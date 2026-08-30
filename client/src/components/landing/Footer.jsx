@@ -1,3 +1,5 @@
+import flowpilotIcon from "../../assets/flowpilot-icon-512.png";
+
 const Footer = () => {
   const productLinks = [
     { name: "Features", href: "#product" },
@@ -31,9 +33,11 @@ const Footer = () => {
               href="/"
               className="flex w-fit items-center gap-2 text-[15px] font-semibold tracking-tight text-zinc-100"
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500 text-xs font-bold text-white">
-                ~
-              </span>
+              <img
+                src={flowpilotIcon}
+                alt="FlowPilot"
+                className="h-7 w-7 rounded-md"
+              />
 
               <span>FlowPilot</span>
             </a>

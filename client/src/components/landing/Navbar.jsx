@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
+
+import flowpilotIcon from "../../assets/flowpilot-icon-512.png";
 
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -8,19 +11,22 @@ const Navbar = () => {
       <nav className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-5 lg:px-8">
 
         {/* Logo */}
-        <a
-          href="/"
+        <Link
+          to="/"
           className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-zinc-100"
         >
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500 text-xs font-bold text-white">
-            ~
-          </span>
+          <img
+            src={flowpilotIcon}
+            alt="FlowPilot"
+            className="h-7 w-7 rounded-md"
+          />
 
           <span>FlowPilot</span>
-        </a>
+        </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden items-center gap-8 md:flex">
+
           <a
             href="#product"
             className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
@@ -48,23 +54,26 @@ const Navbar = () => {
           >
             Pricing
           </a>
+
         </div>
 
         {/* Desktop Actions */}
         <div className="hidden items-center gap-5 md:flex">
-          <a
-            href="/login"
+
+          <Link
+            to="/login"
             className="text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-100"
           >
             Sign in
-          </a>
+          </Link>
 
-          <a
-            href="/signup"
+          <Link
+            to="/register"
             className="rounded-lg bg-violet-500 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-violet-400"
           >
             Get started
-          </a>
+          </Link>
+
         </div>
 
         {/* Mobile Menu Button */}
@@ -73,11 +82,13 @@ const Navbar = () => {
           onClick={() => setMenuOpen(!menuOpen)}
           className="flex h-9 w-9 items-center justify-center rounded-md text-zinc-300 hover:bg-zinc-800 md:hidden"
           aria-label="Toggle navigation"
+          aria-expanded={menuOpen}
         >
           <span className="text-xl">
             {menuOpen ? "×" : "☰"}
           </span>
         </button>
+
       </nav>
 
       {/* Mobile Menu */}
@@ -88,7 +99,7 @@ const Navbar = () => {
             <a
               href="#product"
               onClick={() => setMenuOpen(false)}
-              className="text-sm text-zinc-400 hover:text-zinc-100"
+              className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
             >
               Product
             </a>
@@ -96,7 +107,7 @@ const Navbar = () => {
             <a
               href="#integrations"
               onClick={() => setMenuOpen(false)}
-              className="text-sm text-zinc-400 hover:text-zinc-100"
+              className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
             >
               Integrations
             </a>
@@ -104,7 +115,7 @@ const Navbar = () => {
             <a
               href="#docs"
               onClick={() => setMenuOpen(false)}
-              className="text-sm text-zinc-400 hover:text-zinc-100"
+              className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
             >
               Docs
             </a>
@@ -112,25 +123,30 @@ const Navbar = () => {
             <a
               href="#pricing"
               onClick={() => setMenuOpen(false)}
-              className="text-sm text-zinc-400 hover:text-zinc-100"
+              className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
             >
               Pricing
             </a>
 
+            {/* Mobile Auth */}
             <div className="mt-2 flex flex-col gap-3 border-t border-zinc-800/70 pt-4">
-              <a
-                href="/login"
-                className="text-sm font-medium text-zinc-400 hover:text-zinc-100"
+
+              <Link
+                to="/login"
+                onClick={() => setMenuOpen(false)}
+                className="text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-100"
               >
                 Sign in
-              </a>
+              </Link>
 
-              <a
-                href="/signup"
-                className="rounded-lg bg-violet-500 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-violet-400"
+              <Link
+                to="/register"
+                onClick={() => setMenuOpen(false)}
+                className="rounded-lg bg-violet-500 px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-violet-400"
               >
                 Get started
-              </a>
+              </Link>
+
             </div>
 
           </div>
