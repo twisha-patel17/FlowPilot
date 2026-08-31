@@ -4,6 +4,8 @@ import LandingPage from "../pages/LandingPage";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
 import OverviewPage from "../pages/OverviewPage";
+import WorkflowsPage from "../pages/WorkflowsPage";
+import ExecutionsPage from "../pages/ExecutionsPage";
 
 import AppLayout from "../components/layout/AppLayout";
 import ProtectedRoute from "./ProtectedRoute";
@@ -21,6 +23,16 @@ const AppRoutes = () => {
         <Route path="/app" element={<AppLayout />}>
           {/* Overview */}
           <Route index element={<OverviewPage />} />
+
+          {/* Workflows */}
+          <Route
+            path="workflows"
+            element={<WorkflowsPage />}
+          />
+          <Route
+            path="executions"
+            element={<ExecutionsPage />}
+          />
         </Route>
       </Route>
     </Routes>
