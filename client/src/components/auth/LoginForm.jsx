@@ -1,13 +1,23 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
+import { useAuth } from "../../context/AuthContext";
 
 const LoginForm = () => {
+  const navigate = useNavigate();
+
   const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+
+  const {
+    login,
+    loginLoading,
+    loginError,
+  } = useAuth();
 
   const handleChange = (e) => {
     setFormData({
@@ -16,10 +26,16 @@ const LoginForm = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    console.log("Login data:", formData);
+    try {
+      await login(formData);
+
+      navigate("/app");
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
   };
 
   return (
@@ -27,7 +43,6 @@ const LoginForm = () => {
       onSubmit={handleSubmit}
       className="w-full space-y-5"
     >
-
       {/* Back to Landing */}
       <div className="mb-1">
         <Link
@@ -55,6 +70,7 @@ const LoginForm = () => {
           placeholder="you@company.com"
           value={formData.email}
           onChange={handleChange}
+          required
           className="h-10 w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
         />
       </div>
@@ -85,6 +101,7 @@ const LoginForm = () => {
             placeholder="••••••••••••"
             value={formData.password}
             onChange={handleChange}
+            required
             className="h-10 w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 pr-16 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
           />
 
@@ -98,12 +115,23 @@ const LoginForm = () => {
         </div>
       </div>
 
+      {/* API Error */}
+      {loginError && (
+        <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+          <p className="text-center text-xs text-red-400">
+            {loginError.response?.data?.message ||
+              "Unable to sign in. Please check your credentials."}
+          </p>
+        </div>
+      )}
+
       {/* Submit */}
       <button
         type="submit"
-        className="h-10 w-full rounded-md bg-violet-500 px-4 text-sm font-semibold text-white transition hover:bg-violet-400 active:scale-[0.99]"
+        disabled={loginLoading}
+        className="h-10 w-full rounded-md bg-violet-500 px-4 text-sm font-semibold text-white transition hover:bg-violet-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Sign In
+        {loginLoading ? "Signing in..." : "Sign In"}
       </button>
 
       {/* Divider */}
@@ -123,12 +151,14 @@ const LoginForm = () => {
         className="flex h-10 w-full items-center justify-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-4 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800"
       >
         <span className="text-sm">●</span>
+
         <span>Continue with GitHub</span>
       </button>
 
       {/* Register */}
       <p className="pt-1 text-center text-sm text-zinc-500">
         Don't have an account?{" "}
+
         <Link
           to="/register"
           className="font-medium text-violet-400 transition-colors hover:text-violet-300"
@@ -136,7 +166,6 @@ const LoginForm = () => {
           Create one
         </Link>
       </p>
-
     </form>
   );
 };

@@ -1,7 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
+import { useAuth } from "../../context/AuthContext";
 
 const RegisterForm = () => {
+  const navigate = useNavigate();
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -12,17 +16,84 @@ const RegisterForm = () => {
     confirmPassword: "",
   });
 
+  const [validationError, setValidationError] = useState("");
+
+  const {
+    register,
+    registerLoading,
+    registerError,
+  } = useAuth();
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const passwordRegex =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    setValidationError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    console.log("Register data:", formData);
+    setValidationError("");
+
+    const name = formData.name.trim();
+    const email = formData.email.trim();
+    const password = formData.password;
+    const confirmPassword = formData.confirmPassword;
+
+    if (!name || !email || !password || !confirmPassword) {
+      setValidationError("All fields are required.");
+      return;
+    }
+
+    if (name.length < 2) {
+      setValidationError(
+        "Name must be at least 2 characters."
+      );
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      setValidationError(
+        "Please enter a valid email address."
+      );
+      return;
+    }
+
+    if (!passwordRegex.test(password)) {
+      setValidationError(
+        "Password must be at least 8 characters and include uppercase, lowercase, number, and #."
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setValidationError("Passwords do not match.");
+      return;
+    }
+
+  
+    try {
+      await register({
+        name,
+        email,
+        password,
+        confirmPassword,
+      });
+
+      navigate("/app");
+    } catch (error) {
+      console.error("Registration failed:", error);
+    }
   };
 
   return (
@@ -57,6 +128,8 @@ const RegisterForm = () => {
           placeholder="Twisha Patel"
           value={formData.name}
           onChange={handleChange}
+          autoComplete="name"
+          required
           className="h-10 w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
         />
       </div>
@@ -77,6 +150,8 @@ const RegisterForm = () => {
           placeholder="you@company.com"
           value={formData.email}
           onChange={handleChange}
+          autoComplete="email"
+          required
           className="h-10 w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
         />
       </div>
@@ -98,17 +173,26 @@ const RegisterForm = () => {
             placeholder="••••••••••••"
             value={formData.password}
             onChange={handleChange}
+            autoComplete="new-password"
+            required
             className="h-10 w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 pr-16 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
           />
 
           <button
             type="button"
-            onClick={() => setShowPassword(!showPassword)}
+            onClick={() =>
+              setShowPassword((prev) => !prev)
+            }
             className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-600 transition-colors hover:text-zinc-300"
           >
             {showPassword ? "Hide" : "Show"}
           </button>
         </div>
+
+        <p className="mt-2 text-[11px] leading-4 text-zinc-600">
+          8+ characters with uppercase, lowercase, number
+          and #.
+        </p>
       </div>
 
       {/* Confirm Password */}
@@ -124,17 +208,21 @@ const RegisterForm = () => {
           <input
             id="confirmPassword"
             name="confirmPassword"
-            type={showConfirmPassword ? "text" : "password"}
+            type={
+              showConfirmPassword ? "text" : "password"
+            }
             placeholder="••••••••••••"
             value={formData.confirmPassword}
             onChange={handleChange}
+            autoComplete="new-password"
+            required
             className="h-10 w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 pr-16 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
           />
 
           <button
             type="button"
             onClick={() =>
-              setShowConfirmPassword(!showConfirmPassword)
+              setShowConfirmPassword((prev) => !prev)
             }
             className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-600 transition-colors hover:text-zinc-300"
           >
@@ -143,17 +231,41 @@ const RegisterForm = () => {
         </div>
       </div>
 
+      {/* Frontend Validation Error */}
+      {validationError && (
+        <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+          <p className="text-center text-xs leading-5 text-red-400">
+            {validationError}
+          </p>
+        </div>
+      )}
+
+      {/* Backend Error */}
+      {registerError && !validationError && (
+        <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+          <p className="text-center text-xs leading-5 text-red-400">
+            {registerError.response?.data?.message ||
+              registerError.message ||
+              "Unable to create your account. Please try again."}
+          </p>
+        </div>
+      )}
+
       {/* Submit */}
       <button
         type="submit"
-        className="h-10 w-full rounded-md bg-violet-500 px-4 text-sm font-semibold text-white transition hover:bg-violet-400 active:scale-[0.99]"
+        disabled={registerLoading}
+        className="h-10 w-full rounded-md bg-violet-500 px-4 text-sm font-semibold text-white transition hover:bg-violet-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Create account
+        {registerLoading
+          ? "Creating account..."
+          : "Create account"}
       </button>
 
       {/* Login Link */}
       <p className="pt-1 text-center text-sm text-zinc-500">
         Already have an account?{" "}
+
         <Link
           to="/login"
           className="font-medium text-violet-400 transition-colors hover:text-violet-300"

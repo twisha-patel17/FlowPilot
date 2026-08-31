@@ -1,9 +1,12 @@
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const connectDB = require("./config/db");
 require("dotenv").config();
 
 const app = express();
+
+const authRoutes = require("./routes/authRoutes");
 
 const PORT = process.env.PORT || 5000;
 
@@ -23,6 +26,10 @@ app.get("/", (req, res) => {
     message: "FlowPilot API is running",
   });
 });
+
+app.use("/api/auth", authRoutes);
+
+connectDB();
 
 app.listen(PORT, () => {
   console.log(`FlowPilot server running on port ${PORT}`);
