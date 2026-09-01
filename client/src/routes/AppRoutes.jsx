@@ -7,6 +7,7 @@ import OverviewPage from "../pages/OverviewPage";
 import WorkflowsPage from "../pages/WorkflowsPage";
 import ExecutionsPage from "../pages/ExecutionsPage";
 import SchedulesPage from "../pages/SchedulesPage";
+import IntegrationsPage from "../pages/IntegrationsPage";
 
 import AppLayout from "../components/layout/AppLayout";
 import ProtectedRoute from "./ProtectedRoute";
@@ -35,6 +36,10 @@ const AppRoutes = () => {
           <Route
             path="schedules"
             element={<SchedulesPage />}
+          />
+          <Route
+            path="integrations"
+            element={<IntegrationsPage />}
           />
         </Route>
       </Route>
