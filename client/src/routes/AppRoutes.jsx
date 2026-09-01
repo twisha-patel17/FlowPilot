@@ -6,6 +6,7 @@ import RegisterPage from "../pages/RegisterPage";
 import OverviewPage from "../pages/OverviewPage";
 import WorkflowsPage from "../pages/WorkflowsPage";
 import ExecutionsPage from "../pages/ExecutionsPage";
+import SchedulesPage from "../pages/SchedulesPage";
 
 import AppLayout from "../components/layout/AppLayout";
 import ProtectedRoute from "./ProtectedRoute";
@@ -13,18 +14,16 @@ import ProtectedRoute from "./ProtectedRoute";
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Public Routes */}
+    
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
-      {/* Protected App */}
       <Route element={<ProtectedRoute />}>
         <Route path="/app" element={<AppLayout />}>
-          {/* Overview */}
+          
           <Route index element={<OverviewPage />} />
 
-          {/* Workflows */}
           <Route
             path="workflows"
             element={<WorkflowsPage />}
@@ -32,6 +31,10 @@ const AppRoutes = () => {
           <Route
             path="executions"
             element={<ExecutionsPage />}
+          />
+          <Route
+            path="schedules"
+            element={<SchedulesPage />}
           />
         </Route>
       </Route>
