@@ -1,4 +1,22 @@
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+
 const Hero = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  const handleCreateWorkflow = () => {
+    if (isAuthenticated) {
+      navigate("/app/workflows/new");
+    } else {
+      navigate("/login", {
+        state: {
+          from: "/app/workflows/new",
+        },
+      });
+    }
+  };
+
   return (
     <section className="relative overflow-hidden bg-[#09090b] px-5 pb-24 pt-32 sm:px-8">
       {/* Background glow */}
@@ -31,12 +49,13 @@ const Hero = () => {
         {/* Buttons */}
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
 
-          <a
-            href="/signup"
+          <button
+            type="button"
+            onClick={handleCreateWorkflow}
             className="rounded-lg bg-violet-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-400"
           >
             Create Workflow
-          </a>
+          </button>
 
           <a
             href="#demo"
@@ -48,7 +67,10 @@ const Hero = () => {
         </div>
 
         {/* Workflow Preview */}
-        <div className="mx-auto mt-20 max-w-4xl overflow-hidden rounded-xl border border-zinc-800 bg-[#111113] text-left shadow-2xl shadow-black/30">
+        <div
+          id="demo"
+          className="mx-auto mt-20 max-w-4xl overflow-hidden rounded-xl border border-zinc-800 bg-[#111113] text-left shadow-2xl shadow-black/30"
+        >
 
           {/* Window Header */}
           <div className="flex h-16 items-center gap-2 border-b border-zinc-800 px-6">
@@ -86,8 +108,8 @@ const Hero = () => {
               </div>
 
               <div className="relative h-px w-12 shrink-0 bg-zinc-700">
-  <span className="flow-dot absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.9)]" />
-</div>
+                <span className="flow-dot absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.9)]" />
+              </div>
 
               {/* Filter */}
               <div className="w-36 shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4">
@@ -107,8 +129,8 @@ const Hero = () => {
               </div>
 
               <div className="relative h-px w-10 shrink-0 bg-zinc-700">
-  <span className="flow-dot absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.9)]" />
-</div>
+                <span className="flow-dot absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.9)]" />
+              </div>
 
               {/* Discord */}
               <div className="w-36 shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4">
@@ -128,8 +150,8 @@ const Hero = () => {
               </div>
 
               <div className="relative h-px w-10 shrink-0 bg-zinc-700">
-  <span className="flow-dot absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.9)]" />
-</div>
+                <span className="flow-dot absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.9)]" />
+              </div>
 
               {/* HTTP */}
               <div className="w-36 shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4">

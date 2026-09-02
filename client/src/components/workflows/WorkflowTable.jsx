@@ -1,6 +1,10 @@
 import WorkflowRow from "./WorkflowRow";
 
-const WorkflowTable = ({ workflows, onMenuClick }) => {
+const WorkflowTable = ({
+  workflows,
+  onMenuClick,
+  onEdit,
+}) => {
   if (!workflows || workflows.length === 0) {
     return (
       <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-zinc-800/70 bg-zinc-900/20">
@@ -10,7 +14,7 @@ const WorkflowTable = ({ workflows, onMenuClick }) => {
           </h3>
 
           <p className="mt-1 text-xs text-zinc-600">
-            Try changing your search or filter.
+            Try changing your search or create a new workflow.
           </p>
         </div>
       </div>
@@ -19,6 +23,7 @@ const WorkflowTable = ({ workflows, onMenuClick }) => {
 
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-800/70 bg-[#0d0d0f]">
+
       {/* Table Header */}
       <div className="hidden grid-cols-[minmax(240px,2fr)_140px_110px_90px_90px_40px] items-center gap-3 border-b border-zinc-800/70 bg-zinc-900/30 px-4 py-3 text-[10px] font-medium uppercase tracking-wider text-zinc-600 md:grid">
         <span>Name</span>
@@ -33,9 +38,10 @@ const WorkflowTable = ({ workflows, onMenuClick }) => {
       <div>
         {workflows.map((workflow) => (
           <WorkflowRow
-            key={workflow.id}
+            key={workflow._id || workflow.id}
             workflow={workflow}
             onMenuClick={onMenuClick}
+            onEdit={onEdit}
           />
         ))}
       </div>

@@ -8,6 +8,7 @@ import WorkflowsPage from "../pages/WorkflowsPage";
 import ExecutionsPage from "../pages/ExecutionsPage";
 import SchedulesPage from "../pages/SchedulesPage";
 import IntegrationsPage from "../pages/IntegrationsPage";
+import WorkflowBuilderPage from "../pages/WorkflowBuilderPage";
 
 import AppLayout from "../components/layout/AppLayout";
 import ProtectedRoute from "./ProtectedRoute";
@@ -41,8 +42,17 @@ const AppRoutes = () => {
             path="integrations"
             element={<IntegrationsPage />}
           />
+          <Route
+            path="workflows/:id"
+            element={<WorkflowBuilderPage />}
+          />
+          <Route
+            path="workflows/new"
+            element={<WorkflowBuilderPage />}
+          >
         </Route>
       </Route>
+        </Route>
     </Routes>
   );
 };

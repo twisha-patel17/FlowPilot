@@ -16,7 +16,6 @@ const hashToken = (token) => {
     .digest("hex");
 };
 
-// REGISTER
 const register = async (req, res) => {
   try {
     const { name, email, password, confirmPassword } = req.body;
@@ -86,7 +85,6 @@ const register = async (req, res) => {
   }
 };
 
-// LOGIN
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;

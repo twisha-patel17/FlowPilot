@@ -1,78 +1,61 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+
+import { getWorkflows } from "../api/workflowApi";
 
 import WorkflowHeader from "../components/workflows/WorkflowHeader";
 import WorkflowFilters from "../components/workflows/WorkflowFilters";
 import WorkflowTable from "../components/workflows/WorkflowTable";
 
-const mockWorkflows = [
-  {
-    id: 1,
-    name: "High Priority GitHub Issues",
-    description:
-      "Notify Discord when high priority issues are created",
-    trigger: "GitHub Issue",
-    status: "Active",
-    lastRun: "2m ago",
-    successRate: "99.2%",
-  },
-  {
-    id: 2,
-    name: "Daily Standup Reminder",
-    description:
-      "Post a reminder to Discord every weekday morning",
-    trigger: "Schedule",
-    status: "Active",
-    lastRun: "8h ago",
-    successRate: "100%",
-  },
-  {
-    id: 3,
-    name: "Issue Auto-Triage",
-    description:
-      "Route new issues to the right channel based on labels",
-    trigger: "GitHub Issue",
-    status: "Degraded",
-    lastRun: "21m ago",
-    successRate: "94.1%",
-  },
-  {
-    id: 4,
-    name: "New User Welcome Email",
-    description:
-      "Send a welcome email when a user signs up",
-    trigger: "Webhook",
-    status: "Active",
-    lastRun: "3h ago",
-    successRate: "100%",
-  },
-  {
-    id: 5,
-    name: "Prod Error Alerts",
-    description:
-      "Alert the team the moment a production error is thrown",
-    trigger: "Webhook",
-    status: "Failing",
-    lastRun: "1m ago",
-    successRate: "88.4%",
-  },
-  {
-    id: 6,
-    name: "Weekly Report Export",
-    description:
-      "Export weekly metrics and email them to the team",
-    trigger: "Schedule",
-    status: "Inactive",
-    lastRun: "4d ago",
-    successRate: "100%",
-  },
-];
-
 const WorkflowsPage = () => {
+  const navigate = useNavigate();
+
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
 
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["workflows"],
+    queryFn: getWorkflows,
+  });
+
+  const workflows = data?.workflows || [];
+
+  const formattedWorkflows = useMemo(() => {
+    return workflows.map((workflow) => ({
+      ...workflow,
+
+      // Convert backend values for the existing UI
+      id: workflow._id,
+
+      trigger:
+        workflow.trigger?.type === "github"
+          ? "GitHub Issue"
+          : workflow.trigger?.type === "schedule"
+          ? "Schedule"
+          : workflow.trigger?.type === "webhook"
+          ? "Webhook"
+          : workflow.trigger?.type === "http"
+          ? "HTTP"
+          : "Manual",
+
+      status:
+        workflow.status === "active"
+          ? "Active"
+          : "Inactive",
+
+      lastRun: "Never",
+
+      successRate: "-",
+    }));
+  }, [workflows]);
+
   const filteredWorkflows = useMemo(() => {
-    return mockWorkflows.filter((workflow) => {
+    return formattedWorkflows.filter((workflow) => {
       const matchesFilter =
         activeFilter === "All" ||
         (activeFilter === "Active" &&
@@ -85,20 +68,46 @@ const WorkflowsPage = () => {
       const matchesSearch =
         !searchValue ||
         workflow.name.toLowerCase().includes(searchValue) ||
-        workflow.description.toLowerCase().includes(searchValue) ||
+        workflow.description
+          .toLowerCase()
+          .includes(searchValue) ||
         workflow.trigger.toLowerCase().includes(searchValue);
 
       return matchesFilter && matchesSearch;
     });
-  }, [activeFilter, search]);
+  }, [formattedWorkflows, activeFilter, search]);
 
   const handleCreateWorkflow = () => {
-    console.log("Create workflow");
+    navigate("/app/workflows/new");
+  };
+
+  const handleEditWorkflow = (workflow) => {
+    navigate(`/app/workflows/${workflow._id}`);
   };
 
   const handleMenuClick = (workflow) => {
     console.log("Menu clicked:", workflow);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-zinc-500">
+          Loading workflows...
+        </p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-red-400">
+          Failed to load workflows.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full">
@@ -117,6 +126,7 @@ const WorkflowsPage = () => {
       <WorkflowTable
         workflows={filteredWorkflows}
         onMenuClick={handleMenuClick}
+        onEdit={handleEditWorkflow}
       />
     </div>
   );
