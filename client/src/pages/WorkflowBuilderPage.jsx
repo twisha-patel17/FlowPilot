@@ -4,11 +4,13 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
 import {
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+
 import {
   FiArrowLeft,
   FiSave,
@@ -32,15 +34,12 @@ const WorkflowBuilderPage = () => {
   const queryClient = useQueryClient();
 
   const [selectedNode, setSelectedNode] = useState(null);
+
   const [workflowName, setWorkflowName] =
     useState("Untitled Workflow");
 
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
-
-  // =========================
-  // GET WORKFLOW
-  // =========================
 
   const {
     data,
@@ -52,23 +51,15 @@ const WorkflowBuilderPage = () => {
     enabled: !!id,
   });
 
-  // =========================
-  // LOAD EXISTING WORKFLOW
-  // =========================
-
   useEffect(() => {
     if (!data?.workflow) return;
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setWorkflowName(data.workflow.name);
+    setWorkflowName(data.workflow.name || "Untitled Workflow");
 
     setNodes(data.workflow.nodes || []);
     setEdges(data.workflow.edges || []);
   }, [data]);
-
-  // =========================
-  // WORKFLOW CANVAS CHANGE
-  // =========================
 
   const handleWorkflowChange = useCallback(
     (updatedNodes, updatedEdges) => {
@@ -77,10 +68,6 @@ const WorkflowBuilderPage = () => {
     },
     []
   );
-
-  // =========================
-  // NODE CONFIG UPDATE
-  // =========================
 
   const handleNodeUpdate = useCallback(
     (updatedNode) => {
@@ -97,19 +84,16 @@ const WorkflowBuilderPage = () => {
     []
   );
 
-  // =========================
-  // CREATE
-  // =========================
-
   const createMutation = useMutation({
     mutationFn: createWorkflow,
 
-    onSuccess: (data) => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({
         queryKey: ["workflows"],
       });
 
-      const createdWorkflow = data.workflow;
+      const createdWorkflow =
+        response.workflow;
 
       navigate(
         `/app/workflows/${createdWorkflow._id}`,
@@ -118,58 +102,70 @@ const WorkflowBuilderPage = () => {
         }
       );
     },
-  });
 
-  // =========================
-  // UPDATE
-  // =========================
+    onError: (error) => {
+      console.error(
+        "Create workflow error:",
+        error
+      );
+    },
+  });
 
   const updateMutation = useMutation({
     mutationFn: updateWorkflow,
 
-    onSuccess: (data) => {
+    onSuccess: (response) => {
       queryClient.setQueryData(
         ["workflow", id],
-        data
+        response
       );
 
       queryClient.invalidateQueries({
         queryKey: ["workflows"],
       });
     },
-  });
 
-  // =========================
-  // TOGGLE
-  // =========================
+    onError: (error) => {
+      console.error(
+        "Update workflow error:",
+        error
+      );
+    },
+  });
 
   const toggleMutation = useMutation({
     mutationFn: toggleWorkflow,
 
-    onSuccess: (data) => {
+    onSuccess: (response) => {
       queryClient.setQueryData(
         ["workflow", id],
-        data
+        response
       );
 
       queryClient.invalidateQueries({
         queryKey: ["workflows"],
       });
     },
-  });
 
-  // =========================
-  // SAVE
-  // =========================
+    onError: (error) => {
+      console.error(
+        "Toggle workflow error:",
+        error
+      );
+    },
+  });
 
   const handleSave = () => {
     const workflowData = {
-      name: workflowName,
+      name: workflowName.trim() || "Untitled Workflow",
+
       description: "",
+
       trigger: {
         type: "manual",
         config: {},
       },
+
       nodes,
       edges,
     };
@@ -184,19 +180,11 @@ const WorkflowBuilderPage = () => {
     }
   };
 
-  // =========================
-  // ACTIVATE
-  // =========================
-
   const handleActivate = () => {
     if (!id) return;
 
     toggleMutation.mutate(id);
   };
-
-  // =========================
-  // LOADING
-  // =========================
 
   if (id && isLoading) {
     return (
@@ -207,10 +195,6 @@ const WorkflowBuilderPage = () => {
       </div>
     );
   }
-
-  // =========================
-  // ERROR
-  // =========================
 
   if (id && isError) {
     return (
@@ -224,7 +208,7 @@ const WorkflowBuilderPage = () => {
           onClick={() =>
             navigate("/app/workflows")
           }
-          className="rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-300 hover:bg-zinc-800"
+          className="rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
         >
           Back to Workflows
         </button>
@@ -235,13 +219,7 @@ const WorkflowBuilderPage = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#09090b]">
 
-      {/* =========================
-          TOP HEADER
-      ========================= */}
-
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-800/70 bg-[#0d0d0f] px-3 sm:px-5">
-
-        {/* LEFT */}
 
         <div className="flex min-w-0 items-center gap-3">
 
@@ -318,19 +296,11 @@ const WorkflowBuilderPage = () => {
         </div>
       </header>
 
-      {/* =========================
-          BUILDER
-      ========================= */}
-
       <div className="flex min-h-0 flex-1">
-
-        {/* LEFT NODE PANEL */}
 
         <div className="hidden w-60 shrink-0 md:block">
           <NodePanel />
         </div>
-
-        {/* CANVAS */}
 
         <main className="min-w-0 flex-1">
           <WorkflowCanvas
@@ -342,8 +312,6 @@ const WorkflowBuilderPage = () => {
             initialEdges={edges}
           />
         </main>
-
-        {/* RIGHT CONFIG PANEL */}
 
         <div className="hidden w-72 shrink-0 lg:block">
           <ConfigPanel

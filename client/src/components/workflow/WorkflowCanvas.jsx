@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from "react";
+
 import {
   ReactFlow,
   Background,
@@ -7,6 +8,8 @@ import {
   Handle,
   Position,
   addEdge,
+  applyNodeChanges,
+  applyEdgeChanges,
   useNodesState,
   useEdgesState,
 } from "@xyflow/react";
@@ -26,10 +29,6 @@ import {
 } from "react-icons/fi";
 
 import "@xyflow/react/dist/style.css";
-
-/* ---------------------------------- */
-/* Node configuration */
-/* ---------------------------------- */
 
 const nodeConfig = {
   manual: {
@@ -129,10 +128,6 @@ const nodeConfig = {
   },
 };
 
-/* ---------------------------------- */
-/* Custom node */
-/* ---------------------------------- */
-
 const FlowPilotNode = ({ data, selected }) => {
   const nodeType = data?.nodeType || "manual";
 
@@ -144,10 +139,6 @@ const FlowPilotNode = ({ data, selected }) => {
   const title =
     data?.label || config.title;
 
-  /*
-   * Prefer configured node content.
-   * This will later come from ConfigPanel.
-   */
   const content =
     data?.config?.summary ||
     data?.config?.value ||
@@ -161,14 +152,12 @@ const FlowPilotNode = ({ data, selected }) => {
           : "border-zinc-800 shadow-[0_8px_25px_rgba(0,0,0,0.25)] hover:border-zinc-700"
       }`}
     >
-      {/* Target handle */}
       <Handle
         type="target"
         position={Position.Top}
         className="!h-[7px] !w-[7px] !border-2 !border-[#111113] !bg-zinc-600"
       />
 
-      {/* Top section */}
       <div className="flex items-center gap-2.5 border-b border-zinc-800/70 px-3 py-2.5">
         <div
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${config.iconStyle}`}
@@ -183,7 +172,6 @@ const FlowPilotNode = ({ data, selected }) => {
         </div>
       </div>
 
-      {/* Content */}
       <div className="px-3 py-3">
         <p
           className={`break-words text-[11px] leading-5 ${
@@ -196,7 +184,6 @@ const FlowPilotNode = ({ data, selected }) => {
         </p>
       </div>
 
-      {/* Footer */}
       <div className="flex items-center justify-between border-t border-zinc-800/60 px-3 py-2">
         <span className="text-[10px] uppercase tracking-wide text-zinc-600">
           {config.category}
@@ -209,7 +196,6 @@ const FlowPilotNode = ({ data, selected }) => {
         )}
       </div>
 
-      {/* Source handle */}
       <Handle
         type="source"
         position={Position.Bottom}
@@ -227,23 +213,19 @@ const nodeTypes = {
   flowpilot: FlowPilotNode,
 };
 
-/* ---------------------------------- */
-/* Canvas */
-/* ---------------------------------- */
-
 const WorkflowCanvas = ({
   onNodeSelect,
   onWorkflowChange,
+  onNodeUpdate,
   initialNodes = [],
   initialEdges = [],
 }) => {
-  const [nodes, setNodes, onNodesChange] =
-    useNodesState(initialNodes);
+  const [nodes, setNodes] =
+    useNodesState([]);
 
-  const [edges, setEdges, onEdgesChange] =
-    useEdgesState(initialEdges);
+  const [edges, setEdges] =
+    useEdgesState([]);
 
-  /* Load saved nodes */
   useEffect(() => {
     setNodes(
       (initialNodes || []).map((node) => ({
@@ -253,35 +235,82 @@ const WorkflowCanvas = ({
     );
   }, [initialNodes, setNodes]);
 
-  /* Load saved edges */
   useEffect(() => {
     setEdges(initialEdges || []);
   }, [initialEdges, setEdges]);
 
-  /* Send workflow state to parent */
-  useEffect(() => {
-    if (onWorkflowChange) {
-      onWorkflowChange(nodes, edges);
-    }
-  }, [nodes, edges, onWorkflowChange]);
+  const handleNodesChange = useCallback(
+    (changes) => {
+      setNodes((currentNodes) => {
+        const updatedNodes =
+          applyNodeChanges(
+            changes,
+            currentNodes
+          );
 
-  /* Connect nodes */
-  const onConnect = useCallback(
-    (connection) => {
-      setEdges((currentEdges) =>
-        addEdge(
-          {
-            ...connection,
-            type: "smoothstep",
-          },
-          currentEdges
-        )
-      );
+        if (onWorkflowChange) {
+          onWorkflowChange(
+            updatedNodes,
+            edges
+          );
+        }
+
+        return updatedNodes;
+      });
     },
-    [setEdges]
+    [setNodes, edges, onWorkflowChange]
   );
 
-  /* Select node */
+  const handleEdgesChange = useCallback(
+    (changes) => {
+      setEdges((currentEdges) => {
+        const updatedEdges =
+          applyEdgeChanges(
+            changes,
+            currentEdges
+          );
+
+        if (onWorkflowChange) {
+          onWorkflowChange(
+            nodes,
+            updatedEdges
+          );
+        }
+
+        return updatedEdges;
+      });
+    },
+    [setEdges, nodes, onWorkflowChange]
+  );
+
+  const onConnect = useCallback(
+    (connection) => {
+      setEdges((currentEdges) => {
+        const updatedEdges =
+          addEdge(
+            {
+              ...connection,
+              type: "smoothstep",
+            },
+            currentEdges
+          );
+
+        if (onWorkflowChange) {
+          onWorkflowChange(
+            nodes,
+            updatedEdges
+          );
+        }
+
+        return updatedEdges;
+      });
+    },
+    [
+      setEdges,
+      nodes,
+      onWorkflowChange,
+    ]
+  );
   const onNodeClick = useCallback(
     (_event, node) => {
       if (onNodeSelect) {
@@ -291,20 +320,22 @@ const WorkflowCanvas = ({
     [onNodeSelect]
   );
 
-  /* Deselect node */
   const onPaneClick = useCallback(() => {
     if (onNodeSelect) {
       onNodeSelect(null);
     }
   }, [onNodeSelect]);
 
-  /* Allow drop */
-  const onDragOver = useCallback((event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-  }, []);
+  const onDragOver = useCallback(
+    (event) => {
+      event.preventDefault();
 
-  /* Drop node */
+      event.dataTransfer.dropEffect =
+        "move";
+    },
+    []
+  );
+
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
@@ -320,12 +351,18 @@ const WorkflowCanvas = ({
         event.currentTarget.getBoundingClientRect();
 
       const position = {
-        x: event.clientX - bounds.left,
-        y: event.clientY - bounds.top,
+        x:
+          event.clientX -
+          bounds.left,
+
+        y:
+          event.clientY -
+          bounds.top,
       };
 
       const config =
-        nodeConfig[nodeType] || nodeConfig.manual;
+        nodeConfig[nodeType] ||
+        nodeConfig.manual;
 
       const newNode = {
         id: `${Date.now()}`,
@@ -338,12 +375,64 @@ const WorkflowCanvas = ({
         },
       };
 
-      setNodes((currentNodes) => [
-        ...currentNodes,
-        newNode,
-      ]);
+      setNodes((currentNodes) => {
+        const updatedNodes = [
+          ...currentNodes,
+          newNode,
+        ];
+
+        if (onWorkflowChange) {
+          onWorkflowChange(
+            updatedNodes,
+            edges
+          );
+        }
+
+        return updatedNodes;
+      });
     },
-    [setNodes]
+    [
+      setNodes,
+      edges,
+      onWorkflowChange,
+    ]
+  );
+
+  const handleNodeUpdate = useCallback(
+    (updatedNode) => {
+      setNodes((currentNodes) => {
+        const updatedNodes =
+          currentNodes.map((node) =>
+            node.id === updatedNode.id
+              ? updatedNode
+              : node
+          );
+
+        if (onWorkflowChange) {
+          onWorkflowChange(
+            updatedNodes,
+            edges
+          );
+        }
+
+        return updatedNodes;
+      });
+
+      if (onNodeSelect) {
+        onNodeSelect(updatedNode);
+      }
+
+      if (onNodeUpdate) {
+        onNodeUpdate(updatedNode);
+      }
+    },
+    [
+      setNodes,
+      edges,
+      onWorkflowChange,
+      onNodeSelect,
+      onNodeUpdate,
+    ]
   );
 
   return (
@@ -352,8 +441,8 @@ const WorkflowCanvas = ({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}

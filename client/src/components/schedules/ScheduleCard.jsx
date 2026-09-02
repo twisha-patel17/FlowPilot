@@ -11,10 +11,19 @@ const ScheduleCard = ({
   onToggle,
   onOpen,
 }) => {
+
+  const handleOpen = () => {
+    if (onOpen) {
+      onOpen();
+    }
+  };
+
   return (
     <div className="rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
         {/* Information */}
+
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-zinc-100">
             {name}
@@ -43,10 +52,13 @@ const ScheduleCard = ({
         </div>
 
         {/* Actions */}
+
         <div className="flex shrink-0 items-center gap-2">
+
           <ScheduleStatus active={active} />
 
           {/* Toggle */}
+
           <button
             type="button"
             role="switch"
@@ -69,9 +81,10 @@ const ScheduleCard = ({
           </button>
 
           {/* Open */}
+
           <button
             type="button"
-            onClick={onOpen}
+            onClick={handleOpen}
             className="h-8 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800"
           >
             Open
