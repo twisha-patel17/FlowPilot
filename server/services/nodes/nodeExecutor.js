@@ -1,25 +1,9 @@
 const executeHttpNode = require("./httpNode");
+const executeFilterNode = require("./filterNode");
+const executeDiscordNode = require("./discordNode");
 
 const executeManualNode = async (node, input) => {
   console.log("Executing manual node");
-
-  return {
-    success: true,
-    output: input || {},
-  };
-};
-
-const executeFilterNode = async (node, input) => {
-  console.log("Executing filter node");
-
-  return {
-    success: true,
-    output: input || {},
-  };
-};
-
-const executeDiscordNode = async (node, input) => {
-  console.log("Executing Discord node");
 
   return {
     success: true,

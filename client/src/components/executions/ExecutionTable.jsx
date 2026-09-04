@@ -1,58 +1,54 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { getExecutions } from "../../api/executionApi";
 import ExecutionStatus from "./ExecutionStatus";
 
-const executions = [
-  {
-    id: "#1042",
-    workflow: "High Priority Issues",
-    status: "Success",
-    duration: "1.2s",
-    started: "2m ago",
-  },
-  {
-    id: "#1041",
-    workflow: "High Priority Issues",
-    status: "Success",
-    duration: "0.8s",
-    started: "8m ago",
-  },
-  {
-    id: "#1040",
-    workflow: "Issue Auto-Triage",
-    status: "Failed",
-    duration: "2.3s",
-    started: "14m ago",
-  },
-  {
-    id: "#1039",
-    workflow: "Prod Error Alerts",
-    status: "Retrying",
-    duration: "—",
-    started: "19m ago",
-  },
-  {
-    id: "#1038",
-    workflow: "Daily Standup Reminder",
-    status: "Success",
-    duration: "0.6s",
-    started: "8h ago",
-  },
-  {
-    id: "#1037",
-    workflow: "New User Welcome Email",
-    status: "Success",
-    duration: "1.9s",
-    started: "3h ago",
-  },
-  {
-    id: "#1036",
-    workflow: "Issue Auto-Triage",
-    status: "Failed",
-    duration: "3.4s",
-    started: "6h ago",
-  },
-];
-
 const ExecutionTable = () => {
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["executions"],
+    queryFn: getExecutions,
+  });
+
+  const executions = data?.executions || [];
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border border-zinc-800/70 bg-[#0d0d0f] px-5 py-12 text-center">
+        <p className="text-sm text-zinc-500">
+          Loading executions...
+        </p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-5 py-12 text-center">
+        <p className="text-sm text-red-400">
+          Failed to load executions.
+        </p>
+      </div>
+    );
+  }
+
+  if (executions.length === 0) {
+    return (
+      <div className="rounded-lg border border-zinc-800/70 bg-[#0d0d0f] px-5 py-12 text-center">
+        <p className="text-sm text-zinc-400">
+          No executions yet.
+        </p>
+
+        <p className="mt-1 text-xs text-zinc-600">
+          Run a workflow to see executions here.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-800/70 bg-[#0d0d0f]">
       <div className="overflow-x-auto">
@@ -82,34 +78,67 @@ const ExecutionTable = () => {
           </thead>
 
           <tbody>
-            {executions.map((execution) => (
-              <tr
-                key={execution.id}
-                className="border-b border-zinc-800/50 last:border-b-0 transition hover:bg-zinc-900/40"
-              >
-                <td className="px-5 py-4 text-sm font-medium text-zinc-300">
-                  {execution.id}
-                </td>
+            {executions.map((execution) => {
+              const start = execution.startedAt
+                ? new Date(execution.startedAt)
+                : null;
 
-                <td className="px-5 py-4">
-                  <span className="text-sm text-zinc-200">
-                    {execution.workflow}
-                  </span>
-                </td>
+              const end = execution.finishedAt
+                ? new Date(execution.finishedAt)
+                : null;
 
-                <td className="px-5 py-4">
-                  <ExecutionStatus status={execution.status} />
-                </td>
+              const duration =
+                start && end
+                  ? `${(
+                      (end - start) /
+                      1000
+                    ).toFixed(2)}s`
+                  : "—";
 
-                <td className="px-5 py-4 text-sm text-zinc-500">
-                  {execution.duration}
-                </td>
+              const started = start
+                ? start.toLocaleString()
+                : "—";
 
-                <td className="px-5 py-4 text-sm text-zinc-500">
-                  {execution.started}
-                </td>
-              </tr>
-            ))}
+              return (
+                <tr
+                  key={execution._id}
+                  className="border-b border-zinc-800/50 last:border-b-0 transition hover:bg-zinc-900/40"
+                >
+                  <td className="px-5 py-4 text-sm font-medium text-zinc-300">
+                    #{execution._id.slice(-4)}
+                  </td>
+
+                  <td className="px-5 py-4">
+                    <span className="text-sm text-zinc-200">
+                      {execution.workflow?.name ||
+                        "Unknown workflow"}
+                    </span>
+                  </td>
+
+                  <td className="px-5 py-4">
+                    <ExecutionStatus
+                      status={
+                        execution.status === "success"
+                          ? "Success"
+                          : execution.status === "failed"
+                          ? "Failed"
+                          : execution.status === "running"
+                          ? "Retrying"
+                          : execution.status
+                      }
+                    />
+                  </td>
+
+                  <td className="px-5 py-4 text-sm text-zinc-500">
+                    {duration}
+                  </td>
+
+                  <td className="px-5 py-4 text-sm text-zinc-500">
+                    {started}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

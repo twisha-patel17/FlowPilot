@@ -21,17 +21,50 @@ const executeWorkflow = async (executionId) => {
     console.log(`Starting workflow: ${workflow.name}`);
 
     const nodes = workflow.nodes || [];
+    const edges = workflow.edges || [];
+
+    if (nodes.length === 0) {
+      throw new Error("Workflow has no nodes");
+    }
+
+    const targetNodeIds = new Set(
+      edges.map((edge) => edge.target)
+    );
+
+    let currentNode = nodes.find(
+      (node) => !targetNodeIds.has(node.id)
+    );
+
+    if (!currentNode) {
+      currentNode = nodes[0];
+    }
 
     let input = {};
+    const visitedNodes = new Set();
 
-    for (const node of nodes) {
-      console.log(`Executing node: ${node.id || "unknown"}`);
+    while (currentNode) {
+ 
+      if (visitedNodes.has(currentNode.id)) {
+        throw new Error("Workflow contains a cycle");
+      }
 
-      const result = await executeNode(node, input);
+      visitedNodes.add(currentNode.id);
+
+      console.log(
+        `Executing node: ${currentNode.id || "unknown"}`
+      );
+
+      const result = await executeNode(
+        currentNode,
+        input
+      );
 
       execution.steps.push({
-        nodeId: node.id || null,
-        type: node.data?.type || node.type || "unknown",
+        nodeId: currentNode.id || null,
+        type:
+          currentNode.data?.type ||
+          currentNode.type ||
+          "unknown",
         status: result.success ? "success" : "failed",
         output: result.output || {},
       });
@@ -39,6 +72,24 @@ const executeWorkflow = async (executionId) => {
       await execution.save();
 
       input = result.output || {};
+
+      const nextEdge = edges.find(
+        (edge) => edge.source === currentNode.id
+      );
+
+      if (!nextEdge) {
+        currentNode = null;
+      } else {
+        currentNode = nodes.find(
+          (node) => node.id === nextEdge.target
+        );
+
+        if (!currentNode) {
+          throw new Error(
+            `Next node not found: ${nextEdge.target}`
+          );
+        }
+      }
     }
 
     execution.status = "success";

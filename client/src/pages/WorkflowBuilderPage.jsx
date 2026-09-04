@@ -3,6 +3,7 @@ import {
   useEffect,
   useState,
 } from "react";
+
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -23,6 +24,8 @@ import {
   updateWorkflow,
   toggleWorkflow,
 } from "../api/workflowApi";
+
+import { createExecution } from "../api/executionApi";
 
 import NodePanel from "../components/workflow/NodePanel";
 import WorkflowCanvas from "../components/workflow/WorkflowCanvas";
@@ -55,7 +58,9 @@ const WorkflowBuilderPage = () => {
     if (!data?.workflow) return;
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setWorkflowName(data.workflow.name || "Untitled Workflow");
+    setWorkflowName(
+      data.workflow.name || "Untitled Workflow"
+    );
 
     setNodes(data.workflow.nodes || []);
     setEdges(data.workflow.edges || []);
@@ -84,6 +89,7 @@ const WorkflowBuilderPage = () => {
     []
   );
 
+  // CREATE WORKFLOW
   const createMutation = useMutation({
     mutationFn: createWorkflow,
 
@@ -111,6 +117,7 @@ const WorkflowBuilderPage = () => {
     },
   });
 
+  // UPDATE WORKFLOW
   const updateMutation = useMutation({
     mutationFn: updateWorkflow,
 
@@ -133,6 +140,7 @@ const WorkflowBuilderPage = () => {
     },
   });
 
+  // TOGGLE WORKFLOW
   const toggleMutation = useMutation({
     mutationFn: toggleWorkflow,
 
@@ -155,9 +163,36 @@ const WorkflowBuilderPage = () => {
     },
   });
 
+  // RUN WORKFLOW
+  const executeMutation = useMutation({
+    mutationFn: createExecution,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["executions"],
+      });
+
+      alert("Workflow executed successfully");
+    },
+
+    onError: (error) => {
+      console.error(
+        "Workflow execution error:",
+        error
+      );
+
+      alert(
+        error.response?.data?.message ||
+          "Workflow execution failed"
+      );
+    },
+  });
+
   const handleSave = () => {
     const workflowData = {
-      name: workflowName.trim() || "Untitled Workflow",
+      name:
+        workflowName.trim() ||
+        "Untitled Workflow",
 
       description: "",
 
@@ -184,6 +219,24 @@ const WorkflowBuilderPage = () => {
     if (!id) return;
 
     toggleMutation.mutate(id);
+  };
+
+  const handleRunWorkflow = () => {
+    if (!id) {
+      alert(
+        "Save the workflow before running it."
+      );
+      return;
+    }
+
+    if (nodes.length === 0) {
+      alert(
+        "Add at least one node before running the workflow."
+      );
+      return;
+    }
+
+    executeMutation.mutate(id);
   };
 
   if (id && isLoading) {
@@ -218,11 +271,8 @@ const WorkflowBuilderPage = () => {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#09090b]">
-
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-800/70 bg-[#0d0d0f] px-3 sm:px-5">
-
         <div className="flex min-w-0 items-center gap-3">
-
           <button
             type="button"
             onClick={() =>
@@ -249,12 +299,9 @@ const WorkflowBuilderPage = () => {
           />
         </div>
 
-        {/* RIGHT */}
-
         <div className="flex shrink-0 items-center gap-2">
 
           {/* SAVE */}
-
           <button
             type="button"
             onClick={handleSave}
@@ -274,8 +321,26 @@ const WorkflowBuilderPage = () => {
             </span>
           </button>
 
-          {/* ACTIVATE */}
+          {/* RUN */}
+          <button
+            type="button"
+            onClick={handleRunWorkflow}
+            disabled={
+              !id ||
+              executeMutation.isPending
+            }
+            className="flex h-8 items-center gap-2 rounded-md bg-emerald-600 px-3 text-xs font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FiPlay className="h-3.5 w-3.5" />
 
+            <span className="hidden sm:inline">
+              {executeMutation.isPending
+                ? "Running..."
+                : "Run"}
+            </span>
+          </button>
+
+          {/* ACTIVATE */}
           <button
             type="button"
             onClick={handleActivate}
@@ -297,7 +362,6 @@ const WorkflowBuilderPage = () => {
       </header>
 
       <div className="flex min-h-0 flex-1">
-
         <div className="hidden w-60 shrink-0 md:block">
           <NodePanel />
         </div>

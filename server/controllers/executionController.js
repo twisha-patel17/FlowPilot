@@ -3,7 +3,6 @@ const Execution = require("../models/Execution");
 
 const executeWorkflow = require("../services/workflow/executeWorkflow");
 
-// CREATE AND RUN MANUAL EXECUTION
 const createExecution = async (req, res) => {
   try {
     const { workflowId } = req.body;
@@ -14,7 +13,6 @@ const createExecution = async (req, res) => {
       });
     }
 
-    // Find workflow belonging to logged-in user
     const workflow = await Workflow.findOne({
       _id: workflowId,
       owner: req.user._id,
@@ -26,7 +24,6 @@ const createExecution = async (req, res) => {
       });
     }
 
-    // Create execution
     const execution = await Execution.create({
       workflow: workflow._id,
       owner: req.user._id,
@@ -34,7 +31,6 @@ const createExecution = async (req, res) => {
       trigger: "manual",
     });
 
-    // Execute workflow
     const completedExecution = await executeWorkflow(
       execution._id
     );
@@ -53,6 +49,55 @@ const createExecution = async (req, res) => {
   }
 };
 
+const getExecutions = async (req, res) => {
+  try {
+    const executions = await Execution.find({
+      owner: req.user._id,
+    })
+      .populate("workflow", "name")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      executions,
+    });
+  } catch (error) {
+    console.error("Get executions error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+const getExecution = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const execution = await Execution.findOne({
+      _id: id,
+      owner: req.user._id,
+    }).populate("workflow", "name");
+
+    if (!execution) {
+      return res.status(404).json({
+        message: "Execution not found",
+      });
+    }
+
+    return res.status(200).json({
+      execution,
+    });
+  } catch (error) {
+    console.error("Get execution error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
 module.exports = {
   createExecution,
+  getExecutions,
+  getExecution,
 };

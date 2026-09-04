@@ -4,7 +4,6 @@ import ExecutionTable from "../components/executions/ExecutionTable";
 const ExecutionsPage = () => {
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-zinc-100">
           Executions
@@ -15,10 +14,8 @@ const ExecutionsPage = () => {
         </p>
       </div>
 
-      {/* Filters */}
       <ExecutionFilters />
 
-      {/* Table */}
       <ExecutionTable />
     </div>
   );
