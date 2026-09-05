@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 
 import {
   ReactFlow,
@@ -10,8 +10,6 @@ import {
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
-  useNodesState,
-  useEdgesState,
 } from "@xyflow/react";
 
 import {
@@ -129,7 +127,22 @@ const nodeConfig = {
 };
 
 const FlowPilotNode = ({ data, selected }) => {
-  const nodeType = data?.nodeType || "manual";
+  /*
+   * IMPORTANT:
+   *
+   * node.type = "flowpilot"
+   * node.data.type = actual executable node type
+   *
+   * Example:
+   * {
+   *   type: "flowpilot",
+   *   data: {
+   *     type: "manual"
+   *   }
+   * }
+   */
+
+  const nodeType = data?.type || "manual";
 
   const config =
     nodeConfig[nodeType] || nodeConfig.manual;
@@ -216,101 +229,82 @@ const nodeTypes = {
 const WorkflowCanvas = ({
   onNodeSelect,
   onWorkflowChange,
-  onNodeUpdate,
   initialNodes = [],
   initialEdges = [],
 }) => {
-  const [nodes, setNodes] =
-    useNodesState([]);
-
-  const [edges, setEdges] =
-    useEdgesState([]);
-
-  useEffect(() => {
-    setNodes(
-      (initialNodes || []).map((node) => ({
-        ...node,
-        type: "flowpilot",
-      }))
-    );
-  }, [initialNodes, setNodes]);
-
-  useEffect(() => {
-    setEdges(initialEdges || []);
-  }, [initialEdges, setEdges]);
+  /*
+   * WorkflowBuilderPage owns the actual state.
+   *
+   * WorkflowCanvas only calculates changes and sends
+   * them back to the parent.
+   */
 
   const handleNodesChange = useCallback(
     (changes) => {
-      setNodes((currentNodes) => {
-        const updatedNodes =
-          applyNodeChanges(
-            changes,
-            currentNodes
-          );
+      const updatedNodes = applyNodeChanges(
+        changes,
+        initialNodes
+      );
 
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            updatedNodes,
-            edges
-          );
-        }
-
-        return updatedNodes;
-      });
+      if (onWorkflowChange) {
+        onWorkflowChange(
+          updatedNodes,
+          initialEdges
+        );
+      }
     },
-    [setNodes, edges, onWorkflowChange]
+    [
+      initialNodes,
+      initialEdges,
+      onWorkflowChange,
+    ]
   );
 
   const handleEdgesChange = useCallback(
     (changes) => {
-      setEdges((currentEdges) => {
-        const updatedEdges =
-          applyEdgeChanges(
-            changes,
-            currentEdges
-          );
+      const updatedEdges = applyEdgeChanges(
+        changes,
+        initialEdges
+      );
 
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            nodes,
-            updatedEdges
-          );
-        }
-
-        return updatedEdges;
-      });
+      if (onWorkflowChange) {
+        onWorkflowChange(
+          initialNodes,
+          updatedEdges
+        );
+      }
     },
-    [setEdges, nodes, onWorkflowChange]
+    [
+      initialNodes,
+      initialEdges,
+      onWorkflowChange,
+    ]
   );
 
   const onConnect = useCallback(
     (connection) => {
-      setEdges((currentEdges) => {
-        const updatedEdges =
-          addEdge(
-            {
-              ...connection,
-              type: "smoothstep",
-            },
-            currentEdges
-          );
+      const updatedEdges = addEdge(
+        {
+          ...connection,
+          type: "smoothstep",
+        },
+        initialEdges
+      );
 
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            nodes,
-            updatedEdges
-          );
-        }
-
-        return updatedEdges;
-      });
+      if (onWorkflowChange) {
+        onWorkflowChange(
+          initialNodes,
+          updatedEdges
+        );
+      }
     },
     [
-      setEdges,
-      nodes,
+      initialNodes,
+      initialEdges,
       onWorkflowChange,
     ]
   );
+
   const onNodeClick = useCallback(
     (_event, node) => {
       if (onNodeSelect) {
@@ -326,15 +320,11 @@ const WorkflowCanvas = ({
     }
   }, [onNodeSelect]);
 
-  const onDragOver = useCallback(
-    (event) => {
-      event.preventDefault();
+  const onDragOver = useCallback((event) => {
+    event.preventDefault();
 
-      event.dataTransfer.dropEffect =
-        "move";
-    },
-    []
-  );
+    event.dataTransfer.dropEffect = "move";
+  }, []);
 
   const onDrop = useCallback(
     (event) => {
@@ -351,95 +341,92 @@ const WorkflowCanvas = ({
         event.currentTarget.getBoundingClientRect();
 
       const position = {
-        x:
-          event.clientX -
-          bounds.left,
-
-        y:
-          event.clientY -
-          bounds.top,
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
       };
 
       const config =
         nodeConfig[nodeType] ||
         nodeConfig.manual;
 
+      /*
+       * IMPORTANT:
+       *
+       * React Flow rendering type:
+       * type: "flowpilot"
+       *
+       * Actual workflow execution type:
+       * data.type: nodeType
+       */
       const newNode = {
         id: `${Date.now()}`,
         type: "flowpilot",
         position,
         data: {
+          type: nodeType,
           label: config.title,
-          nodeType,
           config: {},
         },
       };
 
-      setNodes((currentNodes) => {
-        const updatedNodes = [
-          ...currentNodes,
-          newNode,
-        ];
+      const updatedNodes = [
+        ...initialNodes,
+        newNode,
+      ];
 
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            updatedNodes,
-            edges
-          );
-        }
+      if (onWorkflowChange) {
+        onWorkflowChange(
+          updatedNodes,
+          initialEdges
+        );
+      }
 
-        return updatedNodes;
-      });
+      if (onNodeSelect) {
+        onNodeSelect(newNode);
+      }
     },
     [
-      setNodes,
-      edges,
+      initialNodes,
+      initialEdges,
       onWorkflowChange,
+      onNodeSelect,
     ]
   );
 
-  const handleNodeUpdate = useCallback(
-    (updatedNode) => {
-      setNodes((currentNodes) => {
-        const updatedNodes =
-          currentNodes.map((node) =>
-            node.id === updatedNode.id
-              ? updatedNode
-              : node
-          );
+  /*
+   * Normalize older saved nodes.
+   *
+   * If a node was previously saved with:
+   * data.nodeType = "manual"
+   *
+   * convert it visually to:
+   * data.type = "manual"
+   *
+   * This prevents old workflows from breaking.
+   */
+  const normalizedNodes = initialNodes.map(
+    (node) => {
+      const actualType =
+        node.data?.type ||
+        node.data?.nodeType ||
+        "manual";
 
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            updatedNodes,
-            edges
-          );
-        }
-
-        return updatedNodes;
-      });
-
-      if (onNodeSelect) {
-        onNodeSelect(updatedNode);
-      }
-
-      if (onNodeUpdate) {
-        onNodeUpdate(updatedNode);
-      }
-    },
-    [
-      setNodes,
-      edges,
-      onWorkflowChange,
-      onNodeSelect,
-      onNodeUpdate,
-    ]
+      return {
+        ...node,
+        type: "flowpilot",
+        data: {
+          ...node.data,
+          type: actualType,
+        },
+      };
+    }
   );
 
   return (
     <div className="h-full w-full bg-[#09090b]">
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={normalizedNodes}
+        edges={initialEdges}
         nodeTypes={nodeTypes}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}

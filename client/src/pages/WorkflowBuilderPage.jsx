@@ -165,28 +165,38 @@ const WorkflowBuilderPage = () => {
 
   // RUN WORKFLOW
   const executeMutation = useMutation({
-    mutationFn: createExecution,
+  mutationFn: createExecution,
 
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["executions"],
-      });
+  onSuccess: (response) => {
+    queryClient.invalidateQueries({
+      queryKey: ["executions"],
+    });
 
-      alert("Workflow executed successfully");
-    },
+    const execution = response?.execution;
 
-    onError: (error) => {
-      console.error(
-        "Workflow execution error:",
-        error
+    if (execution?._id) {
+      navigate(
+        `/app/executions/${execution._id}`
       );
 
-      alert(
-        error.response?.data?.message ||
-          "Workflow execution failed"
-      );
-    },
-  });
+      return;
+    }
+
+    alert("Workflow executed successfully");
+  },
+
+  onError: (error) => {
+    console.error(
+      "Workflow execution error:",
+      error
+    );
+
+    alert(
+      error.response?.data?.message ||
+        "Workflow execution failed"
+    );
+  },
+});
 
   const handleSave = () => {
     const workflowData = {

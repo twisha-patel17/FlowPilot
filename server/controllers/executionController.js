@@ -61,7 +61,10 @@ const getExecutions = async (req, res) => {
       executions,
     });
   } catch (error) {
-    console.error("Get executions error:", error);
+    console.error(
+      "Get executions error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Server error",
@@ -88,7 +91,10 @@ const getExecution = async (req, res) => {
       execution,
     });
   } catch (error) {
-    console.error("Get execution error:", error);
+    console.error(
+      "Get execution error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Server error",

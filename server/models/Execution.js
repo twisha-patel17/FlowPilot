@@ -22,7 +22,13 @@ const executionSchema = new mongoose.Schema(
 
     trigger: {
       type: String,
-      enum: ["manual", "webhook", "schedule", "github", "http"],
+      enum: [
+        "manual",
+        "webhook",
+        "schedule",
+        "github",
+        "http",
+      ],
       default: "manual",
     },
 
@@ -42,7 +48,45 @@ const executionSchema = new mongoose.Schema(
     },
 
     steps: {
-      type: [mongoose.Schema.Types.Mixed],
+      type: [
+        {
+          nodeId: {
+            type: String,
+            default: null,
+          },
+
+          type: {
+            type: String,
+            default: "unknown",
+          },
+
+          status: {
+            type: String,
+            enum: ["pending", "running", "success", "failed"],
+            default: "pending",
+          },
+
+          input: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {},
+          },
+
+          output: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {},
+          },
+
+          error: {
+            type: String,
+            default: null,
+          },
+
+          duration: {
+            type: Number,
+            default: 0,
+          },
+        },
+      ],
       default: [],
     },
   },
@@ -51,6 +95,9 @@ const executionSchema = new mongoose.Schema(
   }
 );
 
-const Execution = mongoose.model("Execution", executionSchema);
+const Execution = mongoose.model(
+  "Execution",
+  executionSchema
+);
 
 module.exports = Execution;

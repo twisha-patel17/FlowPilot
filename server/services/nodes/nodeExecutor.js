@@ -1,6 +1,5 @@
 const executeHttpNode = require("./httpNode");
 const executeFilterNode = require("./filterNode");
-const executeDiscordNode = require("./discordNode");
 
 const executeManualNode = async (node, input) => {
   console.log("Executing manual node");
@@ -11,8 +10,19 @@ const executeManualNode = async (node, input) => {
   };
 };
 
+const executeDiscordNode = async (node, input) => {
+  console.log("Executing Discord node");
+
+  return {
+    success: true,
+    output: input || {},
+  };
+};
+
 const executeNode = async (node, input = {}) => {
-  const nodeType = node.data?.type || node.type;
+  const nodeType = node.data?.type;
+
+  console.log("Node type:", nodeType);
 
   switch (nodeType) {
     case "manual":
@@ -29,7 +39,7 @@ const executeNode = async (node, input = {}) => {
 
     default:
       throw new Error(
-        `Unsupported node type: ${nodeType}`
+        `Unsupported node type: ${nodeType || "unknown"}`
       );
   }
 };

@@ -27,6 +27,7 @@ const executeWorkflow = async (executionId) => {
       throw new Error("Workflow has no nodes");
     }
 
+    // Find starting node
     const targetNodeIds = new Set(
       edges.map((edge) => edge.target)
     );
@@ -43,7 +44,6 @@ const executeWorkflow = async (executionId) => {
     const visitedNodes = new Set();
 
     while (currentNode) {
- 
       if (visitedNodes.has(currentNode.id)) {
         throw new Error("Workflow contains a cycle");
       }
@@ -54,25 +54,54 @@ const executeWorkflow = async (executionId) => {
         `Executing node: ${currentNode.id || "unknown"}`
       );
 
-      const result = await executeNode(
-        currentNode,
-        input
-      );
+      const stepStartedAt = Date.now();
 
-      execution.steps.push({
+      const step = {
         nodeId: currentNode.id || null,
         type:
           currentNode.data?.type ||
           currentNode.type ||
           "unknown",
-        status: result.success ? "success" : "failed",
-        output: result.output || {},
-      });
+        status: "running",
+        input,
+        output: {},
+        error: null,
+        duration: 0,
+      };
+
+      execution.steps.push(step);
 
       await execution.save();
 
-      input = result.output || {};
+      try {
+        const result = await executeNode(
+          currentNode,
+          input
+        );
 
+        step.status = result.success
+          ? "success"
+          : "failed";
+
+        step.output = result.output || {};
+        step.duration =
+          Date.now() - stepStartedAt;
+
+        await execution.save();
+
+        input = result.output || {};
+      } catch (error) {
+        step.status = "failed";
+        step.error = error.message;
+        step.duration =
+          Date.now() - stepStartedAt;
+
+        await execution.save();
+
+        throw error;
+      }
+
+      // Find next connected node
       const nextEdge = edges.find(
         (edge) => edge.source === currentNode.id
       );
@@ -103,7 +132,10 @@ const executeWorkflow = async (executionId) => {
 
     return execution;
   } catch (error) {
-    console.error("Workflow execution error:", error);
+    console.error(
+      "Workflow execution error:",
+      error
+    );
 
     execution.status = "failed";
     execution.error = error.message;

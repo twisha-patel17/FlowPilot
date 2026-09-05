@@ -11,6 +11,7 @@ import SchedulesPage from "../pages/SchedulesPage";
 import IntegrationsPage from "../pages/IntegrationsPage";
 import WebhooksPage from "../pages/WebhooksPage";
 import WebhookLogsPage from "../pages/WebhookLogsPage";
+import ExecutionDetailsPage from "../pages/ExecutionDetailsPage";
 
 import WorkflowBuilderPage from "../pages/WorkflowBuilderPage";
 
@@ -48,6 +49,11 @@ const AppRoutes = () => {
           <Route
             path="executions"
             element={<ExecutionsPage />}
+          />
+
+          <Route
+            path="executions/:id"
+            element={<ExecutionDetailsPage />}
           />
 
           <Route
