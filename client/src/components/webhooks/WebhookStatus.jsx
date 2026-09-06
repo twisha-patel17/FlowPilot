@@ -9,7 +9,9 @@ const WebhookStatus = ({ active }) => {
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${
-          active ? "bg-emerald-400" : "bg-zinc-500"
+          active
+            ? "bg-emerald-400"
+            : "bg-zinc-500"
         }`}
       />
 

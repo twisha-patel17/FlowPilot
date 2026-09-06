@@ -1,90 +1,184 @@
 import { useState } from "react";
 import { FiPlus } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import WebhookCard from "../components/webhooks/WebhookCard";
 import NewWebhookModal from "../components/webhooks/NewWebhookModal";
 
-const initialWebhooks = [
-  {
-    id: "abc123",
-    name: "GitHub Issues Webhook",
-    active: true,
-    endpoint: "/api/webhooks/github/abc123",
-    events: ["issues.opened", "issues.closed"],
-    lastEvent: "2 minutes ago",
-  },
-  {
-    id: "f92d1e",
-    name: "Manual Deploy Trigger",
-    active: false,
-    endpoint: "/api/webhooks/deploy/f92d1e",
-    events: ["deployment.created"],
-    lastEvent: "2 days ago",
-  },
-];
+import {
+  getWebhooks,
+  createWebhook,
+  toggleWebhook,
+} from "../api/webhookApi";
 
-const workflows = [
-  {
-    id: "workflow-1",
-    name: "High Priority GitHub Issues",
-  },
-  {
-    id: "workflow-2",
-    name: "Manual Deploy Workflow",
-  },
-];
+import { getWorkflows } from "../api/workflowApi";
 
 const WebhooksPage = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [webhooks, setWebhooks] = useState(initialWebhooks);
   const [showModal, setShowModal] = useState(false);
 
-  const handleToggle = (id) => {
-    setWebhooks((currentWebhooks) =>
-      currentWebhooks.map((webhook) => {
-        if (webhook.id !== id) {
-          return webhook;
-        }
+  const {
+    data: webhookData,
+    isLoading: webhooksLoading,
+    isError: webhooksError,
+  } = useQuery({
+    queryKey: ["webhooks"],
+    queryFn: getWebhooks,
+  });
 
-        return {
-          ...webhook,
-          active: !webhook.active,
-        };
-      })
-    );
-  };
+  const {
+    data: workflowData,
+    isLoading: workflowsLoading,
+  } = useQuery({
+    queryKey: ["workflows"],
+    queryFn: getWorkflows,
+  });
+
+  const webhooks = webhookData?.webhooks || [];
+  const workflows = workflowData?.workflows || [];
+
+  const createMutation = useMutation({
+    mutationFn: createWebhook,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["webhooks"],
+      });
+
+      setShowModal(false);
+    },
+
+    onError: (error) => {
+      console.error(
+        "Create webhook error:",
+        error
+      );
+
+      alert(
+        error?.response?.data?.message ||
+          "Failed to create webhook"
+      );
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: toggleWebhook,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["webhooks"],
+      });
+    },
+
+    onError: (error) => {
+      console.error(
+        "Toggle webhook error:",
+        error
+      );
+
+      alert(
+        error?.response?.data?.message ||
+          "Failed to update webhook"
+      );
+    },
+  });
 
   const handleCreate = (webhookData) => {
-    const newWebhook = {
-      id: `webhook-${Date.now()}`,
-      name: webhookData.name,
-      active: true,
-      endpoint: `/api/webhooks/custom/${Math.random()
-        .toString(36)
-        .substring(2, 8)}`,
-      events: webhookData.events,
-      lastEvent: "Never",
-    };
-
-    setWebhooks((currentWebhooks) => [
-      newWebhook,
-      ...currentWebhooks,
-    ]);
-
-    setShowModal(false);
+    createMutation.mutate(webhookData);
   };
 
   const handleViewLogs = (id) => {
     navigate(`/app/webhooks/${id}/logs`);
   };
 
+  const formatLastEvent = (date) => {
+    if (!date) {
+      return "Never";
+    }
+
+    const diff =
+      // eslint-disable-next-line react-hooks/purity
+      Date.now() - new Date(date).getTime();
+
+    const minutes = Math.floor(
+      diff / (1000 * 60)
+    );
+
+    if (minutes < 1) {
+      return "Just now";
+    }
+
+    if (minutes < 60) {
+      return `${minutes} ${
+        minutes === 1 ? "minute" : "minutes"
+      } ago`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+      return `${hours} ${
+        hours === 1 ? "hour" : "hours"
+      } ago`;
+    }
+
+    const days = Math.floor(hours / 24);
+
+    return `${days} ${
+      days === 1 ? "day" : "days"
+    } ago`;
+  };
+
+  if (webhooksLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+            Webhooks
+          </h1>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            Manage inbound endpoints that trigger your workflows.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-8 text-center">
+          <p className="text-sm text-zinc-500">
+            Loading webhooks...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (webhooksError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+            Webhooks
+          </h1>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            Manage inbound endpoints that trigger your workflows.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-8 text-center">
+          <p className="text-sm text-red-400">
+            Failed to load webhooks.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-
       {/* Header */}
-
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
@@ -107,7 +201,6 @@ const WebhooksPage = () => {
       </div>
 
       {/* Webhook list */}
-
       {webhooks.length === 0 ? (
         <div className="rounded-xl border border-zinc-800/70 bg-[#0d0d0f] px-6 py-12 text-center">
           <h2 className="text-sm font-semibold text-zinc-200">
@@ -128,30 +221,49 @@ const WebhooksPage = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {webhooks.map((webhook) => (
-            <WebhookCard
-              key={webhook.id}
-              id={webhook.id}
-              name={webhook.name}
-              active={webhook.active}
-              endpoint={webhook.endpoint}
-              events={webhook.events}
-              lastEvent={webhook.lastEvent}
-              onToggle={() => handleToggle(webhook.id)}
-              onViewLogs={() => handleViewLogs(webhook.id)}
-            />
-          ))}
+          {webhooks.map((webhook) => {
+            const endpoint = `http://localhost:5000/api/webhooks/${webhook.publicId}`;
+
+            return (
+              <WebhookCard
+                key={webhook._id}
+                name={webhook.name}
+                active={webhook.active}
+                endpoint={endpoint}
+                events={webhook.events || []}
+                lastEvent={formatLastEvent(
+                  webhook.lastEventAt
+                )}
+                onToggle={() =>
+                  toggleMutation.mutate(webhook._id)
+                }
+                onViewLogs={() =>
+                  handleViewLogs(webhook._id)
+                }
+                isToggling={
+                  toggleMutation.isPending &&
+                  toggleMutation.variables === webhook._id
+                }
+              />
+            );
+          })}
         </div>
       )}
 
       {/* New Webhook Modal */}
-
       {showModal && (
         <NewWebhookModal
           workflows={workflows}
           onClose={() => setShowModal(false)}
           onCreate={handleCreate}
+          isCreating={createMutation.isPending}
         />
+      )}
+
+      {workflowsLoading && showModal && (
+        <div className="pointer-events-none fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-400">
+          Loading workflows...
+        </div>
       )}
     </div>
   );

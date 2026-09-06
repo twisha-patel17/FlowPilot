@@ -11,6 +11,7 @@ const WebhookCard = ({
   lastEvent,
   onToggle,
   onViewLogs,
+  isToggling = false,
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -24,7 +25,10 @@ const WebhookCard = ({
         setCopied(false);
       }, 1500);
     } catch (error) {
-      console.error("Failed to copy webhook URL:", error);
+      console.error(
+        "Failed to copy webhook URL:",
+        error
+      );
     }
   };
 
@@ -105,13 +109,16 @@ const WebhookCard = ({
           aria-checked={active}
           aria-label={`${active ? "Pause" : "Activate"} ${name}`}
           onClick={onToggle}
-          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500/30 ${
+          disabled={isToggling}
+          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:cursor-not-allowed disabled:opacity-60 ${
             active ? "bg-violet-500" : "bg-zinc-700"
           }`}
         >
           <span
             className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-              active ? "translate-x-4" : "translate-x-0"
+              active
+                ? "translate-x-4"
+                : "translate-x-0"
             }`}
           />
         </button>

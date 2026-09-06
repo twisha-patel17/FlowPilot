@@ -32,6 +32,11 @@ const executionSchema = new mongoose.Schema(
       default: "manual",
     },
 
+    scheduledAt: {
+      type: Date,
+      default: null,
+    },
+
     startedAt: {
       type: Date,
       default: null,
@@ -62,7 +67,12 @@ const executionSchema = new mongoose.Schema(
 
           status: {
             type: String,
-            enum: ["pending", "running", "success", "failed"],
+            enum: [
+              "pending",
+              "running",
+              "success",
+              "failed",
+            ],
             default: "pending",
           },
 
@@ -92,6 +102,17 @@ const executionSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  }
+);
+
+executionSchema.index(
+  { workflow: 1, trigger: 1, scheduledAt: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      trigger: "schedule",
+      scheduledAt: { $type: "date" },
+    },
   }
 );
 

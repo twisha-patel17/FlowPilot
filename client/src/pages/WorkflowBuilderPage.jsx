@@ -199,31 +199,57 @@ const WorkflowBuilderPage = () => {
 });
 
   const handleSave = () => {
-    const workflowData = {
-      name:
-        workflowName.trim() ||
-        "Untitled Workflow",
+  const normalizedNodes = nodes.map((node) => ({
+    ...node,
+    type: "flowpilot",
+    data: {
+      ...node.data,
+      type:
+        node.data?.type ||
+        node.data?.nodeType ||
+        "manual",
+    },
+  }));
 
-      description: "",
+  const triggerNode = normalizedNodes.find((node) => {
+    const nodeType =
+      node.data?.type ||
+      node.data?.nodeType;
 
-      trigger: {
-        type: "manual",
-        config: {},
-      },
+    return [
+      "manual",
+      "webhook",
+      "schedule",
+      "github",
+      "http",
+    ].includes(nodeType);
+  });
 
-      nodes,
-      edges,
-    };
+  const workflowData = {
+    name:
+      workflowName.trim() ||
+      "Untitled Workflow",
 
-    if (id) {
-      updateMutation.mutate({
-        id,
-        workflowData,
-      });
-    } else {
-      createMutation.mutate(workflowData);
-    }
+    description: "",
+
+    trigger: {
+      type: triggerNode?.data?.type || "manual",
+      config: triggerNode?.data?.config || {},
+    },
+
+    nodes: normalizedNodes,
+    edges,
   };
+
+  if (id) {
+    updateMutation.mutate({
+      id,
+      workflowData,
+    });
+  } else {
+    createMutation.mutate(workflowData);
+  }
+};
 
   const handleActivate = () => {
     if (!id) return;

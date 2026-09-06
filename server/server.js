@@ -9,6 +9,8 @@ const app = express();
 const authRoutes = require("./routes/authRoutes");
 const workflowRoutes = require("./routes/workflowRoutes");
 const executionRoutes = require("./routes/executionRoutes");
+const webhookRoutes = require("./routes/webhookRoutes");
+const startScheduler = require("./services/scheduler/scheduler");
 
 const PORT = process.env.PORT || 5000;
 
@@ -32,8 +34,11 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/workflows", workflowRoutes);
 app.use("/api/executions", executionRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 connectDB();
+
+startScheduler();
 
 app.listen(PORT, () => {
   console.log(`FlowPilot server running on port ${PORT}`);

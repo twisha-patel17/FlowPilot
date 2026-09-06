@@ -10,6 +10,15 @@ const executeManualNode = async (node, input) => {
   };
 };
 
+const executeWebhookNode = async (node, input) => {
+  console.log("Executing webhook node");
+
+  return {
+    success: true,
+    output: input || {},
+  };
+};
+
 const executeDiscordNode = async (node, input) => {
   console.log("Executing Discord node");
 
@@ -36,6 +45,9 @@ const executeNode = async (node, input = {}) => {
 
     case "discord":
       return executeDiscordNode(node, input);
+
+    case "webhook":
+      return executeWebhookNode(node, input);  
 
     default:
       throw new Error(

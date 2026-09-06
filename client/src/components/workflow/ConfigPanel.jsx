@@ -238,10 +238,6 @@ const ConfigPanel = ({
   );
 };
 
-/* =========================================================
-   GITHUB
-========================================================= */
-
 const GithubConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -318,10 +314,6 @@ const GithubConfig = ({ config, onChange }) => {
   );
 };
 
-/* =========================================================
-   WEBHOOK
-========================================================= */
-
 const WebhookConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -370,12 +362,27 @@ const WebhookConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
-/* =========================================================
-   SCHEDULE
-========================================================= */
-
 const ScheduleConfig = ({ config, onChange }) => {
+  const selectedDays = config.days || [];
+
+  const days = [
+    { value: "Mon", label: "Monday" },
+    { value: "Tue", label: "Tuesday" },
+    { value: "Wed", label: "Wednesday" },
+    { value: "Thu", label: "Thursday" },
+    { value: "Fri", label: "Friday" },
+    { value: "Sat", label: "Saturday" },
+    { value: "Sun", label: "Sunday" },
+  ];
+
+  const handleDayToggle = (day) => {
+    const updatedDays = selectedDays.includes(day)
+      ? selectedDays.filter((item) => item !== day)
+      : [...selectedDays, day];
+
+    onChange("days", updatedDays);
+  };
+
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -409,6 +416,55 @@ const ScheduleConfig = ({ config, onChange }) => {
           },
         ]}
       />
+
+      {/* Custom days */}
+      {config.frequency === "custom" && (
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-zinc-400">
+            Days
+          </label>
+
+          <div className="space-y-2">
+            {days.map((day) => {
+              const selected =
+                selectedDays.includes(day.value);
+
+              return (
+                <button
+                  key={day.value}
+                  type="button"
+                  onClick={() =>
+                    handleDayToggle(day.value)
+                  }
+                  className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-xs transition ${
+                    selected
+                      ? "border-violet-500/40 bg-violet-500/10 text-violet-300"
+                      : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"
+                  }`}
+                >
+                  <span>{day.label}</span>
+
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
+                      selected
+                        ? "border-violet-500 bg-violet-500 text-white"
+                        : "border-zinc-700"
+                    }`}
+                  >
+                    {selected ? "✓" : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedDays.length === 0 && (
+            <p className="text-[11px] text-amber-400">
+              Select at least one day.
+            </p>
+          )}
+        </div>
+      )}
 
       <Field
         label="Time"
@@ -450,11 +506,6 @@ const ScheduleConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
-/* =========================================================
-   MANUAL
-========================================================= */
-
 const ManualConfig = () => {
   return (
     <div className="space-y-5">
@@ -470,10 +521,6 @@ const ManualConfig = () => {
     </div>
   );
 };
-
-/* =========================================================
-   FILTER
-========================================================= */
 
 const FilterConfig = ({ config, onChange }) => {
   return (
@@ -535,10 +582,6 @@ const FilterConfig = ({ config, onChange }) => {
   );
 };
 
-/* =========================================================
-   CONDITION
-========================================================= */
-
 const ConditionConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -591,10 +634,6 @@ const ConditionConfig = ({ config, onChange }) => {
   );
 };
 
-/* =========================================================
-   SWITCH
-========================================================= */
-
 const SwitchConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -623,10 +662,6 @@ const SwitchConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
-/* =========================================================
-   DELAY
-========================================================= */
 
 const DelayConfig = ({ config, onChange }) => {
   return (
@@ -671,10 +706,6 @@ const DelayConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
-/* =========================================================
-   DISCORD
-========================================================= */
 
 const DiscordConfig = ({ config, onChange }) => {
   return (
@@ -745,10 +776,6 @@ const DiscordConfig = ({ config, onChange }) => {
   );
 };
 
-/* =========================================================
-   EMAIL
-========================================================= */
-
 const EmailConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -787,10 +814,6 @@ const EmailConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
-/* =========================================================
-   HTTP
-========================================================= */
 
 const HttpConfig = ({ config, onChange }) => {
   return (
@@ -865,10 +888,6 @@ const HttpConfig = ({ config, onChange }) => {
   );
 };
 
-/* =========================================================
-   MONGODB
-========================================================= */
-
 const MongoConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -938,10 +957,6 @@ const MongoConfig = ({ config, onChange }) => {
   );
 };
 
-/* =========================================================
-   GENERIC
-========================================================= */
-
 const GenericConfig = ({ selectedNode }) => {
   return (
     <div className="space-y-4">
@@ -960,10 +975,6 @@ const GenericConfig = ({ selectedNode }) => {
   );
 };
 
-/* =========================================================
-   TEST BUTTON
-========================================================= */
-
 const TestButton = () => {
   return (
     <div className="border-t border-zinc-800/70 pt-5">
@@ -981,10 +992,6 @@ const TestButton = () => {
   );
 };
 
-/* =========================================================
-   SECTION TITLE
-========================================================= */
-
 const SectionTitle = ({ label, title }) => {
   return (
     <div>
@@ -998,10 +1005,6 @@ const SectionTitle = ({ label, title }) => {
     </div>
   );
 };
-
-/* =========================================================
-   FIELD
-========================================================= */
 
 const Field = ({
   label,
@@ -1048,10 +1051,6 @@ const Field = ({
     </div>
   );
 };
-
-/* =========================================================
-   TEXTAREA
-========================================================= */
 
 const TextareaField = ({
   label,
