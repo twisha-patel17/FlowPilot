@@ -12,7 +12,6 @@ const executeHttpNode = async (node, input = {}) => {
 
   let body = config.body || {};
 
-  // If body is stored as JSON text, convert it to an object
   if (typeof body === "string" && body.trim()) {
     try {
       body = JSON.parse(body);

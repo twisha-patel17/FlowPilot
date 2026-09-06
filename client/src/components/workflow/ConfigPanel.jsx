@@ -29,6 +29,22 @@ const nodeIcons = {
   mongodb: FiDatabase,
 };
 
+// eslint-disable-next-line no-unused-vars
+const supportedNodeTypes = [
+  "github",
+  "webhook",
+  "schedule",
+  "manual",
+  "filter",
+  "condition",
+  "switch",
+  "delay",
+  "discord",
+  "email",
+  "http",
+  "mongodb",
+];
+
 const ConfigPanel = ({
   selectedNode,
   onClose,
@@ -53,7 +69,9 @@ const ConfigPanel = ({
   }
 
   const nodeType =
-    selectedNode.data?.nodeType || selectedNode.type;
+    selectedNode.data?.type ||
+    selectedNode.data?.nodeType ||
+    selectedNode.type;
 
   const Icon = nodeIcons[nodeType] || FiZap;
 
@@ -68,6 +86,8 @@ const ConfigPanel = ({
       data: {
         ...selectedNode.data,
 
+        type: nodeType,
+
         config: {
           ...config,
           [key]: value,
@@ -76,6 +96,108 @@ const ConfigPanel = ({
     };
 
     onNodeUpdate(updatedNode);
+  };
+
+  const renderConfig = () => {
+    switch (nodeType) {
+      case "github":
+        return (
+          <GithubConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "webhook":
+        return (
+          <WebhookConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "schedule":
+        return (
+          <ScheduleConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "manual":
+        return <ManualConfig />;
+
+      case "filter":
+        return (
+          <FilterConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "condition":
+        return (
+          <ConditionConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "switch":
+        return (
+          <SwitchConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "delay":
+        return (
+          <DelayConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "discord":
+        return (
+          <DiscordConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "email":
+        return (
+          <EmailConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "http":
+        return (
+          <HttpConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      case "mongodb":
+        return (
+          <MongoConfig
+            config={config}
+            onChange={updateConfig}
+          />
+        );
+
+      default:
+        return (
+          <GenericConfig
+            selectedNode={selectedNode}
+          />
+        );
+    }
   };
 
   return (
@@ -110,105 +232,15 @@ const ConfigPanel = ({
 
       {/* Configuration */}
       <div className="flex-1 overflow-y-auto p-4">
-        {nodeType === "github" && (
-          <GithubConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "webhook" && (
-          <WebhookConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "schedule" && (
-          <ScheduleConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "manual" && <ManualConfig />}
-
-        {nodeType === "filter" && (
-          <FilterConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "condition" && (
-          <ConditionConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "switch" && (
-          <SwitchConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "delay" && (
-          <DelayConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "discord" && (
-          <DiscordConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "email" && (
-          <EmailConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "http" && (
-          <HttpConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {nodeType === "mongodb" && (
-          <MongoConfig
-            config={config}
-            onChange={updateConfig}
-          />
-        )}
-
-        {![
-          "github",
-          "webhook",
-          "schedule",
-          "manual",
-          "filter",
-          "condition",
-          "switch",
-          "delay",
-          "discord",
-          "email",
-          "http",
-          "mongodb",
-        ].includes(nodeType) && (
-          <GenericConfig selectedNode={selectedNode} />
-        )}
+        {renderConfig()}
       </div>
     </aside>
   );
 };
+
+/* =========================================================
+   GITHUB
+========================================================= */
 
 const GithubConfig = ({ config, onChange }) => {
   return (
@@ -235,12 +267,18 @@ const GithubConfig = ({ config, onChange }) => {
           onChange("event", value)
         }
         options={[
-          { value: "issues", label: "Issues" },
+          {
+            value: "issues",
+            label: "Issues",
+          },
           {
             value: "pull_request",
             label: "Pull Request",
           },
-          { value: "push", label: "Push" },
+          {
+            value: "push",
+            label: "Push",
+          },
           {
             value: "release",
             label: "Release",
@@ -256,9 +294,18 @@ const GithubConfig = ({ config, onChange }) => {
           onChange("action", value)
         }
         options={[
-          { value: "opened", label: "Opened" },
-          { value: "closed", label: "Closed" },
-          { value: "edited", label: "Edited" },
+          {
+            value: "opened",
+            label: "Opened",
+          },
+          {
+            value: "closed",
+            label: "Closed",
+          },
+          {
+            value: "edited",
+            label: "Edited",
+          },
           {
             value: "reopened",
             label: "Reopened",
@@ -270,6 +317,10 @@ const GithubConfig = ({ config, onChange }) => {
     </div>
   );
 };
+
+/* =========================================================
+   WEBHOOK
+========================================================= */
 
 const WebhookConfig = ({ config, onChange }) => {
   return (
@@ -287,8 +338,14 @@ const WebhookConfig = ({ config, onChange }) => {
           onChange("method", value)
         }
         options={[
-          { value: "POST", label: "POST" },
-          { value: "GET", label: "GET" },
+          {
+            value: "POST",
+            label: "POST",
+          },
+          {
+            value: "GET",
+            label: "GET",
+          },
         ]}
       />
 
@@ -314,6 +371,10 @@ const WebhookConfig = ({ config, onChange }) => {
   );
 };
 
+/* =========================================================
+   SCHEDULE
+========================================================= */
+
 const ScheduleConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -330,7 +391,10 @@ const ScheduleConfig = ({ config, onChange }) => {
           onChange("frequency", value)
         }
         options={[
-          { value: "daily", label: "Every day" },
+          {
+            value: "daily",
+            label: "Every day",
+          },
           {
             value: "weekday",
             label: "Every weekday",
@@ -358,7 +422,9 @@ const ScheduleConfig = ({ config, onChange }) => {
       <Field
         label="Timezone"
         type="select"
-        value={config.timezone || "Asia/Kolkata"}
+        value={
+          config.timezone || "Asia/Kolkata"
+        }
         onChange={(value) =>
           onChange("timezone", value)
         }
@@ -385,6 +451,10 @@ const ScheduleConfig = ({ config, onChange }) => {
   );
 };
 
+/* =========================================================
+   MANUAL
+========================================================= */
+
 const ManualConfig = () => {
   return (
     <div className="space-y-5">
@@ -400,6 +470,10 @@ const ManualConfig = () => {
     </div>
   );
 };
+
+/* =========================================================
+   FILTER
+========================================================= */
 
 const FilterConfig = ({ config, onChange }) => {
   return (
@@ -461,6 +535,10 @@ const FilterConfig = ({ config, onChange }) => {
   );
 };
 
+/* =========================================================
+   CONDITION
+========================================================= */
+
 const ConditionConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -486,7 +564,10 @@ const ConditionConfig = ({ config, onChange }) => {
           onChange("operator", value)
         }
         options={[
-          { value: "equals", label: "Equals" },
+          {
+            value: "equals",
+            label: "Equals",
+          },
           {
             value: "not_equals",
             label: "Not equals",
@@ -509,6 +590,10 @@ const ConditionConfig = ({ config, onChange }) => {
     </div>
   );
 };
+
+/* =========================================================
+   SWITCH
+========================================================= */
 
 const SwitchConfig = ({ config, onChange }) => {
   return (
@@ -538,6 +623,10 @@ const SwitchConfig = ({ config, onChange }) => {
     </div>
   );
 };
+
+/* =========================================================
+   DELAY
+========================================================= */
 
 const DelayConfig = ({ config, onChange }) => {
   return (
@@ -583,6 +672,10 @@ const DelayConfig = ({ config, onChange }) => {
   );
 };
 
+/* =========================================================
+   DISCORD
+========================================================= */
+
 const DiscordConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -617,7 +710,8 @@ const DiscordConfig = ({ config, onChange }) => {
         label="Channel"
         type="select"
         value={
-          config.channel || "#development"
+          config.channel ||
+          "#development"
         }
         onChange={(value) =>
           onChange("channel", value)
@@ -650,6 +744,10 @@ const DiscordConfig = ({ config, onChange }) => {
     </div>
   );
 };
+
+/* =========================================================
+   EMAIL
+========================================================= */
 
 const EmailConfig = ({ config, onChange }) => {
   return (
@@ -690,6 +788,10 @@ const EmailConfig = ({ config, onChange }) => {
   );
 };
 
+/* =========================================================
+   HTTP
+========================================================= */
+
 const HttpConfig = ({ config, onChange }) => {
   return (
     <div className="space-y-5">
@@ -701,15 +803,27 @@ const HttpConfig = ({ config, onChange }) => {
       <Field
         label="Method"
         type="select"
-        value={config.method || "POST"}
+        value={config.method || "GET"}
         onChange={(value) =>
           onChange("method", value)
         }
         options={[
-          { value: "GET", label: "GET" },
-          { value: "POST", label: "POST" },
-          { value: "PUT", label: "PUT" },
-          { value: "PATCH", label: "PATCH" },
+          {
+            value: "GET",
+            label: "GET",
+          },
+          {
+            value: "POST",
+            label: "POST",
+          },
+          {
+            value: "PUT",
+            label: "PUT",
+          },
+          {
+            value: "PATCH",
+            label: "PATCH",
+          },
           {
             value: "DELETE",
             label: "DELETE",
@@ -736,9 +850,24 @@ const HttpConfig = ({ config, onChange }) => {
         rows={6}
         mono
       />
+
+      <div className="rounded-md border border-zinc-800/70 bg-zinc-900/50 px-3 py-2.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+          Tip
+        </p>
+
+        <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+          Use GET for APIs that only retrieve data.
+          Use POST, PUT, or PATCH when sending data.
+        </p>
+      </div>
     </div>
   );
 };
+
+/* =========================================================
+   MONGODB
+========================================================= */
 
 const MongoConfig = ({ config, onChange }) => {
   return (
@@ -809,6 +938,10 @@ const MongoConfig = ({ config, onChange }) => {
   );
 };
 
+/* =========================================================
+   GENERIC
+========================================================= */
+
 const GenericConfig = ({ selectedNode }) => {
   return (
     <div className="space-y-4">
@@ -827,6 +960,10 @@ const GenericConfig = ({ selectedNode }) => {
   );
 };
 
+/* =========================================================
+   TEST BUTTON
+========================================================= */
+
 const TestButton = () => {
   return (
     <div className="border-t border-zinc-800/70 pt-5">
@@ -844,6 +981,10 @@ const TestButton = () => {
   );
 };
 
+/* =========================================================
+   SECTION TITLE
+========================================================= */
+
 const SectionTitle = ({ label, title }) => {
   return (
     <div>
@@ -857,6 +998,10 @@ const SectionTitle = ({ label, title }) => {
     </div>
   );
 };
+
+/* =========================================================
+   FIELD
+========================================================= */
 
 const Field = ({
   label,
@@ -903,6 +1048,10 @@ const Field = ({
     </div>
   );
 };
+
+/* =========================================================
+   TEXTAREA
+========================================================= */
 
 const TextareaField = ({
   label,

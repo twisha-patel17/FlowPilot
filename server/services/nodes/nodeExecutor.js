@@ -20,7 +20,7 @@ const executeDiscordNode = async (node, input) => {
 };
 
 const executeNode = async (node, input = {}) => {
-  const nodeType = node.data?.type;
+  const nodeType = node.data?.type || node.data?.nodeType;
 
   console.log("Node type:", nodeType);
 

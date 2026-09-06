@@ -127,21 +127,7 @@ const nodeConfig = {
 };
 
 const FlowPilotNode = ({ data, selected }) => {
-  /*
-   * IMPORTANT:
-   *
-   * node.type = "flowpilot"
-   * node.data.type = actual executable node type
-   *
-   * Example:
-   * {
-   *   type: "flowpilot",
-   *   data: {
-   *     type: "manual"
-   *   }
-   * }
-   */
-
+  
   const nodeType = data?.type || "manual";
 
   const config =
@@ -159,16 +145,22 @@ const FlowPilotNode = ({ data, selected }) => {
 
   return (
     <div
-      className={`relative w-[190px] overflow-hidden rounded-lg border bg-[#111113] transition-all ${
+      className={`nodrag nopan relative w-[190px] cursor-pointer overflow-visible rounded-lg border bg-[#111113] transition-all ${
         selected
           ? "border-violet-500 shadow-[0_0_0_1px_rgba(139,92,246,0.15),0_8px_30px_rgba(0,0,0,0.35)]"
           : "border-zinc-800 shadow-[0_8px_25px_rgba(0,0,0,0.25)] hover:border-zinc-700"
       }`}
     >
+      {/* INPUT HANDLE */}
       <Handle
         type="target"
         position={Position.Top}
-        className="!h-[7px] !w-[7px] !border-2 !border-[#111113] !bg-zinc-600"
+        isConnectable={true}
+        className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-zinc-500"
+        style={{
+          cursor: "crosshair",
+          pointerEvents: "auto",
+        }}
       />
 
       <div className="flex items-center gap-2.5 border-b border-zinc-800/70 px-3 py-2.5">
@@ -212,11 +204,16 @@ const FlowPilotNode = ({ data, selected }) => {
       <Handle
         type="source"
         position={Position.Bottom}
-        className={`!h-[7px] !w-[7px] !border-2 !border-[#111113] ${
+        isConnectable={true}
+        className={`!z-50 !h-3 !w-3 !border-2 !border-[#111113] ${
           selected
             ? "!bg-violet-500"
-            : "!bg-zinc-600"
+            : "!bg-zinc-500"
         }`}
+        style={{
+          cursor: "crosshair",
+          pointerEvents: "auto",
+        }}
       />
     </div>
   );
@@ -232,12 +229,24 @@ const WorkflowCanvas = ({
   initialNodes = [],
   initialEdges = [],
 }) => {
-  /*
-   * WorkflowBuilderPage owns the actual state.
-   *
-   * WorkflowCanvas only calculates changes and sends
-   * them back to the parent.
-   */
+ 
+  const normalizedNodes = initialNodes.map(
+    (node) => {
+      const actualType =
+        node.data?.type ||
+        node.data?.nodeType ||
+        "manual";
+
+      return {
+        ...node,
+        type: "flowpilot",
+        data: {
+          ...node.data,
+          type: actualType,
+        },
+      };
+    }
+  );
 
   const handleNodesChange = useCallback(
     (changes) => {
@@ -283,6 +292,11 @@ const WorkflowCanvas = ({
 
   const onConnect = useCallback(
     (connection) => {
+      console.log(
+        "Connecting nodes:",
+        connection
+      );
+
       const updatedEdges = addEdge(
         {
           ...connection,
@@ -306,13 +320,17 @@ const WorkflowCanvas = ({
   );
 
   const onNodeClick = useCallback(
-    (_event, node) => {
-      if (onNodeSelect) {
-        onNodeSelect(node);
-      }
-    },
-    [onNodeSelect]
-  );
+  (event, node) => {
+    event.stopPropagation();
+
+    console.log("Node selected:", node);
+
+    if (onNodeSelect) {
+      onNodeSelect(node);
+    }
+  },
+  [onNodeSelect]
+);
 
   const onPaneClick = useCallback(() => {
     if (onNodeSelect) {
@@ -349,15 +367,6 @@ const WorkflowCanvas = ({
         nodeConfig[nodeType] ||
         nodeConfig.manual;
 
-      /*
-       * IMPORTANT:
-       *
-       * React Flow rendering type:
-       * type: "flowpilot"
-       *
-       * Actual workflow execution type:
-       * data.type: nodeType
-       */
       const newNode = {
         id: `${Date.now()}`,
         type: "flowpilot",
@@ -393,35 +402,6 @@ const WorkflowCanvas = ({
     ]
   );
 
-  /*
-   * Normalize older saved nodes.
-   *
-   * If a node was previously saved with:
-   * data.nodeType = "manual"
-   *
-   * convert it visually to:
-   * data.type = "manual"
-   *
-   * This prevents old workflows from breaking.
-   */
-  const normalizedNodes = initialNodes.map(
-    (node) => {
-      const actualType =
-        node.data?.type ||
-        node.data?.nodeType ||
-        "manual";
-
-      return {
-        ...node,
-        type: "flowpilot",
-        data: {
-          ...node.data,
-          type: actualType,
-        },
-      };
-    }
-  );
-
   return (
     <div className="h-full w-full bg-[#09090b]">
       <ReactFlow
@@ -437,6 +417,7 @@ const WorkflowCanvas = ({
         onDrop={onDrop}
         fitView
         colorMode="dark"
+        connectionRadius={30}
         defaultEdgeOptions={{
           type: "smoothstep",
           style: {
