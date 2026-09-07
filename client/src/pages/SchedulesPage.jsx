@@ -48,10 +48,23 @@ const SchedulesPage = () => {
   const workflows = data?.workflows || [];
   const executions = executionData?.executions || [];
 
-  const schedules = workflows.filter(
-    (workflow) =>
-      workflow.trigger?.type === "schedule"
-  );
+console.log(
+  "Workflow triggers:",
+  workflows.map((workflow) => ({
+    id: workflow._id,
+    name: workflow.name,
+    status: workflow.status,
+    trigger: workflow.trigger,
+    triggerType: workflow.trigger?.type,
+  }))
+);
+
+const schedules = workflows.filter(
+  (workflow) =>
+    workflow.trigger?.type === "schedule"
+);
+
+console.log("Scheduled workflows:", schedules);
 
   const handleToggle = (workflowId) => {
     toggleMutation.mutate(workflowId);

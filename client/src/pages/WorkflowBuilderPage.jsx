@@ -44,6 +44,10 @@ const WorkflowBuilderPage = () => {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
 
+  /*
+   * LOAD WORKFLOW
+   */
+
   const {
     data,
     isLoading,
@@ -66,6 +70,10 @@ const WorkflowBuilderPage = () => {
     setEdges(data.workflow.edges || []);
   }, [data]);
 
+  /*
+   * WORKFLOW CANVAS CHANGE
+   */
+
   const handleWorkflowChange = useCallback(
     (updatedNodes, updatedEdges) => {
       setNodes(updatedNodes);
@@ -73,6 +81,10 @@ const WorkflowBuilderPage = () => {
     },
     []
   );
+
+  /*
+   * NODE UPDATE
+   */
 
   const handleNodeUpdate = useCallback(
     (updatedNode) => {
@@ -89,7 +101,10 @@ const WorkflowBuilderPage = () => {
     []
   );
 
-  // CREATE WORKFLOW
+  /*
+   * CREATE WORKFLOW
+   */
+
   const createMutation = useMutation({
     mutationFn: createWorkflow,
 
@@ -117,7 +132,10 @@ const WorkflowBuilderPage = () => {
     },
   });
 
-  // UPDATE WORKFLOW
+  /*
+   * UPDATE WORKFLOW
+   */
+
   const updateMutation = useMutation({
     mutationFn: updateWorkflow,
 
@@ -140,7 +158,10 @@ const WorkflowBuilderPage = () => {
     },
   });
 
-  // TOGGLE WORKFLOW
+  /*
+   * TOGGLE WORKFLOW
+   */
+
   const toggleMutation = useMutation({
     mutationFn: toggleWorkflow,
 
@@ -163,93 +184,164 @@ const WorkflowBuilderPage = () => {
     },
   });
 
-  // RUN WORKFLOW
+  /*
+   * RUN WORKFLOW
+   */
+
   const executeMutation = useMutation({
-  mutationFn: createExecution,
+    mutationFn: createExecution,
 
-  onSuccess: (response) => {
-    queryClient.invalidateQueries({
-      queryKey: ["executions"],
-    });
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({
+        queryKey: ["executions"],
+      });
 
-    const execution = response?.execution;
+      const execution =
+        response?.execution;
 
-    if (execution?._id) {
-      navigate(
-        `/app/executions/${execution._id}`
+      if (execution?._id) {
+        navigate(
+          `/app/executions/${execution._id}`
+        );
+
+        return;
+      }
+
+      alert(
+        "Workflow executed successfully"
+      );
+    },
+
+    onError: (error) => {
+      console.error(
+        "Workflow execution error:",
+        error
       );
 
-      return;
-    }
-
-    alert("Workflow executed successfully");
-  },
-
-  onError: (error) => {
-    console.error(
-      "Workflow execution error:",
-      error
-    );
-
-    alert(
-      error.response?.data?.message ||
-        "Workflow execution failed"
-    );
-  },
-});
-
-  const handleSave = () => {
-  const normalizedNodes = nodes.map((node) => ({
-    ...node,
-    type: "flowpilot",
-    data: {
-      ...node.data,
-      type:
-        node.data?.type ||
-        node.data?.nodeType ||
-        "manual",
+      alert(
+        error.response?.data?.message ||
+          "Workflow execution failed"
+      );
     },
-  }));
-
-  const triggerNode = normalizedNodes.find((node) => {
-    const nodeType =
-      node.data?.type ||
-      node.data?.nodeType;
-
-    return [
-      "manual",
-      "webhook",
-      "schedule",
-      "github",
-      "http",
-    ].includes(nodeType);
   });
 
-  const workflowData = {
-    name:
-      workflowName.trim() ||
-      "Untitled Workflow",
+  /*
+   * SAVE WORKFLOW
+   */
 
-    description: "",
+  const handleSave = () => {
+    /*
+     * Normalize nodes before saving.
+     */
+    const normalizedNodes = nodes.map(
+      (node) => {
+        const nodeType =
+          node.data?.type ||
+          node.data?.nodeType ||
+          node.type ||
+          "manual";
 
-    trigger: {
-      type: triggerNode?.data?.type || "manual",
-      config: triggerNode?.data?.config || {},
-    },
+        return {
+          ...node,
 
-    nodes: normalizedNodes,
-    edges,
+          type: "flowpilot",
+
+          data: {
+            ...node.data,
+            type: nodeType,
+          },
+        };
+      }
+    );
+
+    /*
+     * Trigger node priority.
+     *
+     * We intentionally check real trigger nodes
+     * BEFORE manual.
+     *
+     * This prevents a Manual node appearing before
+     * a Schedule node from overriding the Schedule
+     * trigger.
+     */
+
+    const triggerPriority = [
+      "schedule",
+      "webhook",
+      "github",
+      "http",
+      "manual",
+    ];
+
+    let triggerNode = null;
+
+    for (const triggerType of triggerPriority) {
+      triggerNode = normalizedNodes.find(
+        (node) =>
+          node.data?.type === triggerType
+      );
+
+      if (triggerNode) {
+        break;
+      }
+    }
+
+    /*
+     * Get trigger type.
+     */
+
+    const triggerType =
+      triggerNode?.data?.type ||
+      "manual";
+
+    /*
+     * Get trigger configuration.
+     */
+
+    const triggerConfig =
+      triggerNode?.data?.config || {};
+
+    /*
+     * Build workflow payload.
+     */
+
+    const workflowData = {
+      name:
+        workflowName.trim() ||
+        "Untitled Workflow",
+
+      description: "",
+
+      trigger: {
+        type: triggerType,
+        config: triggerConfig,
+      },
+
+      nodes: normalizedNodes,
+
+      edges,
+    };
+
+    console.log(
+      "Saving workflow:",
+      workflowData
+    );
+
+    if (id) {
+      updateMutation.mutate({
+        id,
+        workflowData,
+      });
+    } else {
+      createMutation.mutate(
+        workflowData
+      );
+    }
   };
 
-  if (id) {
-    updateMutation.mutate({
-      id,
-      workflowData,
-    });
-  } else {
-    createMutation.mutate(workflowData);
-  }
-};
+  /*
+   * ACTIVATE WORKFLOW
+   */
 
   const handleActivate = () => {
     if (!id) return;
@@ -257,11 +349,16 @@ const WorkflowBuilderPage = () => {
     toggleMutation.mutate(id);
   };
 
+  /*
+   * RUN WORKFLOW
+   */
+
   const handleRunWorkflow = () => {
     if (!id) {
       alert(
         "Save the workflow before running it."
       );
+
       return;
     }
 
@@ -269,11 +366,16 @@ const WorkflowBuilderPage = () => {
       alert(
         "Add at least one node before running the workflow."
       );
+
       return;
     }
 
     executeMutation.mutate(id);
   };
+
+  /*
+   * LOADING
+   */
 
   if (id && isLoading) {
     return (
@@ -284,6 +386,10 @@ const WorkflowBuilderPage = () => {
       </div>
     );
   }
+
+  /*
+   * ERROR
+   */
 
   if (id && isError) {
     return (
@@ -305,10 +411,16 @@ const WorkflowBuilderPage = () => {
     );
   }
 
+  /*
+   * PAGE
+   */
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#09090b]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-800/70 bg-[#0d0d0f] px-3 sm:px-5">
+
         <div className="flex min-w-0 items-center gap-3">
+
           <button
             type="button"
             onClick={() =>
@@ -329,15 +441,19 @@ const WorkflowBuilderPage = () => {
             type="text"
             value={workflowName}
             onChange={(event) =>
-              setWorkflowName(event.target.value)
+              setWorkflowName(
+                event.target.value
+              )
             }
             className="min-w-0 max-w-[220px] truncate bg-transparent text-sm font-semibold text-zinc-100 outline-none"
           />
+
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
 
           {/* SAVE */}
+
           <button
             type="button"
             onClick={handleSave}
@@ -358,6 +474,7 @@ const WorkflowBuilderPage = () => {
           </button>
 
           {/* RUN */}
+
           <button
             type="button"
             onClick={handleRunWorkflow}
@@ -377,6 +494,7 @@ const WorkflowBuilderPage = () => {
           </button>
 
           {/* ACTIVATE */}
+
           <button
             type="button"
             onClick={handleActivate}
@@ -394,10 +512,12 @@ const WorkflowBuilderPage = () => {
                 : "Activate"}
             </span>
           </button>
+
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
+
         <div className="hidden w-60 shrink-0 md:block">
           <NodePanel />
         </div>
@@ -422,6 +542,7 @@ const WorkflowBuilderPage = () => {
             onNodeUpdate={handleNodeUpdate}
           />
         </div>
+
       </div>
     </div>
   );

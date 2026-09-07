@@ -27,7 +27,6 @@ const executeWorkflow = async (executionId) => {
       throw new Error("Workflow has no nodes");
     }
 
-    // Find starting node
     const targetNodeIds = new Set(
       edges.map((edge) => edge.target)
     );
@@ -40,7 +39,7 @@ const executeWorkflow = async (executionId) => {
       currentNode = nodes[0];
     }
 
-    let input = {};
+    let input = execution.input || {};
     const visitedNodes = new Set();
 
     while (currentNode) {
@@ -101,7 +100,6 @@ const executeWorkflow = async (executionId) => {
         throw error;
       }
 
-      // Find next connected node
       const nextEdge = edges.find(
         (edge) => edge.source === currentNode.id
       );

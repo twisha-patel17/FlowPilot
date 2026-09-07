@@ -19,6 +19,8 @@ const ExecutionDetailsPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
+  console.log("Execution details ID:", id);
+
   const [expandedStep, setExpandedStep] = useState(null);
   const [activeTab, setActiveTab] = useState("output");
 

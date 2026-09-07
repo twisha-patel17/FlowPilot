@@ -10,6 +10,8 @@ const authRoutes = require("./routes/authRoutes");
 const workflowRoutes = require("./routes/workflowRoutes");
 const executionRoutes = require("./routes/executionRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
+const integrationRoutes = require("./routes/integrationRoutes");
+
 const startScheduler = require("./services/scheduler/scheduler");
 
 const PORT = process.env.PORT || 5000;
@@ -35,6 +37,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/workflows", workflowRoutes);
 app.use("/api/executions", executionRoutes);
 app.use("/api/webhooks", webhookRoutes);
+app.use("/api/integrations", integrationRoutes);
 
 connectDB();
 

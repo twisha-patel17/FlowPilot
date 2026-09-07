@@ -170,32 +170,96 @@ const receiveWebhook = async (req, res) => {
       req.body?.event ||
       "unknown";
 
+    const workflowTrigger =
+      webhook.workflow?.trigger;
+
+    const isGithubTrigger =
+      workflowTrigger?.type === "github";
+
+    if (isGithubTrigger) {
+      const githubConfig =
+        workflowTrigger.config || {};
+
+      const configuredEvent =
+        githubConfig.event || "issues";
+
+      const configuredAction =
+        githubConfig.action || "opened";
+
+      if (event !== configuredEvent) {
+        return res.status(400).json({
+          message:
+            `GitHub event "${event}" does not match ` +
+            `configured event "${configuredEvent}"`,
+        });
+      }
+
+      const receivedAction =
+        req.body?.action;
+
+      if (
+        receivedAction &&
+        receivedAction !== configuredAction
+      ) {
+        return res.status(400).json({
+          message:
+            `GitHub action "${receivedAction}" does not match ` +
+            `configured action "${configuredAction}"`,
+        });
+      }
+
+      const configuredRepository =
+        githubConfig.repository;
+
+      const receivedRepository =
+        req.body?.repository?.full_name;
+
+      if (
+        configuredRepository &&
+        receivedRepository &&
+        configuredRepository !== receivedRepository
+      ) {
+        return res.status(400).json({
+          message:
+            `GitHub repository "${receivedRepository}" does not match ` +
+            `configured repository "${configuredRepository}"`,
+        });
+      }
+    }
+
     if (
       webhook.events.length > 0 &&
       event !== "unknown" &&
       !webhook.events.includes(event)
     ) {
       return res.status(400).json({
-        message: `Event "${event}" is not configured for this webhook`,
+        message:
+          `Event "${event}" is not configured for this webhook`,
       });
     }
 
     webhook.lastEventAt = new Date();
+
     await webhook.save();
 
     const execution = await Execution.create({
       workflow: webhook.workflow._id,
       owner: webhook.owner,
       status: "pending",
-      trigger: "webhook",
+      trigger: isGithubTrigger
+        ? "github"
+        : "webhook",
+      input: req.body || {},
     });
 
     try {
-      const completedExecution = await executeWorkflow(
-        execution._id
-      );
+      const completedExecution =
+        await executeWorkflow(
+          execution._id
+        );
 
-      const duration = Date.now() - startedAt;
+      const duration =
+        Date.now() - startedAt;
 
       await WebhookDelivery.create({
         webhook: webhook._id,
@@ -204,15 +268,19 @@ const receiveWebhook = async (req, res) => {
         responseCode: 200,
         duration,
         payload: req.body,
-        execution: completedExecution._id,
+        execution:
+          completedExecution._id,
       });
 
       return res.status(200).json({
-        message: "Webhook received successfully",
-        executionId: completedExecution._id,
+        message:
+          "Webhook received successfully",
+        executionId:
+          completedExecution._id,
       });
     } catch (executionError) {
-      const duration = Date.now() - startedAt;
+      const duration =
+        Date.now() - startedAt;
 
       await WebhookDelivery.create({
         webhook: webhook._id,
@@ -222,19 +290,26 @@ const receiveWebhook = async (req, res) => {
         duration,
         payload: req.body,
         execution: execution._id,
-        error: executionError.message,
+        error:
+          executionError.message,
       });
 
       return res.status(500).json({
-        message: "Workflow execution failed",
-        error: executionError.message,
+        message:
+          "Workflow execution failed",
+        error:
+          executionError.message,
       });
     }
   } catch (error) {
-    console.error("Receive webhook error:", error);
+    console.error(
+      "Receive webhook error:",
+      error
+    );
 
     return res.status(500).json({
-      message: "Webhook processing failed",
+      message:
+        "Webhook processing failed",
       error: error.message,
     });
   }
