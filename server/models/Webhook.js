@@ -22,6 +22,12 @@ const webhookSchema = new mongoose.Schema(
       required: true,
     },
 
+    workspace: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Workspace",
+      required: true,
+    },
+
     workflow: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Workflow",

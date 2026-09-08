@@ -4,12 +4,14 @@ const Webhook = require("../models/Webhook");
 const WebhookDelivery = require("../models/WebhookDelivery");
 const Workflow = require("../models/Workflow");
 const Execution = require("../models/Execution");
+const Workspace = require("../models/Workspace");
 
 const executeWorkflow = require("../services/workflow/executeWorkflow");
 
 const createWebhook = async (req, res) => {
   try {
     const { name, workflowId, events } = req.body;
+    const workspaceId = req.headers["x-workspace-id"];
 
     if (!name) {
       return res.status(400).json({
@@ -23,9 +25,27 @@ const createWebhook = async (req, res) => {
       });
     }
 
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
     const workflow = await Workflow.findOne({
       _id: workflowId,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!workflow) {
@@ -37,9 +57,10 @@ const createWebhook = async (req, res) => {
     const publicId = crypto.randomBytes(6).toString("hex");
 
     const webhook = await Webhook.create({
-      name,
+      name: name.trim(),
       publicId,
       owner: req.user._id,
+      workspace: workspaceId,
       workflow: workflow._id,
       events: events || [],
       active: true,
@@ -61,8 +82,28 @@ const createWebhook = async (req, res) => {
 
 const getWebhooks = async (req, res) => {
   try {
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
     const webhooks = await Webhook.find({
       owner: req.user._id,
+      workspace: workspaceId,
     })
       .populate("workflow", "name")
       .sort({ createdAt: -1 });
@@ -82,10 +123,29 @@ const getWebhooks = async (req, res) => {
 const toggleWebhook = async (req, res) => {
   try {
     const { id } = req.params;
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
 
     const webhook = await Webhook.findOne({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!webhook) {
@@ -114,10 +174,29 @@ const toggleWebhook = async (req, res) => {
 const getWebhookDeliveries = async (req, res) => {
   try {
     const { id } = req.params;
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
 
     const webhook = await Webhook.findOne({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!webhook) {
@@ -164,6 +243,29 @@ const receiveWebhook = async (req, res) => {
       });
     }
 
+    if (!webhook.workspace) {
+      return res.status(500).json({
+        message: "Webhook workspace is not configured",
+      });
+    }
+
+    if (!webhook.workflow) {
+      return res.status(500).json({
+        message: "Webhook workflow not found",
+      });
+    }
+
+    if (
+      !webhook.workflow.workspace ||
+      webhook.workflow.workspace.toString() !==
+        webhook.workspace.toString()
+    ) {
+      return res.status(500).json({
+        message:
+          "Webhook and workflow belong to different workspaces",
+      });
+    }
+
     const event =
       req.headers["x-webhook-event"] ||
       req.headers["x-github-event"] ||
@@ -171,7 +273,7 @@ const receiveWebhook = async (req, res) => {
       "unknown";
 
     const workflowTrigger =
-      webhook.workflow?.trigger;
+      webhook.workflow.trigger;
 
     const isGithubTrigger =
       workflowTrigger?.type === "github";
@@ -245,6 +347,7 @@ const receiveWebhook = async (req, res) => {
     const execution = await Execution.create({
       workflow: webhook.workflow._id,
       owner: webhook.owner,
+      workspace: webhook.workspace,
       status: "pending",
       trigger: isGithubTrigger
         ? "github"

@@ -3,8 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import ExecutionFilters from "../components/executions/ExecutionFilters";
 import ExecutionTable from "../components/executions/ExecutionTable";
+
 import { getExecutions } from "../api/executionApi";
 import { getWorkflows } from "../api/workflowApi";
+
+import { useWorkspace } from "../context/WorkspaceContext";
 
 const ExecutionsPage = () => {
   const [search, setSearch] = useState("");
@@ -14,21 +17,29 @@ const ExecutionsPage = () => {
   const [trigger, setTrigger] = useState("all");
 
   const {
+    currentWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace();
+
+  const workspaceId = currentWorkspace?._id;
+
+  const {
     data: executionData,
     isLoading: executionsLoading,
   } = useQuery({
-    queryKey: ["executions"],
-    queryFn: getExecutions,
+    queryKey: ["executions", workspaceId],
+    queryFn: () => getExecutions(workspaceId),
+    enabled: !!workspaceId,
   });
 
   const {
     data: workflowData,
   } = useQuery({
-    queryKey: ["workflows"],
-    queryFn: getWorkflows,
+    queryKey: ["workflows", workspaceId],
+    queryFn: () => getWorkflows(workspaceId),
+    enabled: !!workspaceId,
   });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const executions =
     executionData?.executions || [];
 
@@ -121,6 +132,26 @@ const ExecutionsPage = () => {
     time,
     trigger,
   ]);
+
+  if (workspaceLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-zinc-500">
+          Loading workspace...
+        </p>
+      </div>
+    );
+  }
+
+  if (!workspaceId) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-zinc-500">
+          No workspace selected.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

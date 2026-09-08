@@ -46,10 +46,14 @@ const startScheduler = () => {
           if (currentTime !== scheduledTime) {
             continue;
           }
-            now.toLocaleDateString("en-US", {
+
+          const currentDay = now.toLocaleDateString(
+            "en-US",
+            {
               timeZone: timezone,
               weekday: "short",
-            });
+            }
+          );
 
           if (
             frequency === "weekday" &&
@@ -94,7 +98,6 @@ const startScheduler = () => {
               scheduledAt,
             });
           } catch (error) {
-          
             if (error.code === 11000) {
               console.log(
                 `Duplicate scheduled execution skipped: ${workflow.name}`
@@ -126,7 +129,10 @@ const startScheduler = () => {
         }
       }
     } catch (error) {
-      console.error("Scheduler error:", error);
+      console.error(
+        "Scheduler error:",
+        error
+      );
     }
   });
 };

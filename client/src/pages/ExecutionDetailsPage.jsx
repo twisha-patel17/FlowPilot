@@ -14,12 +14,18 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 
 import { getExecution } from "../api/executionApi";
+import { useWorkspace } from "../context/WorkspaceContext";
 
 const ExecutionDetailsPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  console.log("Execution details ID:", id);
+  const {
+    currentWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace();
+
+  const workspaceId = currentWorkspace?._id;
 
   const [expandedStep, setExpandedStep] = useState(null);
   const [activeTab, setActiveTab] = useState("output");
@@ -29,16 +35,19 @@ const ExecutionDetailsPage = () => {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["execution", id],
-    queryFn: () => getExecution(id),
-    enabled: !!id,
+    queryKey: ["execution", id, workspaceId],
+    queryFn: () =>
+      getExecution({
+        id,
+        workspaceId,
+      }),
+    enabled: !!id && !!workspaceId,
   });
 
   const execution = data?.execution;
 
   const retryMutation = useMutation({
     mutationFn: async () => {
-    
       throw new Error(
         "Retry functionality is not connected yet."
       );
@@ -64,12 +73,46 @@ const ExecutionDetailsPage = () => {
     return formatDuration(duration);
   }, [execution]);
 
-  if (isLoading) {
+  if (workspaceLoading || isLoading) {
     return (
       <div className="flex min-h-[500px] items-center justify-center">
         <div className="flex items-center gap-2 text-sm text-zinc-500">
           <FiRefreshCw className="h-4 w-4 animate-spin" />
-          Loading execution...
+
+          {workspaceLoading
+            ? "Loading workspace..."
+            : "Loading execution..."}
+        </div>
+      </div>
+    );
+  }
+
+  if (!workspaceId) {
+    return (
+      <div className="flex min-h-[500px] flex-col items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-900">
+            <FiAlertCircle className="h-5 w-5 text-zinc-500" />
+          </div>
+
+          <h1 className="mt-4 text-sm font-semibold text-zinc-200">
+            No workspace selected
+          </h1>
+
+          <p className="mt-1 text-xs text-zinc-500">
+            Select a workspace before viewing executions.
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigate("/app/executions")
+            }
+            className="mt-5 inline-flex h-8 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800"
+          >
+            <FiArrowLeft className="h-3.5 w-3.5" />
+            Back to Executions
+          </button>
         </div>
       </div>
     );
@@ -124,7 +167,7 @@ const ExecutionDetailsPage = () => {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 pb-10">
-
+      {/* BACK */}
       <button
         type="button"
         onClick={() =>
@@ -136,8 +179,8 @@ const ExecutionDetailsPage = () => {
         Back to Executions
       </button>
 
+      {/* HEADER */}
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-xs text-zinc-600">
             <span>Executions</span>
@@ -152,9 +195,7 @@ const ExecutionDetailsPage = () => {
           </h1>
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <ExecutionStatus
-              status={status}
-            />
+            <ExecutionStatus status={status} />
 
             <span className="text-xs text-zinc-500">
               Duration: {totalDuration}
@@ -193,8 +234,8 @@ const ExecutionDetailsPage = () => {
         </button>
       </div>
 
+      {/* INFO */}
       <div className="grid gap-3 sm:grid-cols-3">
-
         <InfoCard
           label="Workflow"
           value={workflowName}
@@ -211,7 +252,6 @@ const ExecutionDetailsPage = () => {
           label="Steps"
           value={`${execution.steps?.length || 0}`}
         />
-
       </div>
 
       {/* EXECUTION STEPS */}
@@ -251,6 +291,7 @@ const ExecutionDetailsPage = () => {
                             ? null
                             : index
                         );
+
                         setActiveTab(
                           step.error
                             ? "error"
@@ -275,7 +316,6 @@ const ExecutionDetailsPage = () => {
         execution.error && (
           <div className="overflow-hidden rounded-xl border border-red-500/20 bg-red-500/[0.04]">
             <div className="flex items-start gap-3 p-4 sm:p-5">
-
               <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-500/10">
                 <FiX className="h-3.5 w-3.5 text-red-400" />
               </div>
@@ -332,13 +372,11 @@ const ExecutionStep = ({
 
   return (
     <div className="relative">
-
       {!isLast && (
         <div className="absolute bottom-0 left-[11px] top-8 w-px bg-zinc-800" />
       )}
 
       <div className="relative">
-
         {/* STEP ROW */}
         <button
           type="button"
@@ -349,7 +387,6 @@ const ExecutionStep = ({
               : "hover:bg-zinc-900/40"
           }`}
         >
-
           {/* STATUS ICON */}
           <StepStatusIcon
             status={step.status}
@@ -370,9 +407,7 @@ const ExecutionStep = ({
 
           {/* DURATION */}
           <span className="shrink-0 font-mono text-xs text-zinc-600">
-            {formatDuration(
-              step.duration
-            )}
+            {formatDuration(step.duration)}
           </span>
 
           {/* CHEVRON */}
@@ -388,10 +423,8 @@ const ExecutionStep = ({
         {/* STEP DETAILS */}
         {isExpanded && (
           <div className="mb-3 ml-9 mt-1 overflow-hidden rounded-lg border border-zinc-800/70 bg-[#111113]">
-
             {/* TABS */}
             <div className="flex items-center gap-5 border-b border-zinc-800/70 px-4 pt-3">
-
               <StepTab
                 active={activeTab === "input"}
                 onClick={() =>
@@ -419,7 +452,6 @@ const ExecutionStep = ({
               >
                 Error
               </StepTab>
-
             </div>
 
             {/* CONTENT */}
@@ -435,9 +467,7 @@ const ExecutionStep = ({
               </span>
 
               <span className="font-mono text-[10px] text-zinc-600">
-                {formatDuration(
-                  step.duration
-                )}
+                {formatDuration(step.duration)}
               </span>
             </div>
           </div>
@@ -480,7 +510,6 @@ const StepContent = ({
 
   return (
     <div className="relative p-4">
-
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
           {activeTab}
@@ -580,6 +609,7 @@ const ExecutionStatus = ({
     </span>
   );
 };
+
 const InfoCard = ({
   label,
   value,

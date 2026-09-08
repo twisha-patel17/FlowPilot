@@ -1,13 +1,31 @@
 const Workflow = require("../models/Workflow");
+const Workspace = require("../models/Workspace");
 
-// CREATE WORKFLOW
 const createWorkflow = async (req, res) => {
   try {
     const { name, description, trigger, nodes, edges } = req.body;
+    const workspaceId = req.headers["x-workspace-id"];
 
     if (!name) {
       return res.status(400).json({
         message: "Workflow name is required",
+      });
+    }
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
       });
     }
 
@@ -18,6 +36,7 @@ const createWorkflow = async (req, res) => {
       nodes,
       edges,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     return res.status(201).json({
@@ -33,11 +52,30 @@ const createWorkflow = async (req, res) => {
   }
 };
 
-// GET ALL USER WORKFLOWS
 const getWorkflows = async (req, res) => {
   try {
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
     const workflows = await Workflow.find({
       owner: req.user._id,
+      workspace: workspaceId,
     }).sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -52,14 +90,32 @@ const getWorkflows = async (req, res) => {
   }
 };
 
-// GET SINGLE WORKFLOW
 const getWorkflow = async (req, res) => {
   try {
     const { id } = req.params;
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
 
     const workflow = await Workflow.findOne({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!workflow) {
@@ -80,15 +136,41 @@ const getWorkflow = async (req, res) => {
   }
 };
 
-// UPDATE WORKFLOW
 const updateWorkflow = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, status, trigger, nodes, edges } = req.body;
+    const {
+      name,
+      description,
+      status,
+      trigger,
+      nodes,
+      edges,
+    } = req.body;
+
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
 
     const workflow = await Workflow.findOne({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!workflow) {
@@ -98,7 +180,9 @@ const updateWorkflow = async (req, res) => {
     }
 
     if (name !== undefined) workflow.name = name;
-    if (description !== undefined) workflow.description = description;
+    if (description !== undefined) {
+      workflow.description = description;
+    }
     if (status !== undefined) workflow.status = status;
     if (trigger !== undefined) workflow.trigger = trigger;
     if (nodes !== undefined) workflow.nodes = nodes;
@@ -119,14 +203,32 @@ const updateWorkflow = async (req, res) => {
   }
 };
 
-// DELETE WORKFLOW
 const deleteWorkflow = async (req, res) => {
   try {
     const { id } = req.params;
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
 
     const workflow = await Workflow.findOneAndDelete({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!workflow) {
@@ -147,14 +249,32 @@ const deleteWorkflow = async (req, res) => {
   }
 };
 
-// TOGGLE WORKFLOW STATUS
 const toggleWorkflow = async (req, res) => {
   try {
     const { id } = req.params;
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
 
     const workflow = await Workflow.findOne({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!workflow) {
@@ -164,7 +284,9 @@ const toggleWorkflow = async (req, res) => {
     }
 
     workflow.status =
-      workflow.status === "active" ? "inactive" : "active";
+      workflow.status === "active"
+        ? "inactive"
+        : "active";
 
     await workflow.save();
 

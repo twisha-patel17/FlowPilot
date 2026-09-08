@@ -1,4 +1,10 @@
+import { useState } from "react";
 import { NavLink, Link } from "react-router-dom";
+import {
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+
 import {
   FiHome,
   FiZap,
@@ -8,7 +14,12 @@ import {
   FiShare2,
   FiSettings,
   FiChevronDown,
+  FiPlus,
 } from "react-icons/fi";
+
+import { useWorkspace } from "../../context/WorkspaceContext";
+import { createWorkspace } from "../../api/workspaceApi";
+import CreateWorkspaceModal from "../workspace/CreateWorkspaceModal";
 
 const navigation = [
   {
@@ -45,6 +56,54 @@ const navigation = [
 ];
 
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] =
+    useState(false);
+
+  const queryClient = useQueryClient();
+
+  const {
+    workspaces,
+    currentWorkspace,
+    switchWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace();
+
+  const createWorkspaceMutation = useMutation({
+    mutationFn: createWorkspace,
+
+    onSuccess: (data) => {
+      queryClient.setQueryData(["workspaces"], (oldData) => ({
+        workspaces: [
+          ...(oldData?.workspaces || []),
+          data.workspace,
+        ],
+      }));
+
+      switchWorkspace(data.workspace);
+
+      setCreateWorkspaceOpen(false);
+      setWorkspaceOpen(false);
+    },
+  });
+
+  const handleCreateWorkspace = async (name) => {
+    try {
+      await createWorkspaceMutation.mutateAsync({ name });
+    } catch (error) {
+      console.error("Create workspace error:", error);
+    }
+  };
+
+  const workspaceInitials = currentWorkspace?.name
+    ? currentWorkspace.name
+        .split(" ")
+        .map((word) => word[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "WS";
+
   return (
     <>
       {/* Mobile overlay */}
@@ -85,23 +144,112 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         </div>
 
         {/* Workspace */}
-        <div className="px-2 pt-3">
+        <div className="relative px-2 pt-3">
           <button
             type="button"
+            onClick={() => setWorkspaceOpen((prev) => !prev)}
             className="flex h-10 w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/70 px-2.5 text-left transition hover:bg-zinc-800"
           >
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500 text-[10px] font-bold text-white">
-                DS
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-500 text-[10px] font-bold text-white">
+                {workspaceLoading ? "..." : workspaceInitials}
               </span>
 
-              <span className="text-sm font-medium text-zinc-200">
-                DevSpace Team
+              <span className="truncate text-sm font-medium text-zinc-200">
+                {workspaceLoading
+                  ? "Loading..."
+                  : currentWorkspace?.name || "No workspace"}
               </span>
             </div>
 
-            <FiChevronDown className="h-4 w-4 text-zinc-500" />
+            <FiChevronDown
+              className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${
+                workspaceOpen ? "rotate-180" : ""
+              }`}
+            />
           </button>
+
+          {/* Workspace dropdown */}
+          {workspaceOpen && (
+            <div className="absolute left-2 right-2 top-[58px] z-50 overflow-hidden rounded-lg border border-zinc-800 bg-[#111113] shadow-xl">
+              {/* Dropdown header */}
+              <div className="border-b border-zinc-800/70 px-3 py-2">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+                  Workspaces
+                </p>
+              </div>
+
+              {/* Workspace list */}
+              <div className="max-h-52 overflow-y-auto p-1">
+                {workspaces.length === 0 && !workspaceLoading ? (
+                  <div className="px-3 py-3">
+                    <p className="text-xs text-zinc-500">
+                      No workspaces found.
+                    </p>
+                  </div>
+                ) : (
+                  workspaces.map((workspace) => {
+                    const initials = workspace.name
+                      .split(" ")
+                      .map((word) => word[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase();
+
+                    const isActive =
+                      currentWorkspace?._id === workspace._id;
+
+                    return (
+                      <button
+                        key={workspace._id}
+                        type="button"
+                        onClick={() => {
+                          switchWorkspace(workspace);
+                          setWorkspaceOpen(false);
+                        }}
+                        className={`
+                          flex w-full items-center gap-2 rounded-md
+                          px-2.5 py-2 text-left transition
+                          ${
+                            isActive
+                              ? "bg-violet-500/10"
+                              : "hover:bg-zinc-800"
+                          }
+                        `}
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-500/20 text-[10px] font-bold text-violet-300">
+                          {initials}
+                        </span>
+
+                        <span className="truncate text-xs font-medium text-zinc-300">
+                          {workspace.name}
+                        </span>
+
+                        {isActive && (
+                          <span className="ml-auto text-xs text-violet-400">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Create workspace */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateWorkspaceOpen(true);
+                  setWorkspaceOpen(false);
+                }}
+                className="flex w-full items-center gap-2 border-t border-zinc-800/70 px-3 py-2.5 text-xs text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-200"
+              >
+                <FiPlus className="h-3.5 w-3.5" />
+                Create workspace
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -188,6 +336,14 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
           </div>
         </div>
       </aside>
+
+      {/* Create Workspace Modal */}
+      <CreateWorkspaceModal
+        isOpen={createWorkspaceOpen}
+        onClose={() => setCreateWorkspaceOpen(false)}
+        onCreate={handleCreateWorkspace}
+        loading={createWorkspaceMutation.isPending}
+      />
     </>
   );
 };

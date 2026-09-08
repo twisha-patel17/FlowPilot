@@ -1,19 +1,43 @@
 import api from "./axios";
 
-export const getIntegrations = async () => {
-  const response = await api.get("/integrations");
+export const getIntegrations = async (workspaceId) => {
+  const response = await api.get("/integrations", {
+    headers: {
+      "X-Workspace-Id": workspaceId,
+    },
+  });
+
   return response.data;
 };
 
-export const getIntegration = async (id) => {
-  const response = await api.get(`/integrations/${id}`);
+export const getIntegration = async ({
+  id,
+  workspaceId,
+}) => {
+  const response = await api.get(
+    `/integrations/${id}`,
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
+  );
+
   return response.data;
 };
 
-export const createIntegration = async (integrationData) => {
+export const createIntegration = async ({
+  integrationData,
+  workspaceId,
+}) => {
   const response = await api.post(
     "/integrations",
-    integrationData
+    integrationData,
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
   );
 
   return response.data;
@@ -22,26 +46,49 @@ export const createIntegration = async (integrationData) => {
 export const updateIntegration = async ({
   id,
   integrationData,
+  workspaceId,
 }) => {
   const response = await api.patch(
     `/integrations/${id}`,
-    integrationData
+    integrationData,
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
   );
 
   return response.data;
 };
 
-export const toggleIntegration = async (id) => {
+export const toggleIntegration = async ({
+  id,
+  workspaceId,
+}) => {
   const response = await api.patch(
-    `/integrations/${id}/toggle`
+    `/integrations/${id}/toggle`,
+    {},
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
   );
 
   return response.data;
 };
 
-export const deleteIntegration = async (id) => {
+export const deleteIntegration = async ({
+  id,
+  workspaceId,
+}) => {
   const response = await api.delete(
-    `/integrations/${id}`
+    `/integrations/${id}`,
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
   );
 
   return response.data;

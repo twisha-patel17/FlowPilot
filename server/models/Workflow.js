@@ -22,6 +22,13 @@ const workflowSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Workspace this workflow belongs to
+    workspace: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Workspace",
+      required: true,
+    },
+
     status: {
       type: String,
       enum: ["active", "inactive"],

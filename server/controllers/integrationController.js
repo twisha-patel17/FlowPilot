@@ -1,4 +1,16 @@
 const Integration = require("../models/Integration");
+const Workspace = require("../models/Workspace");
+
+const getWorkspace = async (workspaceId, userId) => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  return Workspace.findOne({
+    _id: workspaceId,
+    "members.user": userId,
+  });
+};
 
 const createIntegration = async (req, res) => {
   try {
@@ -8,6 +20,9 @@ const createIntegration = async (req, res) => {
       credentials,
       metadata,
     } = req.body;
+
+    const workspaceId =
+      req.headers["x-workspace-id"];
 
     if (!name) {
       return res.status(400).json({
@@ -21,10 +36,29 @@ const createIntegration = async (req, res) => {
       });
     }
 
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await getWorkspace(
+      workspaceId,
+      req.user._id
+    );
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+
     const integration = await Integration.create({
       name,
       provider,
       owner: req.user._id,
+      workspace: workspaceId,
       credentials: credentials || {},
       metadata: metadata || {},
       status: "connected",
@@ -48,8 +82,30 @@ const createIntegration = async (req, res) => {
 
 const getIntegrations = async (req, res) => {
   try {
+    const workspaceId =
+      req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await getWorkspace(
+      workspaceId,
+      req.user._id
+    );
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+
     const integrations = await Integration.find({
       owner: req.user._id,
+      workspace: workspaceId,
     }).sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -71,9 +127,31 @@ const getIntegration = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const workspaceId =
+      req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await getWorkspace(
+      workspaceId,
+      req.user._id
+    );
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+
     const integration = await Integration.findOne({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!integration) {
@@ -107,9 +185,31 @@ const updateIntegration = async (req, res) => {
       metadata,
     } = req.body;
 
+    const workspaceId =
+      req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await getWorkspace(
+      workspaceId,
+      req.user._id
+    );
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+
     const integration = await Integration.findOne({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!integration) {
@@ -133,7 +233,8 @@ const updateIntegration = async (req, res) => {
     await integration.save();
 
     return res.status(200).json({
-      message: "Integration updated successfully",
+      message:
+        "Integration updated successfully",
       integration,
     });
   } catch (error) {
@@ -152,9 +253,31 @@ const toggleIntegration = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const workspaceId =
+      req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await getWorkspace(
+      workspaceId,
+      req.user._id
+    );
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+
     const integration = await Integration.findOne({
       _id: id,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!integration) {
@@ -171,7 +294,8 @@ const toggleIntegration = async (req, res) => {
     await integration.save();
 
     return res.status(200).json({
-      message: "Integration status updated",
+      message:
+        "Integration status updated",
       integration,
     });
   } catch (error) {
@@ -190,10 +314,32 @@ const deleteIntegration = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const workspaceId =
+      req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await getWorkspace(
+      workspaceId,
+      req.user._id
+    );
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+
     const integration =
       await Integration.findOneAndDelete({
         _id: id,
         owner: req.user._id,
+        workspace: workspaceId,
       });
 
     if (!integration) {
@@ -203,7 +349,8 @@ const deleteIntegration = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Integration deleted successfully",
+      message:
+        "Integration deleted successfully",
     });
   } catch (error) {
     console.error(

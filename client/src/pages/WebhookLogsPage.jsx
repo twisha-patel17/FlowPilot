@@ -9,6 +9,8 @@ import {
   getWebhookDeliveries,
 } from "../api/webhookApi";
 
+import { useWorkspace } from "../context/WorkspaceContext";
+
 const WebhookLogsPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -20,11 +22,19 @@ const WebhookLogsPage = () => {
     useState("24h");
 
   const {
+    currentWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace();
+
+  const workspaceId = currentWorkspace?._id;
+
+  const {
     data: webhookData,
     isLoading: webhookLoading,
   } = useQuery({
-    queryKey: ["webhooks"],
-    queryFn: getWebhooks,
+    queryKey: ["webhooks", workspaceId],
+    queryFn: () => getWebhooks(workspaceId),
+    enabled: !!workspaceId,
   });
 
   const webhooks = webhookData?.webhooks || [];
@@ -38,9 +48,17 @@ const WebhookLogsPage = () => {
     isLoading: deliveriesLoading,
     refetch,
   } = useQuery({
-    queryKey: ["webhook-deliveries", id],
-    queryFn: () => getWebhookDeliveries(id),
-    enabled: !!webhook,
+    queryKey: [
+      "webhook-deliveries",
+      id,
+      workspaceId,
+    ],
+    queryFn: () =>
+      getWebhookDeliveries({
+        id,
+        workspaceId,
+      }),
+    enabled: !!webhook && !!workspaceId,
   });
 
   const deliveries =
@@ -77,7 +95,10 @@ const WebhookLogsPage = () => {
   ]);
 
   const formatDuration = (duration) => {
-    if (duration === undefined || duration === null) {
+    if (
+      duration === undefined ||
+      duration === null
+    ) {
       return "-";
     }
 
@@ -132,6 +153,39 @@ const WebhookLogsPage = () => {
     } ago`;
   };
 
+  if (workspaceLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-zinc-500">
+          Loading workspace...
+        </p>
+      </div>
+    );
+  }
+
+  if (!workspaceId) {
+    return (
+      <div className="space-y-6">
+        <button
+          type="button"
+          onClick={() =>
+            navigate("/app/webhooks")
+          }
+          className="inline-flex items-center gap-2 text-xs text-zinc-500 transition hover:text-zinc-200"
+        >
+          <FiArrowLeft className="h-3.5 w-3.5" />
+          Back to Webhooks
+        </button>
+
+        <div className="rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-8 text-center">
+          <p className="text-sm text-zinc-500">
+            No workspace selected.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (webhookLoading) {
     return (
       <div className="space-y-6">
@@ -175,7 +229,7 @@ const WebhookLogsPage = () => {
           </h1>
 
           <p className="mt-2 text-xs text-zinc-500">
-            The webhook you're looking for doesn't exist.
+            The webhook you're looking for doesn't exist in this workspace.
           </p>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { getWorkflows } from "../api/workflowApi";
+import { useWorkspace } from "../context/WorkspaceContext";
 
 import WorkflowHeader from "../components/workflows/WorkflowHeader";
 import WorkflowFilters from "../components/workflows/WorkflowFilters";
@@ -14,13 +15,23 @@ const WorkflowsPage = () => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
 
+  const { currentWorkspace, loading: workspaceLoading } =
+    useWorkspace();
+
+ const workspaceId = currentWorkspace?._id;
+
+console.log("CURRENT WORKSPACE:", currentWorkspace);
+console.log("WORKSPACE ID:", workspaceId);
+console.log("WORKSPACE ID TYPE:", typeof workspaceId);
+
   const {
     data,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["workflows"],
-    queryFn: getWorkflows,
+    queryKey: ["workflows", workspaceId],
+    queryFn: () => getWorkflows(workspaceId),
+    enabled: !!workspaceId,
   });
 
   const workflows = data?.workflows || [];
@@ -71,7 +82,9 @@ const WorkflowsPage = () => {
         workflow.description
           .toLowerCase()
           .includes(searchValue) ||
-        workflow.trigger.toLowerCase().includes(searchValue);
+        workflow.trigger
+          .toLowerCase()
+          .includes(searchValue);
 
       return matchesFilter && matchesSearch;
     });
@@ -88,6 +101,16 @@ const WorkflowsPage = () => {
   const handleMenuClick = (workflow) => {
     console.log("Menu clicked:", workflow);
   };
+
+  if (workspaceLoading || !workspaceId) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-zinc-500">
+          Loading workspace...
+        </p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

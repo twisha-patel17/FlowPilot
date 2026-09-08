@@ -10,7 +10,22 @@ const executeWorkflow = async (executionId) => {
     throw new Error("Execution not found");
   }
 
+  if (!execution.workflow) {
+    throw new Error("Workflow not found");
+  }
+
   const workflow = execution.workflow;
+
+  if (
+    !execution.workspace ||
+    !workflow.workspace ||
+    execution.workspace.toString() !==
+      workflow.workspace.toString()
+  ) {
+    throw new Error(
+      "Execution and workflow belong to different workspaces"
+    );
+  }
 
   try {
     execution.status = "running";

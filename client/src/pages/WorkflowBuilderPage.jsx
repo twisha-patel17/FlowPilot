@@ -27,6 +27,8 @@ import {
 
 import { createExecution } from "../api/executionApi";
 
+import { useWorkspace } from "../context/WorkspaceContext";
+
 import NodePanel from "../components/workflow/NodePanel";
 import WorkflowCanvas from "../components/workflow/WorkflowCanvas";
 import ConfigPanel from "../components/workflow/ConfigPanel";
@@ -35,6 +37,13 @@ const WorkflowBuilderPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const queryClient = useQueryClient();
+
+  const {
+    currentWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace();
+
+  const workspaceId = currentWorkspace?._id;
 
   const [selectedNode, setSelectedNode] = useState(null);
 
@@ -53,9 +62,13 @@ const WorkflowBuilderPage = () => {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["workflow", id],
-    queryFn: () => getWorkflow(id),
-    enabled: !!id,
+    queryKey: ["workflow", id, workspaceId],
+    queryFn: () =>
+      getWorkflow({
+        id,
+        workspaceId,
+      }),
+    enabled: !!id && !!workspaceId,
   });
 
   useEffect(() => {
@@ -110,7 +123,7 @@ const WorkflowBuilderPage = () => {
 
     onSuccess: (response) => {
       queryClient.invalidateQueries({
-        queryKey: ["workflows"],
+        queryKey: ["workflows", workspaceId],
       });
 
       const createdWorkflow =
@@ -141,12 +154,12 @@ const WorkflowBuilderPage = () => {
 
     onSuccess: (response) => {
       queryClient.setQueryData(
-        ["workflow", id],
+        ["workflow", id, workspaceId],
         response
       );
 
       queryClient.invalidateQueries({
-        queryKey: ["workflows"],
+        queryKey: ["workflows", workspaceId],
       });
     },
 
@@ -167,12 +180,12 @@ const WorkflowBuilderPage = () => {
 
     onSuccess: (response) => {
       queryClient.setQueryData(
-        ["workflow", id],
+        ["workflow", id, workspaceId],
         response
       );
 
       queryClient.invalidateQueries({
-        queryKey: ["workflows"],
+        queryKey: ["workflows", workspaceId],
       });
     },
 
@@ -193,7 +206,7 @@ const WorkflowBuilderPage = () => {
 
     onSuccess: (response) => {
       queryClient.invalidateQueries({
-        queryKey: ["executions"],
+        queryKey: ["executions", workspaceId],
       });
 
       const execution =
@@ -230,9 +243,18 @@ const WorkflowBuilderPage = () => {
    */
 
   const handleSave = () => {
+    if (!workspaceId) {
+      alert(
+        "Please select a workspace first."
+      );
+
+      return;
+    }
+
     /*
      * Normalize nodes before saving.
      */
+
     const normalizedNodes = nodes.map(
       (node) => {
         const nodeType =
@@ -331,11 +353,13 @@ const WorkflowBuilderPage = () => {
       updateMutation.mutate({
         id,
         workflowData,
+        workspaceId,
       });
     } else {
-      createMutation.mutate(
-        workflowData
-      );
+      createMutation.mutate({
+        workflowData,
+        workspaceId,
+      });
     }
   };
 
@@ -344,9 +368,12 @@ const WorkflowBuilderPage = () => {
    */
 
   const handleActivate = () => {
-    if (!id) return;
+    if (!id || !workspaceId) return;
 
-    toggleMutation.mutate(id);
+    toggleMutation.mutate({
+      id,
+      workspaceId,
+    });
   };
 
   /*
@@ -362,6 +389,14 @@ const WorkflowBuilderPage = () => {
       return;
     }
 
+    if (!workspaceId) {
+      alert(
+        "Please select a workspace first."
+      );
+
+      return;
+    }
+
     if (nodes.length === 0) {
       alert(
         "Add at least one node before running the workflow."
@@ -370,12 +405,45 @@ const WorkflowBuilderPage = () => {
       return;
     }
 
-    executeMutation.mutate(id);
+    executeMutation.mutate({
+      workflowId: id,
+      workspaceId,
+    });
   };
 
   /*
    * LOADING
    */
+
+  if (workspaceLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#09090b]">
+        <p className="text-sm text-zinc-500">
+          Loading workspace...
+        </p>
+      </div>
+    );
+  }
+
+  if (!workspaceId) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[#09090b]">
+        <p className="text-sm text-zinc-500">
+          No workspace selected.
+        </p>
+
+        <button
+          type="button"
+          onClick={() =>
+            navigate("/app/workflows")
+          }
+          className="rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
+        >
+          Back to Workflows
+        </button>
+      </div>
+    );
+  }
 
   if (id && isLoading) {
     return (
@@ -386,10 +454,6 @@ const WorkflowBuilderPage = () => {
       </div>
     );
   }
-
-  /*
-   * ERROR
-   */
 
   if (id && isError) {
     return (

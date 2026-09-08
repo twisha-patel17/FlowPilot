@@ -15,6 +15,8 @@ import {
   toggleIntegration,
 } from "../api/integrationApi";
 
+import { useWorkspace } from "../context/WorkspaceContext";
+
 const availableIntegrations = [
   {
     provider: "github",
@@ -60,12 +62,20 @@ const IntegrationsPage = () => {
     useState(null);
 
   const {
+    currentWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace();
+
+  const workspaceId = currentWorkspace?._id;
+
+  const {
     data,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["integrations"],
-    queryFn: getIntegrations,
+    queryKey: ["integrations", workspaceId],
+    queryFn: () => getIntegrations(workspaceId),
+    enabled: !!workspaceId,
   });
 
   const createMutation = useMutation({
@@ -73,7 +83,7 @@ const IntegrationsPage = () => {
 
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["integrations"],
+        queryKey: ["integrations", workspaceId],
       });
 
       setSelectedIntegration(null);
@@ -97,7 +107,7 @@ const IntegrationsPage = () => {
 
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["integrations"],
+        queryKey: ["integrations", workspaceId],
       });
     },
 
@@ -152,18 +162,71 @@ const IntegrationsPage = () => {
 
     if (!connectedIntegration) return;
 
-    toggleMutation.mutate(
-      connectedIntegration._id
-    );
+    toggleMutation.mutate({
+      id: connectedIntegration._id,
+      workspaceId,
+    });
   };
 
   const handleCreateIntegration = (
     integrationData
   ) => {
-    createMutation.mutate(
-      integrationData
-    );
+    if (!workspaceId) {
+      alert("No workspace selected");
+      return;
+    }
+
+    createMutation.mutate({
+      integrationData,
+      workspaceId,
+    });
   };
+
+  if (workspaceLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+            Integrations
+          </h1>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            Connect the services your workflows can
+            trigger from and act on.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-800/70 bg-[#0d0d0f] px-6 py-10 text-center">
+          <p className="text-sm text-zinc-500">
+            Loading workspace...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!workspaceId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+            Integrations
+          </h1>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            Connect the services your workflows can
+            trigger from and act on.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-800/70 bg-[#0d0d0f] px-6 py-10 text-center">
+          <p className="text-sm text-zinc-500">
+            No workspace selected.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

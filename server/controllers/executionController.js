@@ -1,11 +1,13 @@
 const Workflow = require("../models/Workflow");
 const Execution = require("../models/Execution");
+const Workspace = require("../models/Workspace");
 
 const executeWorkflow = require("../services/workflow/executeWorkflow");
 
 const createExecution = async (req, res) => {
   try {
     const { workflowId } = req.body;
+    const workspaceId = req.headers["x-workspace-id"];
 
     if (!workflowId) {
       return res.status(400).json({
@@ -13,9 +15,27 @@ const createExecution = async (req, res) => {
       });
     }
 
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
     const workflow = await Workflow.findOne({
       _id: workflowId,
       owner: req.user._id,
+      workspace: workspaceId,
     });
 
     if (!workflow) {
@@ -27,6 +47,7 @@ const createExecution = async (req, res) => {
     const execution = await Execution.create({
       workflow: workflow._id,
       owner: req.user._id,
+      workspace: workspaceId,
       status: "pending",
       trigger: "manual",
     });
@@ -51,8 +72,28 @@ const createExecution = async (req, res) => {
 
 const getExecutions = async (req, res) => {
   try {
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
     const executions = await Execution.find({
       owner: req.user._id,
+      workspace: workspaceId,
     })
       .populate("workflow", "name")
       .sort({ createdAt: -1 });
@@ -61,10 +102,7 @@ const getExecutions = async (req, res) => {
       executions,
     });
   } catch (error) {
-    console.error(
-      "Get executions error:",
-      error
-    );
+    console.error("Get executions error:", error);
 
     return res.status(500).json({
       message: "Server error",
@@ -75,11 +113,30 @@ const getExecutions = async (req, res) => {
 const getExecution = async (req, res) => {
   try {
     const { id } = req.params;
+    const workspaceId = req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": req.user._id,
+    });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
 
     const execution = await Execution.findOne({
       _id: id,
       owner: req.user._id,
-    }).populate("workflow", "name");
+      workspace: workspaceId,
+    }).populate("workflow", "name workspace");
 
     if (!execution) {
       return res.status(404).json({
@@ -91,10 +148,7 @@ const getExecution = async (req, res) => {
       execution,
     });
   } catch (error) {
-    console.error(
-      "Get execution error:",
-      error
-    );
+    console.error("Get execution error:", error);
 
     return res.status(500).json({
       message: "Server error",

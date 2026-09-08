@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 
 const User = require("../models/User");
+const Workspace = require("../models/Workspace");
 
 const {
   generateAccessToken,
@@ -53,6 +54,17 @@ const register = async (req, res) => {
       email,
       password: hashedPassword,
     });
+
+    await Workspace.create({
+  name: "Personal Space",
+  owner: user._id,
+  members: [
+    {
+      user: user._id,
+      role: "owner",
+    },
+  ],
+});
 
     const accessToken = generateAccessToken(user._id.toString());
     const refreshToken = generateRefreshToken(user._id.toString());

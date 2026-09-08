@@ -1,19 +1,43 @@
 import api from "./axios";
 
-export const getExecutions = async () => {
-  const response = await api.get("/executions");
-  return response.data;
-};
-
-export const getExecution = async (id) => {
-  const response = await api.get(`/executions/${id}`);
-  return response.data;
-};
-
-export const createExecution = async (workflowId) => {
-  const response = await api.post("/executions", {
-    workflowId,
+export const getExecutions = async (workspaceId) => {
+  const response = await api.get("/executions", {
+    headers: {
+      "X-Workspace-Id": workspaceId,
+    },
   });
+
+  return response.data;
+};
+
+export const getExecution = async ({
+  id,
+  workspaceId,
+}) => {
+  const response = await api.get(`/executions/${id}`, {
+    headers: {
+      "X-Workspace-Id": workspaceId,
+    },
+  });
+
+  return response.data;
+};
+
+export const createExecution = async ({
+  workflowId,
+  workspaceId,
+}) => {
+  const response = await api.post(
+    "/executions",
+    {
+      workflowId,
+    },
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
+  );
 
   return response.data;
 };

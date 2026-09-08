@@ -14,6 +14,12 @@ const executionSchema = new mongoose.Schema(
       required: true,
     },
 
+    workspace: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Workspace",
+      required: true,
+    },
+
     status: {
       type: String,
       enum: ["pending", "running", "success", "failed"],
@@ -106,7 +112,12 @@ const executionSchema = new mongoose.Schema(
 );
 
 executionSchema.index(
-  { workflow: 1, trigger: 1, scheduledAt: 1 },
+  {
+    workspace: 1,
+    workflow: 1,
+    trigger: 1,
+    scheduledAt: 1,
+  },
   {
     unique: true,
     partialFilterExpression: {

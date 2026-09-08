@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { FiPlus } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import WebhookCard from "../components/webhooks/WebhookCard";
 import NewWebhookModal from "../components/webhooks/NewWebhookModal";
@@ -14,6 +18,8 @@ import {
 
 import { getWorkflows } from "../api/workflowApi";
 
+import { useWorkspace } from "../context/WorkspaceContext";
+
 const WebhooksPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -21,20 +27,29 @@ const WebhooksPage = () => {
   const [showModal, setShowModal] = useState(false);
 
   const {
+    currentWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace();
+
+  const workspaceId = currentWorkspace?._id;
+
+  const {
     data: webhookData,
     isLoading: webhooksLoading,
     isError: webhooksError,
   } = useQuery({
-    queryKey: ["webhooks"],
-    queryFn: getWebhooks,
+    queryKey: ["webhooks", workspaceId],
+    queryFn: () => getWebhooks(workspaceId),
+    enabled: !!workspaceId,
   });
 
   const {
     data: workflowData,
     isLoading: workflowsLoading,
   } = useQuery({
-    queryKey: ["workflows"],
-    queryFn: getWorkflows,
+    queryKey: ["workflows", workspaceId],
+    queryFn: () => getWorkflows(workspaceId),
+    enabled: !!workspaceId,
   });
 
   const webhooks = webhookData?.webhooks || [];
@@ -45,7 +60,7 @@ const WebhooksPage = () => {
 
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["webhooks"],
+        queryKey: ["webhooks", workspaceId],
       });
 
       setShowModal(false);
@@ -69,7 +84,7 @@ const WebhooksPage = () => {
 
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["webhooks"],
+        queryKey: ["webhooks", workspaceId],
       });
     },
 
@@ -87,7 +102,15 @@ const WebhooksPage = () => {
   });
 
   const handleCreate = (webhookData) => {
-    createMutation.mutate(webhookData);
+    if (!workspaceId) {
+      alert("No workspace selected");
+      return;
+    }
+
+    createMutation.mutate({
+      webhookData,
+      workspaceId,
+    });
   };
 
   const handleViewLogs = (id) => {
@@ -131,6 +154,26 @@ const WebhooksPage = () => {
       days === 1 ? "day" : "days"
     } ago`;
   };
+
+  if (workspaceLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-zinc-500">
+          Loading workspace...
+        </p>
+      </div>
+    );
+  }
+
+  if (!workspaceId) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-sm text-zinc-500">
+          No workspace selected.
+        </p>
+      </div>
+    );
+  }
 
   if (webhooksLoading) {
     return (
@@ -235,14 +278,18 @@ const WebhooksPage = () => {
                   webhook.lastEventAt
                 )}
                 onToggle={() =>
-                  toggleMutation.mutate(webhook._id)
+                  toggleMutation.mutate({
+                    id: webhook._id,
+                    workspaceId,
+                  })
                 }
                 onViewLogs={() =>
                   handleViewLogs(webhook._id)
                 }
                 isToggling={
                   toggleMutation.isPending &&
-                  toggleMutation.variables === webhook._id
+                  toggleMutation.variables?.id ===
+                    webhook._id
                 }
               />
             );
