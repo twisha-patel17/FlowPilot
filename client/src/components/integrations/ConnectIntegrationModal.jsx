@@ -16,7 +16,7 @@ const ConnectIntegrationModal = ({
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (!name.trim()) {
+    if (!name.trim() || !value.trim()) {
       return;
     }
 
@@ -32,16 +32,19 @@ const ConnectIntegrationModal = ({
   const getCredentialLabel = () => {
     switch (integration.provider) {
       case "discord":
-        return "Webhook URL";
+        return "Discord Webhook URL";
 
       case "github":
-        return "Access Token";
+        return "GitHub Access Token";
 
       case "email":
         return "SMTP Host / API Key";
 
       case "mongodb":
         return "MongoDB Connection String";
+
+      case "http":
+        return "API URL";
 
       default:
         return "Connection Value";
@@ -54,16 +57,41 @@ const ConnectIntegrationModal = ({
         return "https://discord.com/api/webhooks/...";
 
       case "github":
-        return "Enter GitHub access token";
+        return "ghp_xxxxxxxxxxxxxxxxxxxx";
 
       case "email":
-        return "SMTP host or provider API key";
+        return "smtp.example.com";
 
       case "mongodb":
-        return "mongodb+srv://...";
+        return "mongodb+srv://username:password@cluster...";
+
+      case "http":
+        return "https://api.example.com";
 
       default:
         return "Enter connection value";
+    }
+  };
+
+  const getDescription = () => {
+    switch (integration.provider) {
+      case "discord":
+        return "Create a Discord webhook in your server and paste the webhook URL here.";
+
+      case "github":
+        return "A GitHub access token will be used to access your repositories.";
+
+      case "email":
+        return "Provide the connection details for your email provider.";
+
+      case "mongodb":
+        return "Provide the connection string for your MongoDB cluster.";
+
+      case "http":
+        return "HTTP requests do not require a persistent connection.";
+
+      default:
+        return "Provide the required connection details.";
     }
   };
 
@@ -96,6 +124,7 @@ const ConnectIntegrationModal = ({
           onSubmit={handleSubmit}
           className="space-y-5 p-5"
         >
+          {/* Connection Name */}
           <div>
             <label className="mb-2 block text-xs font-medium text-zinc-400">
               Connection name
@@ -107,11 +136,12 @@ const ConnectIntegrationModal = ({
               onChange={(event) =>
                 setName(event.target.value)
               }
-              placeholder="My Discord"
+              placeholder={`My ${integration.name}`}
               className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
             />
           </div>
 
+          {/* Provider Credential */}
           <div>
             <label className="mb-2 block text-xs font-medium text-zinc-400">
               {getCredentialLabel()}
@@ -129,15 +159,21 @@ const ConnectIntegrationModal = ({
                 setValue(event.target.value)
               }
               placeholder={getPlaceholder()}
+              required
               className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
             />
+
+            <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+              {getDescription()}
+            </p>
           </div>
 
+          {/* Development Notice */}
           <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
             <p className="text-[11px] leading-5 text-amber-400">
-              This is currently a development connection
-              form. We'll add provider-specific OAuth and
-              secure credential handling later.
+              Connection credentials are currently stored
+              for development purposes. Secure credential
+              storage will be added later.
             </p>
           </div>
 
@@ -155,7 +191,8 @@ const ConnectIntegrationModal = ({
               type="submit"
               disabled={
                 isConnecting ||
-                !name.trim()
+                !name.trim() ||
+                !value.trim()
               }
               className="h-9 rounded-md bg-violet-600 px-4 text-xs font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
             >

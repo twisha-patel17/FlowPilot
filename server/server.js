@@ -11,6 +11,7 @@ const workflowRoutes = require("./routes/workflowRoutes");
 const executionRoutes = require("./routes/executionRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
 const integrationRoutes = require("./routes/integrationRoutes");
+const workspaceRoutes = require("./routes/workspaceRoutes");
 
 const startScheduler = require("./services/scheduler/scheduler");
 
@@ -38,6 +39,7 @@ app.use("/api/workflows", workflowRoutes);
 app.use("/api/executions", executionRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/integrations", integrationRoutes);
+app.use("/api/workspaces", workspaceRoutes);
 
 connectDB();
 

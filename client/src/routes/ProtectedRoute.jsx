@@ -1,4 +1,9 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import {
+  Navigate,
+  Outlet,
+  useLocation,
+} from "react-router-dom";
+
 import { useAuth } from "../context/AuthContext";
 
 const ProtectedRoute = () => {
@@ -7,7 +12,13 @@ const ProtectedRoute = () => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#09090b]">
+        <p className="text-sm text-zinc-500">
+          Loading...
+        </p>
+      </div>
+    );
   }
 
   if (!user) {

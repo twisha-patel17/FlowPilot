@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+
 import {
   useQuery,
   useMutation,
@@ -32,11 +33,12 @@ export const AuthProvider = ({ children }) => {
     mutationFn: loginUser,
 
     onSuccess: (data) => {
-
-      sessionStorage.setItem(
-        "accessToken",
-        data.accessToken
-      );
+      if (data?.accessToken) {
+        localStorage.setItem(
+          "token",
+          data.accessToken
+        );
+      }
 
       queryClient.setQueryData(
         ["currentUser"],
@@ -51,11 +53,12 @@ export const AuthProvider = ({ children }) => {
     mutationFn: registerUser,
 
     onSuccess: (data) => {
-   
-      sessionStorage.setItem(
-        "accessToken",
-        data.accessToken
-      );
+      if (data?.accessToken) {
+        localStorage.setItem(
+          "token",
+          data.accessToken
+        );
+      }
 
       queryClient.setQueryData(
         ["currentUser"],
@@ -70,8 +73,12 @@ export const AuthProvider = ({ children }) => {
     mutationFn: logoutUser,
 
     onSuccess: () => {
+      localStorage.removeItem("token");
 
-      sessionStorage.removeItem("accessToken");
+      queryClient.setQueryData(
+        ["currentUser"],
+        null
+      );
 
       queryClient.clear();
     },
@@ -101,12 +108,14 @@ export const AuthProvider = ({ children }) => {
         logout,
 
         loginLoading: loginMutation.isPending,
-        registerLoading: registerMutation.isPending,
-        logoutLoading: logoutMutation.isPending,
+        registerLoading:
+          registerMutation.isPending,
+        logoutLoading:
+          logoutMutation.isPending,
 
         loginError: loginMutation.error,
-        registerError: registerMutation.error,
-        logoutError: logoutMutation.error,
+        registerError:
+          registerMutation.error,
       }}
     >
       {children}
@@ -126,3 +135,5 @@ export const useAuth = () => {
 
   return context;
 };
+
+export default AuthContext;

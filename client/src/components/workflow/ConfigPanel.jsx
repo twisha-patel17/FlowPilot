@@ -706,8 +706,44 @@ const DelayConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
 const DiscordConfig = ({ config, onChange }) => {
+  const {
+    data,
+    isLoading,
+    isError,
+  // eslint-disable-next-line no-undef
+  } = useQuery({
+    queryKey: ["integrations"],
+    // eslint-disable-next-line no-undef
+    queryFn: getIntegrations,
+  });
+
+  const discordIntegrations =
+    data?.integrations?.filter(
+      (integration) =>
+        integration.provider === "discord" &&
+        integration.status === "connected"
+    ) || [];
+
+  const connectionOptions = [
+    {
+      value: "",
+      label: isLoading
+        ? "Loading Discord connections..."
+        : discordIntegrations.length === 0
+        ? "No Discord connections"
+        : "Select Discord connection",
+    },
+    ...discordIntegrations.map(
+      (integration) => ({
+        value: integration._id,
+        label:
+          integration.name ||
+          "Discord Connection",
+      })
+    ),
+  ];
+
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -718,32 +754,38 @@ const DiscordConfig = ({ config, onChange }) => {
       <Field
         label="Connection"
         type="select"
-        value={
-          config.connection ||
-          "DevSpace Workspace"
-        }
+        value={config.integrationId || ""}
         onChange={(value) =>
-          onChange("connection", value)
+          onChange("integrationId", value)
         }
-        options={[
-          {
-            value: "DevSpace Workspace",
-            label: "DevSpace Workspace",
-          },
-          {
-            value: "Connect new account",
-            label: "Connect new account",
-          },
-        ]}
+        options={connectionOptions}
       />
+
+      {isError && (
+        <p className="text-[11px] text-red-400">
+          Failed to load Discord connections.
+        </p>
+      )}
+
+      {!isLoading &&
+        !isError &&
+        discordIntegrations.length === 0 && (
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
+              No connection
+            </p>
+
+            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+              Connect a Discord integration from the
+              Integrations page before using this node.
+            </p>
+          </div>
+        )}
 
       <Field
         label="Channel"
         type="select"
-        value={
-          config.channel ||
-          "#development"
-        }
+        value={config.channel || "#development"}
         onChange={(value) =>
           onChange("channel", value)
         }
@@ -772,6 +814,17 @@ const DiscordConfig = ({ config, onChange }) => {
         placeholder="Enter message"
         rows={4}
       />
+
+      <div className="rounded-md border border-zinc-800/70 bg-zinc-900/50 px-3 py-2.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+          Discord connection
+        </p>
+
+        <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+          Select a connected Discord integration to
+          send this message.
+        </p>
+      </div>
     </div>
   );
 };
