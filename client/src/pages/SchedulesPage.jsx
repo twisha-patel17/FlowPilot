@@ -14,25 +14,36 @@ import {
 
 import { getExecutions } from "../api/executionApi";
 
+import { useWorkspace } from "../context/WorkspaceContext";
+
 const SchedulesPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const {
+    currentWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace();
+
+  const workspaceId = currentWorkspace?._id;
 
   const {
     data,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["workflows"],
-    queryFn: getWorkflows,
+    queryKey: ["workflows", workspaceId],
+    queryFn: () => getWorkflows(workspaceId),
+    enabled: !!workspaceId,
   });
 
   const {
     data: executionData,
     isLoading: executionsLoading,
   } = useQuery({
-    queryKey: ["executions"],
-    queryFn: getExecutions,
+    queryKey: ["executions", workspaceId],
+    queryFn: () => getExecutions(workspaceId),
+    enabled: !!workspaceId,
   });
 
   const toggleMutation = useMutation({
@@ -40,7 +51,7 @@ const SchedulesPage = () => {
 
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["workflows"],
+        queryKey: ["workflows", workspaceId],
       });
     },
   });
@@ -48,31 +59,42 @@ const SchedulesPage = () => {
   const workflows = data?.workflows || [];
   const executions = executionData?.executions || [];
 
-console.log(
-  "Workflow triggers:",
-  workflows.map((workflow) => ({
-    id: workflow._id,
-    name: workflow.name,
-    status: workflow.status,
-    trigger: workflow.trigger,
-    triggerType: workflow.trigger?.type,
-  }))
-);
-
-const schedules = workflows.filter(
-  (workflow) =>
-    workflow.trigger?.type === "schedule"
-);
-
-console.log("Scheduled workflows:", schedules);
+  const schedules = workflows.filter(
+    (workflow) =>
+      workflow.trigger?.type === "schedule"
+  );
 
   const handleToggle = (workflowId) => {
-    toggleMutation.mutate(workflowId);
+    toggleMutation.mutate({
+      id: workflowId,
+      workspaceId,
+    });
   };
 
   const handleOpen = (workflowId) => {
     navigate(`/app/workflows/${workflowId}`);
   };
+
+  if (workspaceLoading || !workspaceId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+            Schedules
+          </h1>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            Workflows that run automatically on a
+            time-based trigger.
+          </p>
+        </div>
+
+        <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-6 text-sm text-zinc-500">
+          Loading workspace...
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -118,7 +140,6 @@ console.log("Scheduled workflows:", schedules);
 
   return (
     <div className="space-y-6">
-
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
           Schedules

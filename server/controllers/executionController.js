@@ -2,7 +2,7 @@ const Workflow = require("../models/Workflow");
 const Execution = require("../models/Execution");
 const Workspace = require("../models/Workspace");
 
-const executeWorkflow = require("../services/workflow/executeWorkflow");
+const workflowQueue = require("../services/queue/workflowQueue");
 
 const createExecution = async (req, res) => {
   try {
@@ -52,19 +52,26 @@ const createExecution = async (req, res) => {
       trigger: "manual",
     });
 
-    const completedExecution = await executeWorkflow(
-      execution._id
+    const job = await workflowQueue.add(
+      "execute-workflow",
+      {
+        executionId: execution._id.toString(),
+      }
+    );
+
+    console.log(
+      `Workflow execution queued: ${execution._id} | Job: ${job.id}`
     );
 
     return res.status(201).json({
-      message: "Workflow executed successfully",
-      execution: completedExecution,
+      message: "Workflow execution queued successfully",
+      execution,
     });
   } catch (error) {
     console.error("Create execution error:", error);
 
     return res.status(500).json({
-      message: "Workflow execution failed",
+      message: "Failed to queue workflow execution",
       error: error.message,
     });
   }

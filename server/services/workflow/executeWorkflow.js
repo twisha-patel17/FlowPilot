@@ -1,5 +1,6 @@
 const Execution = require("../../models/Execution");
 const executeNode = require("../nodes/nodeExecutor");
+const { emitExecutionUpdate } = require("../socket/socket");
 
 const executeWorkflow = async (executionId) => {
   const execution = await Execution.findById(executionId).populate(
@@ -32,6 +33,7 @@ const executeWorkflow = async (executionId) => {
     execution.startedAt = new Date();
 
     await execution.save();
+    emitExecutionUpdate(execution);
 
     console.log(`Starting workflow: ${workflow.name}`);
 
@@ -102,6 +104,7 @@ const executeWorkflow = async (executionId) => {
           Date.now() - stepStartedAt;
 
         await execution.save();
+        emitExecutionUpdate(execution);
 
         input = result.output || {};
       } catch (error) {
@@ -138,6 +141,7 @@ const executeWorkflow = async (executionId) => {
     execution.finishedAt = new Date();
 
     await execution.save();
+    emitExecutionUpdate(execution);
 
     console.log(
       `Workflow completed successfully: ${workflow.name}`
@@ -155,6 +159,7 @@ const executeWorkflow = async (executionId) => {
     execution.finishedAt = new Date();
 
     await execution.save();
+    emitExecutionUpdate(execution);
 
     throw error;
   }

@@ -1,5 +1,9 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   FiArrowLeft,
   FiCheck,
@@ -15,10 +19,12 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { getExecution } from "../api/executionApi";
 import { useWorkspace } from "../context/WorkspaceContext";
+import socket from "../socket/socket";
 
 const ExecutionDetailsPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const queryClient = useQueryClient();
 
   const {
     currentWorkspace,
@@ -45,6 +51,42 @@ const ExecutionDetailsPage = () => {
   });
 
   const execution = data?.execution;
+
+  /*
+   * Join the execution-specific Socket.IO room.
+   *
+   * The worker emits updates to:
+   * execution:<executionId>
+   *
+   * Every update is written directly into the React Query cache.
+   */
+  useEffect(() => {
+    if (!id) return;
+
+    socket.emit("join-execution", id);
+
+    const handleExecutionUpdate = (updatedExecution) => {
+      queryClient.setQueryData(
+        ["execution", id, workspaceId],
+        {
+          execution: updatedExecution,
+        }
+      );
+    };
+
+    socket.on(
+      "execution-update",
+      handleExecutionUpdate
+    );
+
+    return () => {
+      socket.emit("leave-execution", id);
+      socket.off(
+        "execution-update",
+        handleExecutionUpdate
+      );
+    };
+  }, [id, workspaceId, queryClient]);
 
   const retryMutation = useMutation({
     mutationFn: async () => {

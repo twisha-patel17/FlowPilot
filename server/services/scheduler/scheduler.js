@@ -2,7 +2,7 @@ const cron = require("node-cron");
 
 const Workflow = require("../../models/Workflow");
 const Execution = require("../../models/Execution");
-const executeWorkflow = require("../workflow/executeWorkflow");
+const workflowQueue = require("../queue/workflowQueue");
 
 const startScheduler = () => {
   console.log("Scheduler started");
@@ -83,16 +83,13 @@ const startScheduler = () => {
             continue;
           }
 
-          console.log(
-            `Running scheduled workflow: ${workflow.name}`
-          );
-
           let execution;
 
           try {
             execution = await Execution.create({
               workflow: workflow._id,
               owner: workflow.owner,
+              workspace: workflow.workspace,
               status: "pending",
               trigger: "schedule",
               scheduledAt,
@@ -110,14 +107,19 @@ const startScheduler = () => {
           }
 
           try {
-            await executeWorkflow(execution._id);
+            const job = await workflowQueue.add(
+              "execute-workflow",
+              {
+                executionId: execution._id.toString(),
+              }
+            );
 
             console.log(
-              `Scheduled workflow completed: ${workflow.name}`
+              `Scheduled workflow queued: ${workflow.name} | Execution: ${execution._id} | Job: ${job.id}`
             );
           } catch (error) {
             console.error(
-              `Scheduled workflow failed: ${workflow.name}`,
+              `Failed to queue scheduled workflow: ${workflow.name}`,
               error.message
             );
           }
@@ -129,10 +131,7 @@ const startScheduler = () => {
         }
       }
     } catch (error) {
-      console.error(
-        "Scheduler error:",
-        error
-      );
+      console.error("Scheduler error:", error);
     }
   });
 };

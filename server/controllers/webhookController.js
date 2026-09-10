@@ -6,7 +6,7 @@ const Workflow = require("../models/Workflow");
 const Execution = require("../models/Execution");
 const Workspace = require("../models/Workspace");
 
-const executeWorkflow = require("../services/workflow/executeWorkflow");
+const workflowQueue = require("../services/queue/workflowQueue");
 
 const createWebhook = async (req, res) => {
   try {
@@ -356,13 +356,14 @@ const receiveWebhook = async (req, res) => {
     });
 
     try {
-      const completedExecution =
-        await executeWorkflow(
-          execution._id
-        );
+      const job = await workflowQueue.add(
+        "execute-workflow",
+        {
+          executionId: execution._id.toString(),
+        }
+      );
 
-      const duration =
-        Date.now() - startedAt;
+      const duration = Date.now() - startedAt;
 
       await WebhookDelivery.create({
         webhook: webhook._id,
@@ -371,19 +372,19 @@ const receiveWebhook = async (req, res) => {
         responseCode: 200,
         duration,
         payload: req.body,
-        execution:
-          completedExecution._id,
+        execution: execution._id,
       });
 
+      console.log(
+        `Webhook workflow queued: ${webhook.workflow.name} | Execution: ${execution._id} | Job: ${job.id}`
+      );
+
       return res.status(200).json({
-        message:
-          "Webhook received successfully",
-        executionId:
-          completedExecution._id,
+        message: "Webhook received successfully",
+        executionId: execution._id,
       });
-    } catch (executionError) {
-      const duration =
-        Date.now() - startedAt;
+    } catch (queueError) {
+      const duration = Date.now() - startedAt;
 
       await WebhookDelivery.create({
         webhook: webhook._id,
@@ -393,15 +394,12 @@ const receiveWebhook = async (req, res) => {
         duration,
         payload: req.body,
         execution: execution._id,
-        error:
-          executionError.message,
+        error: queueError.message,
       });
 
       return res.status(500).json({
-        message:
-          "Workflow execution failed",
-        error:
-          executionError.message,
+        message: "Failed to queue workflow execution",
+        error: queueError.message,
       });
     }
   } catch (error) {
