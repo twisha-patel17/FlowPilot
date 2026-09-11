@@ -1,5 +1,7 @@
 const executeHttpNode = require("./httpNode");
 const executeFilterNode = require("./filterNode");
+const executeDiscordNode = require("./discordNode");
+const executeEmailNode = require("./emailNode");
 
 const executeManualNode = async (node, input) => {
   console.log("Executing manual node");
@@ -19,17 +21,13 @@ const executeWebhookNode = async (node, input) => {
   };
 };
 
-const executeDiscordNode = async (node, input) => {
-  console.log("Executing Discord node");
-
-  return {
-    success: true,
-    output: input || {},
-  };
-};
-
-const executeNode = async (node, input = {}) => {
-  const nodeType = node.data?.type || node.data?.nodeType;
+const executeNode = async (
+  node,
+  input = {},
+  context = {}
+) => {
+  const nodeType =
+    node.data?.type || node.data?.nodeType;
 
   console.log("Node type:", nodeType);
 
@@ -41,17 +39,30 @@ const executeNode = async (node, input = {}) => {
       return executeFilterNode(node, input);
 
     case "http":
-      return executeHttpNode(node, input);
+      return executeHttpNode(node, input, context);
 
     case "discord":
-      return executeDiscordNode(node, input);
+      return executeDiscordNode(
+        node,
+        input,
+        context
+      );
+    
+    case "email":
+      return executeEmailNode(
+        node,
+        input,
+        context
+      );  
 
     case "webhook":
-      return executeWebhookNode(node, input);  
+      return executeWebhookNode(node, input);
 
     default:
       throw new Error(
-        `Unsupported node type: ${nodeType || "unknown"}`
+        `Unsupported node type: ${
+          nodeType || "unknown"
+        }`
       );
   }
 };

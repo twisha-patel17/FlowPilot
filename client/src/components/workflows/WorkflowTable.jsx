@@ -4,6 +4,9 @@ const WorkflowTable = ({
   workflows,
   onMenuClick,
   onEdit,
+  onDuplicate,
+  onToggle,
+  onDelete,
 }) => {
   if (!workflows || workflows.length === 0) {
     return (
@@ -22,8 +25,7 @@ const WorkflowTable = ({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-zinc-800/70 bg-[#0d0d0f]">
-
+    <div className="relative overflow-visible rounded-lg border border-zinc-800/70 bg-[#0d0d0f]">
       {/* Table Header */}
       <div className="hidden grid-cols-[minmax(240px,2fr)_140px_110px_90px_90px_40px] items-center gap-3 border-b border-zinc-800/70 bg-zinc-900/30 px-4 py-3 text-[10px] font-medium uppercase tracking-wider text-zinc-600 md:grid">
         <span>Name</span>
@@ -42,6 +44,9 @@ const WorkflowTable = ({
             workflow={workflow}
             onMenuClick={onMenuClick}
             onEdit={onEdit}
+            onDuplicate={onDuplicate}
+            onToggle={onToggle}
+            onDelete={onDelete}
           />
         ))}
       </div>

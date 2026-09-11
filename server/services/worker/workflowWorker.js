@@ -8,7 +8,9 @@ const { emitExecutionUpdate } = require("../socket/socket");
 const workflowWorker = new Worker(
   "workflow-execution",
   async (job) => {
-    console.log(`Processing workflow job: ${job.id}`);
+    console.log(
+      `Processing workflow job: ${job.id}`
+    );
 
     const { executionId } = job.data;
 
@@ -17,7 +19,8 @@ const workflowWorker = new Worker(
     }
 
     try {
-      const execution = await executeWorkflow(executionId);
+      const execution =
+        await executeWorkflow(executionId);
 
       emitExecutionUpdate(execution);
 
@@ -30,9 +33,8 @@ const workflowWorker = new Worker(
         status: execution.status,
       };
     } catch (error) {
-      const execution = await Execution.findById(
-        executionId
-      );
+      const execution =
+        await Execution.findById(executionId);
 
       if (execution) {
         const attemptsAllowed =
@@ -47,14 +49,20 @@ const workflowWorker = new Worker(
         if (isRetrying) {
           execution.status = "pending";
           execution.finishedAt = null;
-          execution.error = `Retrying workflow execution... Attempt ${attemptsMade + 1} of ${attemptsAllowed}`;
+          execution.error =
+            `Retrying workflow execution... ` +
+            `Attempt ${attemptsMade + 1} ` +
+            `of ${attemptsAllowed}`;
 
           await execution.save();
 
           emitExecutionUpdate(execution);
 
           console.log(
-            `Workflow execution will retry: ${execution._id} | Attempt ${attemptsMade + 1} of ${attemptsAllowed}`
+            `Workflow execution will retry: ` +
+            `${execution._id} | ` +
+            `Attempt ${attemptsMade + 1} ` +
+            `of ${attemptsAllowed}`
           );
         }
       }
@@ -67,44 +75,63 @@ const workflowWorker = new Worker(
   }
 );
 
-workflowWorker.on("completed", (job, result) => {
-  console.log(
-    `Workflow job completed: ${job.id}`,
-    result
-  );
-});
-
-workflowWorker.on("failed", async (job, error) => {
-  console.error(
-    `Workflow job failed: ${job?.id}`,
-    error.message
-  );
-
-  if (!job) {
-    return;
+workflowWorker.on(
+  "completed",
+  (job, result) => {
+    console.log(
+      `Workflow job completed: ${job.id}`,
+      result
+    );
   }
+);
 
-  const attemptsAllowed =
-    job.opts.attempts || 1;
+workflowWorker.on(
+  "failed",
+  async (job, error) => {
+    console.error(
+      `Workflow job failed: ${job?.id}`,
+      error.message
+    );
 
-  const attemptsMade =
-    job.attemptsMade;
+    if (!job) {
+      return;
+    }
 
-  if (attemptsMade >= attemptsAllowed) {
+    const attemptsAllowed =
+      job.opts.attempts || 1;
+
+    const attemptsMade =
+      job.attemptsMade;
+
+    const isFinalAttempt =
+      attemptsMade >= attemptsAllowed;
+
+    if (!isFinalAttempt) {
+      return;
+    }
+
     try {
-      const execution = await Execution.findById(
-        job.data.executionId
-      );
+      const execution =
+        await Execution.findById(
+          job.data.executionId
+        );
 
-      if (execution) {
-        execution.status = "failed";
-        execution.error = error.message;
-        execution.finishedAt = new Date();
-
-        await execution.save();
-
-        emitExecutionUpdate(execution);
+      if (!execution) {
+        return;
       }
+
+      execution.status = "failed";
+      execution.error = error.message;
+      execution.finishedAt = new Date();
+
+      await execution.save();
+
+      emitExecutionUpdate(execution);
+
+      console.log(
+        `Workflow execution permanently failed: ` +
+        `${execution._id}`
+      );
     } catch (updateError) {
       console.error(
         "Failed to update execution after final retry:",
@@ -112,13 +139,16 @@ workflowWorker.on("failed", async (job, error) => {
       );
     }
   }
-});
+);
 
-workflowWorker.on("error", (error) => {
-  console.error(
-    "Workflow worker error:",
-    error
-  );
-});
+workflowWorker.on(
+  "error",
+  (error) => {
+    console.error(
+      "Workflow worker error:",
+      error
+    );
+  }
+);
 
 module.exports = workflowWorker;

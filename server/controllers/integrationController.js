@@ -12,6 +12,17 @@ const getWorkspace = async (workspaceId, userId) => {
   });
 };
 
+// Never expose integration credentials to the frontend.
+const sanitizeIntegration = (integration) => {
+  const data = integration.toObject
+    ? integration.toObject()
+    : { ...integration };
+
+  delete data.credentials;
+
+  return data;
+};
+
 const createIntegration = async (req, res) => {
   try {
     const {
@@ -66,7 +77,7 @@ const createIntegration = async (req, res) => {
 
     return res.status(201).json({
       message: "Integration created successfully",
-      integration,
+      integration: sanitizeIntegration(integration),
     });
   } catch (error) {
     console.error(
@@ -109,7 +120,9 @@ const getIntegrations = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     return res.status(200).json({
-      integrations,
+      integrations: integrations.map(
+        sanitizeIntegration
+      ),
     });
   } catch (error) {
     console.error(
@@ -161,7 +174,7 @@ const getIntegration = async (req, res) => {
     }
 
     return res.status(200).json({
-      integration,
+      integration: sanitizeIntegration(integration),
     });
   } catch (error) {
     console.error(
@@ -235,7 +248,7 @@ const updateIntegration = async (req, res) => {
     return res.status(200).json({
       message:
         "Integration updated successfully",
-      integration,
+      integration: sanitizeIntegration(integration),
     });
   } catch (error) {
     console.error(
@@ -296,7 +309,7 @@ const toggleIntegration = async (req, res) => {
     return res.status(200).json({
       message:
         "Integration status updated",
-      integration,
+      integration: sanitizeIntegration(integration),
     });
   } catch (error) {
     console.error(

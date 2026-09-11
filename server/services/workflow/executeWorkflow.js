@@ -3,9 +3,9 @@ const executeNode = require("../nodes/nodeExecutor");
 const { emitExecutionUpdate } = require("../socket/socket");
 
 const executeWorkflow = async (executionId) => {
-  const execution = await Execution.findById(executionId).populate(
-    "workflow"
-  );
+  const execution = await Execution.findById(
+    executionId
+  ).populate("workflow");
 
   if (!execution) {
     throw new Error("Execution not found");
@@ -31,11 +31,14 @@ const executeWorkflow = async (executionId) => {
   try {
     execution.status = "running";
     execution.startedAt = new Date();
+    execution.error = null;
 
     await execution.save();
     emitExecutionUpdate(execution);
 
-    console.log(`Starting workflow: ${workflow.name}`);
+    console.log(
+      `Starting workflow: ${workflow.name}`
+    );
 
     const nodes = workflow.nodes || [];
     const edges = workflow.edges || [];
@@ -61,7 +64,9 @@ const executeWorkflow = async (executionId) => {
 
     while (currentNode) {
       if (visitedNodes.has(currentNode.id)) {
-        throw new Error("Workflow contains a cycle");
+        throw new Error(
+          "Workflow contains a cycle"
+        );
       }
 
       visitedNodes.add(currentNode.id);
@@ -88,11 +93,16 @@ const executeWorkflow = async (executionId) => {
       execution.steps.push(step);
 
       await execution.save();
+      emitExecutionUpdate(execution);
 
       try {
         const result = await executeNode(
           currentNode,
-          input
+          input,
+          {
+            userId: execution.owner,
+            workspaceId: execution.workspace,
+          }
         );
 
         step.status = result.success
@@ -100,6 +110,7 @@ const executeWorkflow = async (executionId) => {
           : "failed";
 
         step.output = result.output || {};
+
         step.duration =
           Date.now() - stepStartedAt;
 
@@ -110,23 +121,27 @@ const executeWorkflow = async (executionId) => {
       } catch (error) {
         step.status = "failed";
         step.error = error.message;
+
         step.duration =
           Date.now() - stepStartedAt;
 
         await execution.save();
+        emitExecutionUpdate(execution);
 
         throw error;
       }
 
       const nextEdge = edges.find(
-        (edge) => edge.source === currentNode.id
+        (edge) =>
+          edge.source === currentNode.id
       );
 
       if (!nextEdge) {
         currentNode = null;
       } else {
         currentNode = nodes.find(
-          (node) => node.id === nextEdge.target
+          (node) =>
+            node.id === nextEdge.target
         );
 
         if (!currentNode) {
@@ -138,6 +153,7 @@ const executeWorkflow = async (executionId) => {
     }
 
     execution.status = "success";
+    execution.error = null;
     execution.finishedAt = new Date();
 
     await execution.save();
@@ -154,9 +170,7 @@ const executeWorkflow = async (executionId) => {
       error
     );
 
-    execution.status = "failed";
     execution.error = error.message;
-    execution.finishedAt = new Date();
 
     await execution.save();
     emitExecutionUpdate(execution);

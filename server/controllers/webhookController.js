@@ -38,7 +38,8 @@ const createWebhook = async (req, res) => {
 
     if (!workspace) {
       return res.status(403).json({
-        message: "You do not have access to this workspace",
+        message:
+          "You do not have access to this workspace",
       });
     }
 
@@ -54,7 +55,9 @@ const createWebhook = async (req, res) => {
       });
     }
 
-    const publicId = crypto.randomBytes(6).toString("hex");
+    const publicId = crypto
+      .randomBytes(6)
+      .toString("hex");
 
     const webhook = await Webhook.create({
       name: name.trim(),
@@ -72,7 +75,10 @@ const createWebhook = async (req, res) => {
       endpoint: `/api/webhooks/${publicId}`,
     });
   } catch (error) {
-    console.error("Create webhook error:", error);
+    console.error(
+      "Create webhook error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Server error",
@@ -82,7 +88,8 @@ const createWebhook = async (req, res) => {
 
 const getWebhooks = async (req, res) => {
   try {
-    const workspaceId = req.headers["x-workspace-id"];
+    const workspaceId =
+      req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -97,7 +104,8 @@ const getWebhooks = async (req, res) => {
 
     if (!workspace) {
       return res.status(403).json({
-        message: "You do not have access to this workspace",
+        message:
+          "You do not have access to this workspace",
       });
     }
 
@@ -112,7 +120,10 @@ const getWebhooks = async (req, res) => {
       webhooks,
     });
   } catch (error) {
-    console.error("Get webhooks error:", error);
+    console.error(
+      "Get webhooks error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Server error",
@@ -123,7 +134,8 @@ const getWebhooks = async (req, res) => {
 const toggleWebhook = async (req, res) => {
   try {
     const { id } = req.params;
-    const workspaceId = req.headers["x-workspace-id"];
+    const workspaceId =
+      req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -138,7 +150,8 @@ const toggleWebhook = async (req, res) => {
 
     if (!workspace) {
       return res.status(403).json({
-        message: "You do not have access to this workspace",
+        message:
+          "You do not have access to this workspace",
       });
     }
 
@@ -163,7 +176,10 @@ const toggleWebhook = async (req, res) => {
       webhook,
     });
   } catch (error) {
-    console.error("Toggle webhook error:", error);
+    console.error(
+      "Toggle webhook error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Server error",
@@ -174,7 +190,8 @@ const toggleWebhook = async (req, res) => {
 const getWebhookDeliveries = async (req, res) => {
   try {
     const { id } = req.params;
-    const workspaceId = req.headers["x-workspace-id"];
+    const workspaceId =
+      req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -189,7 +206,8 @@ const getWebhookDeliveries = async (req, res) => {
 
     if (!workspace) {
       return res.status(403).json({
-        message: "You do not have access to this workspace",
+        message:
+          "You do not have access to this workspace",
       });
     }
 
@@ -205,15 +223,19 @@ const getWebhookDeliveries = async (req, res) => {
       });
     }
 
-    const deliveries = await WebhookDelivery.find({
-      webhook: webhook._id,
-    }).sort({ receivedAt: -1 });
+    const deliveries =
+      await WebhookDelivery.find({
+        webhook: webhook._id,
+      }).sort({ receivedAt: -1 });
 
     return res.status(200).json({
       deliveries,
     });
   } catch (error) {
-    console.error("Get webhook deliveries error:", error);
+    console.error(
+      "Get webhook deliveries error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Server error",
@@ -245,7 +267,8 @@ const receiveWebhook = async (req, res) => {
 
     if (!webhook.workspace) {
       return res.status(500).json({
-        message: "Webhook workspace is not configured",
+        message:
+          "Webhook workspace is not configured",
       });
     }
 
@@ -319,7 +342,8 @@ const receiveWebhook = async (req, res) => {
       if (
         configuredRepository &&
         receivedRepository &&
-        configuredRepository !== receivedRepository
+        configuredRepository !==
+          receivedRepository
       ) {
         return res.status(400).json({
           message:
@@ -344,26 +368,38 @@ const receiveWebhook = async (req, res) => {
 
     await webhook.save();
 
-    const execution = await Execution.create({
-      workflow: webhook.workflow._id,
-      owner: webhook.owner,
-      workspace: webhook.workspace,
-      status: "pending",
-      trigger: isGithubTrigger
-        ? "github"
-        : "webhook",
-      input: req.body || {},
-    });
+    /*
+     * Store the complete webhook payload as
+     * the execution input so the first workflow
+     * node can access the incoming data.
+     */
+    const executionInput =
+      req.body || {};
+
+    const execution =
+      await Execution.create({
+        workflow: webhook.workflow._id,
+        owner: webhook.owner,
+        workspace: webhook.workspace,
+        status: "pending",
+        trigger: isGithubTrigger
+          ? "github"
+          : "webhook",
+        input: executionInput,
+      });
 
     try {
-      const job = await workflowQueue.add(
-        "execute-workflow",
-        {
-          executionId: execution._id.toString(),
-        }
-      );
+      const job =
+        await workflowQueue.add(
+          "execute-workflow",
+          {
+            executionId:
+              execution._id.toString(),
+          }
+        );
 
-      const duration = Date.now() - startedAt;
+      const duration =
+        Date.now() - startedAt;
 
       await WebhookDelivery.create({
         webhook: webhook._id,
@@ -371,20 +407,38 @@ const receiveWebhook = async (req, res) => {
         status: "success",
         responseCode: 200,
         duration,
-        payload: req.body,
+        payload: executionInput,
         execution: execution._id,
       });
 
       console.log(
-        `Webhook workflow queued: ${webhook.workflow.name} | Execution: ${execution._id} | Job: ${job.id}`
+        `Webhook workflow queued: ` +
+          `${webhook.workflow.name} | ` +
+          `Execution: ${execution._id} | ` +
+          `Job: ${job.id}`
       );
 
       return res.status(200).json({
-        message: "Webhook received successfully",
+        message:
+          "Webhook received successfully",
         executionId: execution._id,
       });
     } catch (queueError) {
-      const duration = Date.now() - startedAt;
+      const duration =
+        Date.now() - startedAt;
+
+      /*
+       * The execution was created but the
+       * BullMQ job could not be queued.
+       * Mark it failed instead of leaving it
+       * stuck in "pending".
+       */
+      execution.status = "failed";
+      execution.error =
+        queueError.message;
+      execution.finishedAt = new Date();
+
+      await execution.save();
 
       await WebhookDelivery.create({
         webhook: webhook._id,
@@ -392,13 +446,14 @@ const receiveWebhook = async (req, res) => {
         status: "failed",
         responseCode: 500,
         duration,
-        payload: req.body,
+        payload: executionInput,
         execution: execution._id,
         error: queueError.message,
       });
 
       return res.status(500).json({
-        message: "Failed to queue workflow execution",
+        message:
+          "Failed to queue workflow execution",
         error: queueError.message,
       });
     }

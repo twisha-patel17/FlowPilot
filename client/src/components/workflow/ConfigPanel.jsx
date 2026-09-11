@@ -45,6 +45,10 @@ const supportedNodeTypes = [
   "mongodb",
 ];
 
+import { useWorkspace } from "../../context/WorkspaceContext";
+import { useQuery } from "@tanstack/react-query";
+import { getIntegrations } from "../../api/integrationApi";
+
 const ConfigPanel = ({
   selectedNode,
   onClose,
@@ -237,14 +241,74 @@ const ConfigPanel = ({
     </aside>
   );
 };
-
 const GithubConfig = ({ config, onChange }) => {
+  const { currentWorkspace } = useWorkspace();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["integrations", currentWorkspace?._id],
+    queryFn: () => getIntegrations(currentWorkspace._id),
+    enabled: !!currentWorkspace?._id,
+  });
+
+  const githubIntegrations =
+    data?.integrations?.filter(
+      (integration) =>
+        integration.provider === "github" &&
+        integration.status === "connected"
+    ) || [];
+
+  const connectionOptions = [
+    {
+      value: "",
+      label: isLoading
+        ? "Loading GitHub connections..."
+        : githubIntegrations.length === 0
+        ? "No GitHub connections"
+        : "Select GitHub connection",
+    },
+    ...githubIntegrations.map((integration) => ({
+      value: integration._id,
+      label: integration.name || "GitHub Connection",
+    })),
+  ];
+
   return (
     <div className="space-y-5">
       <SectionTitle
         label="Trigger configuration"
-        title="GitHub Issue Created"
+        title="GitHub"
       />
+
+      <Field
+        label="Connection"
+        type="select"
+        value={config.integrationId || ""}
+        onChange={(value) =>
+          onChange("integrationId", value)
+        }
+        options={connectionOptions}
+      />
+
+      {isError && (
+        <p className="text-[11px] text-red-400">
+          Failed to load GitHub connections.
+        </p>
+      )}
+
+      {!isLoading &&
+        !isError &&
+        githubIntegrations.length === 0 && (
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
+              No connection
+            </p>
+
+            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+              Connect a GitHub integration from the
+              Integrations page before using this trigger.
+            </p>
+          </div>
+        )}
 
       <Field
         label="Repository"
@@ -707,15 +771,12 @@ const DelayConfig = ({ config, onChange }) => {
   );
 };
 const DiscordConfig = ({ config, onChange }) => {
-  const {
-    data,
-    isLoading,
-    isError,
-  // eslint-disable-next-line no-undef
-  } = useQuery({
-    queryKey: ["integrations"],
-    // eslint-disable-next-line no-undef
-    queryFn: getIntegrations,
+  const { currentWorkspace } = useWorkspace();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["integrations", currentWorkspace?._id],
+    queryFn: () => getIntegrations(currentWorkspace._id),
+    enabled: !!currentWorkspace?._id,
   });
 
   const discordIntegrations =
@@ -734,14 +795,10 @@ const DiscordConfig = ({ config, onChange }) => {
         ? "No Discord connections"
         : "Select Discord connection",
     },
-    ...discordIntegrations.map(
-      (integration) => ({
-        value: integration._id,
-        label:
-          integration.name ||
-          "Discord Connection",
-      })
-    ),
+    ...discordIntegrations.map((integration) => ({
+      value: integration._id,
+      label: integration.name || "Discord Connection",
+    })),
   ];
 
   return (
@@ -828,14 +885,74 @@ const DiscordConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
 const EmailConfig = ({ config, onChange }) => {
+  const { currentWorkspace } = useWorkspace();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["integrations", currentWorkspace?._id],
+    queryFn: () => getIntegrations(currentWorkspace._id),
+    enabled: !!currentWorkspace?._id,
+  });
+
+  const emailIntegrations =
+    data?.integrations?.filter(
+      (integration) =>
+        integration.provider === "email" &&
+        integration.status === "connected"
+    ) || [];
+
+  const connectionOptions = [
+    {
+      value: "",
+      label: isLoading
+        ? "Loading email connections..."
+        : emailIntegrations.length === 0
+        ? "No email connections"
+        : "Select email connection",
+    },
+    ...emailIntegrations.map((integration) => ({
+      value: integration._id,
+      label: integration.name || "Email Connection",
+    })),
+  ];
+
   return (
     <div className="space-y-5">
       <SectionTitle
         label="Action configuration"
         title="Email"
       />
+
+      <Field
+        label="Connection"
+        type="select"
+        value={config.integrationId || ""}
+        onChange={(value) =>
+          onChange("integrationId", value)
+        }
+        options={connectionOptions}
+      />
+
+      {isError && (
+        <p className="text-[11px] text-red-400">
+          Failed to load email connections.
+        </p>
+      )}
+
+      {!isLoading &&
+        !isError &&
+        emailIntegrations.length === 0 && (
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
+              No connection
+            </p>
+
+            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+              Connect an email integration from the
+              Integrations page before using this node.
+            </p>
+          </div>
+        )}
 
       <Field
         label="To"
@@ -942,6 +1059,36 @@ const HttpConfig = ({ config, onChange }) => {
 };
 
 const MongoConfig = ({ config, onChange }) => {
+  const { currentWorkspace } = useWorkspace();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["integrations", currentWorkspace?._id],
+    queryFn: () => getIntegrations(currentWorkspace._id),
+    enabled: !!currentWorkspace?._id,
+  });
+
+  const mongoIntegrations =
+    data?.integrations?.filter(
+      (integration) =>
+        integration.provider === "mongodb" &&
+        integration.status === "connected"
+    ) || [];
+
+  const connectionOptions = [
+    {
+      value: "",
+      label: isLoading
+        ? "Loading MongoDB connections..."
+        : mongoIntegrations.length === 0
+        ? "No MongoDB connections"
+        : "Select MongoDB connection",
+    },
+    ...mongoIntegrations.map((integration) => ({
+      value: integration._id,
+      label: integration.name || "MongoDB Connection",
+    })),
+  ];
+
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -952,24 +1099,33 @@ const MongoConfig = ({ config, onChange }) => {
       <Field
         label="Connection"
         type="select"
-        value={
-          config.connection ||
-          "Default MongoDB"
-        }
+        value={config.integrationId || ""}
         onChange={(value) =>
-          onChange("connection", value)
+          onChange("integrationId", value)
         }
-        options={[
-          {
-            value: "Default MongoDB",
-            label: "Default MongoDB",
-          },
-          {
-            value: "Connect new database",
-            label: "Connect new database",
-          },
-        ]}
+        options={connectionOptions}
       />
+
+      {isError && (
+        <p className="text-[11px] text-red-400">
+          Failed to load MongoDB connections.
+        </p>
+      )}
+
+      {!isLoading &&
+        !isError &&
+        mongoIntegrations.length === 0 && (
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
+              No connection
+            </p>
+
+            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+              Connect a MongoDB integration from the
+              Integrations page before using this node.
+            </p>
+          </div>
+        )}
 
       <Field
         label="Collection"
@@ -1009,7 +1165,6 @@ const MongoConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
 const GenericConfig = ({ selectedNode }) => {
   return (
     <div className="space-y-4">

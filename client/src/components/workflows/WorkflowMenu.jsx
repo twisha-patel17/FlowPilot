@@ -29,7 +29,10 @@ const WorkflowMenu = ({
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
 
     return () => {
       document.removeEventListener(
@@ -46,14 +49,17 @@ const WorkflowMenu = ({
   const isActive = workflow.status === "Active";
 
   const handleAction = (action) => {
-    action(workflow);
+    if (action) {
+      action(workflow);
+    }
+
     onClose();
   };
 
   return (
     <div
       ref={menuRef}
-      className="absolute right-4 z-30 mt-1 w-44 overflow-hidden rounded-lg border border-zinc-800 bg-[#151517] p-1 shadow-xl shadow-black/30"
+      className="absolute right-0 top-full z-[100] mt-1 w-44 overflow-hidden rounded-lg border border-zinc-800 bg-[#151517] p-1 shadow-xl shadow-black/30"
     >
       {/* Edit */}
       <button
@@ -82,6 +88,7 @@ const WorkflowMenu = ({
         className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-left text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
       >
         <FiPower className="h-3.5 w-3.5" />
+
         {isActive ? "Deactivate" : "Activate"}
       </button>
 
@@ -94,6 +101,7 @@ const WorkflowMenu = ({
         className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-left text-xs text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
       >
         <FiTrash2 className="h-3.5 w-3.5" />
+
         Delete
       </button>
     </div>

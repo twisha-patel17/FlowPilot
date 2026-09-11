@@ -38,6 +38,11 @@ const executionSchema = new mongoose.Schema(
       default: "manual",
     },
 
+    input: {
+  type: mongoose.Schema.Types.Mixed,
+  default: {},
+},
+
     scheduledAt: {
       type: Date,
       default: null,

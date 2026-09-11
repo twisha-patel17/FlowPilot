@@ -20,7 +20,8 @@ const startScheduler = () => {
 
       for (const workflow of workflows) {
         try {
-          const config = workflow.trigger?.config || {};
+          const config =
+            workflow.trigger?.config || {};
 
           const frequency = config.frequency;
           const scheduledTime = config.time;
@@ -33,27 +34,23 @@ const startScheduler = () => {
 
           const now = new Date();
 
-          const currentTime = now.toLocaleTimeString(
-            "en-GB",
-            {
+          const currentTime =
+            now.toLocaleTimeString("en-GB", {
               timeZone: timezone,
               hour: "2-digit",
               minute: "2-digit",
               hour12: false,
-            }
-          );
+            });
 
           if (currentTime !== scheduledTime) {
             continue;
           }
 
-          const currentDay = now.toLocaleDateString(
-            "en-US",
-            {
+          const currentDay =
+            now.toLocaleDateString("en-US", {
               timeZone: timezone,
               weekday: "short",
-            }
-          );
+            });
 
           if (
             frequency === "weekday" &&
@@ -93,8 +90,10 @@ const startScheduler = () => {
               status: "pending",
               trigger: "schedule",
               scheduledAt,
+              input: {},
             });
           } catch (error) {
+          
             if (error.code === 11000) {
               console.log(
                 `Duplicate scheduled execution skipped: ${workflow.name}`
@@ -107,19 +106,31 @@ const startScheduler = () => {
           }
 
           try {
-            const job = await workflowQueue.add(
-              "execute-workflow",
-              {
-                executionId: execution._id.toString(),
-              }
-            );
+            const job =
+              await workflowQueue.add(
+                "execute-workflow",
+                {
+                  executionId:
+                    execution._id.toString(),
+                }
+              );
 
             console.log(
-              `Scheduled workflow queued: ${workflow.name} | Execution: ${execution._id} | Job: ${job.id}`
+              `Scheduled workflow queued: ` +
+                `${workflow.name} | ` +
+                `Execution: ${execution._id} | ` +
+                `Job: ${job.id}`
             );
           } catch (error) {
+            execution.status = "failed";
+            execution.error = error.message;
+            execution.finishedAt = new Date();
+
+            await execution.save();
+
             console.error(
-              `Failed to queue scheduled workflow: ${workflow.name}`,
+              `Failed to queue scheduled workflow: ` +
+                `${workflow.name}`,
               error.message
             );
           }
@@ -131,7 +142,10 @@ const startScheduler = () => {
         }
       }
     } catch (error) {
-      console.error("Scheduler error:", error);
+      console.error(
+        "Scheduler error:",
+        error
+      );
     }
   });
 };
