@@ -16,6 +16,7 @@ const executionRoutes = require("./routes/executionRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
 const integrationRoutes = require("./routes/integrationRoutes");
 const workspaceRoutes = require("./routes/workspaceRoutes");
+const scheduleRoutes = require("./routes/scheduleRoutes");
 
 const startScheduler = require("./services/scheduler/scheduler");
 require("./services/worker/workflowWorker");
@@ -45,6 +46,7 @@ app.use("/api/executions", executionRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/integrations", integrationRoutes);
 app.use("/api/workspaces", workspaceRoutes);
+app.use("/api/schedules", scheduleRoutes);
 
 const server = http.createServer(app);
 

@@ -2,6 +2,8 @@ const { Worker } = require("bullmq");
 
 const redisConnection = require("../../config/redis");
 const Execution = require("../../models/Execution");
+const WebhookDelivery = require("../../models/WebhookDelivery");
+
 const executeWorkflow = require("../workflow/executeWorkflow");
 const { emitExecutionUpdate } = require("../socket/socket");
 
@@ -18,18 +20,46 @@ const workflowWorker = new Worker(
       throw new Error("Execution ID is missing");
     }
 
+    const webhookDelivery =
+      await WebhookDelivery.findOne({
+        execution: executionId,
+      });
+
+    if (webhookDelivery) {
+      webhookDelivery.status = "running";
+      await webhookDelivery.save();
+    }
+
     try {
       const execution =
         await executeWorkflow(executionId);
 
       emitExecutionUpdate(execution);
 
+      const webhookDelivery =
+        await WebhookDelivery.findOne({
+          execution: executionId,
+        });
+
+      if (webhookDelivery) {
+        webhookDelivery.status = "success";
+        webhookDelivery.responseCode = 200;
+        webhookDelivery.duration =
+          Date.now() -
+          new Date(
+            webhookDelivery.receivedAt
+          ).getTime();
+
+        await webhookDelivery.save();
+      }
+
       console.log(
         `Workflow execution finished: ${execution._id}`
       );
 
       return {
-        executionId: execution._id.toString(),
+        executionId:
+          execution._id.toString(),
         status: execution.status,
       };
     } catch (error) {
@@ -127,6 +157,25 @@ workflowWorker.on(
       await execution.save();
 
       emitExecutionUpdate(execution);
+
+      const webhookDelivery =
+        await WebhookDelivery.findOne({
+          execution: execution._id,
+        });
+
+      if (webhookDelivery) {
+        webhookDelivery.status = "failed";
+        webhookDelivery.responseCode = 500;
+        webhookDelivery.error =
+          error.message;
+        webhookDelivery.duration =
+          Date.now() -
+          new Date(
+            webhookDelivery.receivedAt
+          ).getTime();
+
+        await webhookDelivery.save();
+      }
 
       console.log(
         `Workflow execution permanently failed: ` +

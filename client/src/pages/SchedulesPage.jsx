@@ -8,11 +8,16 @@ import { useNavigate } from "react-router-dom";
 import ScheduleCard from "../components/schedules/ScheduleCard";
 
 import {
-  getWorkflows,
   toggleWorkflow,
 } from "../api/workflowApi";
 
-import { getExecutions } from "../api/executionApi";
+import {
+  getSchedules,
+} from "../api/scheduleApi";
+
+import {
+  getExecutions,
+} from "../api/executionApi";
 
 import { useWorkspace } from "../context/WorkspaceContext";
 
@@ -32,8 +37,8 @@ const SchedulesPage = () => {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["workflows", workspaceId],
-    queryFn: () => getWorkflows(workspaceId),
+    queryKey: ["schedules", workspaceId],
+    queryFn: () => getSchedules(workspaceId),
     enabled: !!workspaceId,
   });
 
@@ -51,18 +56,17 @@ const SchedulesPage = () => {
 
     onSuccess: () => {
       queryClient.invalidateQueries({
+        queryKey: ["schedules", workspaceId],
+      });
+
+      queryClient.invalidateQueries({
         queryKey: ["workflows", workspaceId],
       });
     },
   });
 
-  const workflows = data?.workflows || [];
+  const schedules = data?.schedules || [];
   const executions = executionData?.executions || [];
-
-  const schedules = workflows.filter(
-    (workflow) =>
-      workflow.trigger?.type === "schedule"
-  );
 
   const handleToggle = (workflowId) => {
     toggleMutation.mutate({
@@ -77,79 +81,39 @@ const SchedulesPage = () => {
 
   if (workspaceLoading || !workspaceId) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
-            Schedules
-          </h1>
+      <PageContainer>
+        <PageHeader />
 
-          <p className="mt-1 text-sm text-zinc-500">
-            Workflows that run automatically on a
-            time-based trigger.
-          </p>
-        </div>
-
-        <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-6 text-sm text-zinc-500">
-          Loading workspace...
-        </div>
-      </div>
+        <LoadingState message="Loading workspace..." />
+      </PageContainer>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
-            Schedules
-          </h1>
+      <PageContainer>
+        <PageHeader />
 
-          <p className="mt-1 text-sm text-zinc-500">
-            Workflows that run automatically on a
-            time-based trigger.
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-6 text-sm text-zinc-500">
-          Loading schedules...
-        </div>
-      </div>
+        <LoadingState message="Loading schedules..." />
+      </PageContainer>
     );
   }
 
   if (isError) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
-            Schedules
-          </h1>
-
-          <p className="mt-1 text-sm text-zinc-500">
-            Workflows that run automatically on a
-            time-based trigger.
-          </p>
-        </div>
+      <PageContainer>
+        <PageHeader />
 
         <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6 text-sm text-red-400">
           Failed to load schedules.
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
-          Schedules
-        </h1>
-
-        <p className="mt-1 text-sm text-zinc-500">
-          Workflows that run automatically on a
-          time-based trigger.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader />
 
       {schedules.length === 0 ? (
         <div className="rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-8 text-center">
@@ -174,35 +138,70 @@ const SchedulesPage = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {schedules.map((workflow) => (
+          {schedules.map((schedule) => (
             <ScheduleCard
-              key={workflow._id}
-              name={workflow.name}
+              key={schedule._id}
+              name={schedule.workflowName}
               schedule={formatSchedule(
-                workflow.trigger?.config
+                schedule.trigger?.config
               )}
-              nextRun={getNextRun(workflow)}
+              nextRun={getNextRun(schedule)}
               lastRun={
                 executionsLoading
                   ? "Loading..."
                   : getLastRun(
-                      workflow._id,
+                      schedule.workflowId,
                       executions
                     )
               }
               active={
-                workflow.status === "active"
+                schedule.status === "active"
               }
               onToggle={() =>
-                handleToggle(workflow._id)
+                handleToggle(
+                  schedule.workflowId
+                )
               }
               onOpen={() =>
-                handleOpen(workflow._id)
+                handleOpen(
+                  schedule.workflowId
+                )
               }
             />
           ))}
         </div>
       )}
+    </PageContainer>
+  );
+};
+
+const PageContainer = ({ children }) => {
+  return (
+    <div className="space-y-6">
+      {children}
+    </div>
+  );
+};
+
+const PageHeader = () => {
+  return (
+    <div>
+      <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+        Schedules
+      </h1>
+
+      <p className="mt-1 text-sm text-zinc-500">
+        Workflows that run automatically on a
+        time-based trigger.
+      </p>
+    </div>
+  );
+};
+
+const LoadingState = ({ message }) => {
+  return (
+    <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-6 text-sm text-zinc-500">
+      {message}
     </div>
   );
 };
@@ -276,13 +275,13 @@ const getLastRun = (
   );
 };
 
-const getNextRun = (workflow) => {
-  if (workflow.status !== "active") {
+const getNextRun = (schedule) => {
+  if (schedule.status !== "active") {
     return "Inactive";
   }
 
   const config =
-    workflow.trigger?.config || {};
+    schedule.trigger?.config || {};
 
   const { frequency, time } = config;
 
@@ -302,7 +301,6 @@ const getNextRun = (workflow) => {
   }
 
   const now = new Date();
-
   const next = new Date(now);
 
   next.setHours(

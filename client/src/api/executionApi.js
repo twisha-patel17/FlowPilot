@@ -26,11 +26,13 @@ export const getExecution = async ({
 export const createExecution = async ({
   workflowId,
   workspaceId,
+  input = {},
 }) => {
   const response = await api.post(
     "/executions",
     {
       workflowId,
+      input,
     },
     {
       headers: {

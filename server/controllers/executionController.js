@@ -5,13 +5,9 @@ const Workspace = require("../models/Workspace");
 const workflowQueue = require("../services/queue/workflowQueue");
 const createExecution = async (req, res) => {
   try {
-    const {
-      workflowId,
-      input = {},
-    } = req.body;
+    const { workflowId, input = {} } = req.body;
 
-    const workspaceId =
-      req.headers["x-workspace-id"];
+    const workspaceId = req.headers["x-workspace-id"];
 
     if (!workflowId) {
       return res.status(400).json({
@@ -32,8 +28,7 @@ const createExecution = async (req, res) => {
 
     if (!workspace) {
       return res.status(403).json({
-        message:
-          "You do not have access to this workspace",
+        message: "You do not have access to this workspace",
       });
     }
 
@@ -58,33 +53,46 @@ const createExecution = async (req, res) => {
       input,
     });
 
-    const job = await workflowQueue.add(
-      "execute-workflow",
-      {
-        executionId:
-          execution._id.toString(),
-      }
-    );
+    try {
+      const job = await workflowQueue.add(
+        "execute-workflow",
+        {
+          executionId: execution._id.toString(),
+        }
+      );
 
-    console.log(
-      `Workflow execution queued: ` +
-      `${execution._id} | Job: ${job.id}`
-    );
+      console.log(
+        `Workflow execution queued: ` +
+        `${execution._id} | Job: ${job.id}`
+      );
 
-    return res.status(201).json({
-      message:
-        "Workflow execution queued successfully",
-      execution,
-    });
+      return res.status(201).json({
+        message: "Workflow execution queued successfully",
+        execution,
+      });
+    } catch (queueError) {
+      execution.status = "failed";
+      execution.error = queueError.message;
+      execution.finishedAt = new Date();
+
+      await execution.save();
+
+      console.error(
+        "Failed to queue workflow execution:",
+        queueError
+      );
+
+      return res.status(500).json({
+        message: "Failed to queue workflow execution",
+        error: queueError.message,
+        execution,
+      });
+    }
   } catch (error) {
-    console.error(
-      "Create execution error:",
-      error
-    );
+    console.error("Create execution error:", error);
 
     return res.status(500).json({
-      message:
-        "Failed to queue workflow execution",
+      message: "Failed to create workflow execution",
       error: error.message,
     });
   }

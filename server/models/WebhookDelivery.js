@@ -15,7 +15,7 @@ const webhookDeliverySchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["success", "failed"],
+      enum: ["queued", "running", "success", "failed"],
       required: true,
     },
 

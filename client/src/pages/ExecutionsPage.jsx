@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import ExecutionFilters from "../components/executions/ExecutionFilters";
 import ExecutionTable from "../components/executions/ExecutionTable";
 
-import { getExecutions } from "../api/executionApi";
+import { useExecutions } from "../hooks/useExecutions";
 import { getWorkflows } from "../api/workflowApi";
 
 import { useWorkspace } from "../context/WorkspaceContext";
@@ -26,11 +26,7 @@ const ExecutionsPage = () => {
   const {
     data: executionData,
     isLoading: executionsLoading,
-  } = useQuery({
-    queryKey: ["executions", workspaceId],
-    queryFn: () => getExecutions(workspaceId),
-    enabled: !!workspaceId,
-  });
+  } = useExecutions(workspaceId);
 
   const {
     data: workflowData,
@@ -63,8 +59,7 @@ const ExecutionsPage = () => {
       /* Search */
       if (searchValue) {
         const workflowName =
-          execution.workflow?.name
-            ?.toLowerCase() || "";
+          execution.workflow?.name?.toLowerCase() || "";
 
         const executionId =
           execution._id?.toLowerCase() || "";
@@ -115,9 +110,7 @@ const ExecutionsPage = () => {
         const limit =
           timeLimits[time];
 
-        if (
-          now - started > limit
-        ) {
+        if (now - started > limit) {
           return false;
         }
       }

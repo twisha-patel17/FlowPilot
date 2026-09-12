@@ -368,11 +368,6 @@ const receiveWebhook = async (req, res) => {
 
     await webhook.save();
 
-    /*
-     * Store the complete webhook payload as
-     * the execution input so the first workflow
-     * node can access the incoming data.
-     */
     const executionInput =
       req.body || {};
 
@@ -404,7 +399,7 @@ const receiveWebhook = async (req, res) => {
       await WebhookDelivery.create({
         webhook: webhook._id,
         event,
-        status: "success",
+        status: "queued",
         responseCode: 200,
         duration,
         payload: executionInput,
@@ -427,12 +422,6 @@ const receiveWebhook = async (req, res) => {
       const duration =
         Date.now() - startedAt;
 
-      /*
-       * The execution was created but the
-       * BullMQ job could not be queued.
-       * Mark it failed instead of leaving it
-       * stuck in "pending".
-       */
       execution.status = "failed";
       execution.error =
         queueError.message;

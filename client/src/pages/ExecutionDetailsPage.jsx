@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FiArrowLeft,
   FiCheck,
@@ -55,21 +51,71 @@ const ExecutionDetailsPage = () => {
   /*
    * Join the execution-specific Socket.IO room.
    *
-   * The worker emits updates to:
-   * execution:<executionId>
+   * Backend emits:
+   * "execution-update"
    *
-   * Every update is written directly into the React Query cache.
+   * to:
+   * execution:<executionId>
    */
   useEffect(() => {
-    if (!id) return;
+    if (!id || !workspaceId) return;
 
     socket.emit("join-execution", id);
 
     const handleExecutionUpdate = (updatedExecution) => {
+      if (!updatedExecution?._id) return;
+
+      if (
+        updatedExecution.workspace &&
+        updatedExecution.workspace.toString() !==
+          workspaceId.toString()
+      ) {
+        return;
+      }
+
       queryClient.setQueryData(
         ["execution", id, workspaceId],
         {
           execution: updatedExecution,
+        }
+      );
+
+      queryClient.setQueryData(
+        ["executions", workspaceId],
+        (currentData) => {
+          if (!currentData?.executions) {
+            return currentData;
+          }
+
+          const existingIndex =
+            currentData.executions.findIndex(
+              (item) =>
+                item._id === updatedExecution._id
+            );
+
+          if (existingIndex === -1) {
+            return {
+              ...currentData,
+              executions: [
+                updatedExecution,
+                ...currentData.executions,
+              ],
+            };
+          }
+
+          const updatedExecutions = [
+            ...currentData.executions,
+          ];
+
+          updatedExecutions[existingIndex] = {
+            ...updatedExecutions[existingIndex],
+            ...updatedExecution,
+          };
+
+          return {
+            ...currentData,
+            executions: updatedExecutions,
+          };
         }
       );
     };
@@ -81,24 +127,13 @@ const ExecutionDetailsPage = () => {
 
     return () => {
       socket.emit("leave-execution", id);
+
       socket.off(
         "execution-update",
         handleExecutionUpdate
       );
     };
   }, [id, workspaceId, queryClient]);
-
-  const retryMutation = useMutation({
-    mutationFn: async () => {
-      throw new Error(
-        "Retry functionality is not connected yet."
-      );
-    },
-
-    onError: (error) => {
-      alert(error.message);
-    },
-  });
 
   const totalDuration = useMemo(() => {
     if (
@@ -195,9 +230,7 @@ const ExecutionDetailsPage = () => {
     ? execution._id.slice(-4)
     : "----";
 
-  const status = formatStatus(
-    execution.status
-  );
+  const status = formatStatus(execution.status);
 
   const workflowName =
     execution.workflow?.name ||
@@ -255,25 +288,6 @@ const ExecutionDetailsPage = () => {
             </span>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            retryMutation.mutate()
-          }
-          disabled={retryMutation.isPending}
-          className="inline-flex h-9 items-center gap-2 self-start rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <FiRefreshCw
-            className={`h-3.5 w-3.5 ${
-              retryMutation.isPending
-                ? "animate-spin"
-                : ""
-            }`}
-          />
-
-          Retry from step
-        </button>
       </div>
 
       {/* INFO */}
@@ -353,6 +367,33 @@ const ExecutionDetailsPage = () => {
         </div>
       </section>
 
+      {/* INPUT */}
+      <section>
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-zinc-200">
+            Execution Input
+          </h2>
+
+          <p className="mt-1 text-xs text-zinc-600">
+            Data provided when this workflow execution started.
+          </p>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-zinc-800/70 bg-[#0d0d0f]">
+          <div className="flex items-center justify-between border-b border-zinc-800/70 px-4 py-3">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+              Input
+            </span>
+
+            <CopyButton value={execution.input || {}} />
+          </div>
+
+          <pre className="max-h-80 overflow-auto p-4 font-mono text-xs leading-5 text-zinc-400">
+            {formatJSON(execution.input || {})}
+          </pre>
+        </div>
+      </section>
+
       {/* EXECUTION ERROR */}
       {execution.status === "failed" &&
         execution.error && (
@@ -372,29 +413,6 @@ const ExecutionDetailsPage = () => {
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center gap-3 border-t border-red-500/10 px-4 py-3 sm:px-5">
-              <button
-                type="button"
-                onClick={() =>
-                  retryMutation.mutate()
-                }
-                className="inline-flex h-8 items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 text-xs font-medium text-red-300 transition hover:bg-red-500/20"
-              >
-                <FiRefreshCw className="h-3.5 w-3.5" />
-                Retry Step
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  navigate("/app/executions")
-                }
-                className="text-xs text-zinc-500 transition hover:text-zinc-300"
-              >
-                View Logs
-              </button>
-            </div>
           </div>
         )}
     </div>
@@ -410,8 +428,6 @@ const ExecutionStep = ({
   activeTab,
   onTabChange,
 }) => {
-  const failed = step.status === "failed";
-
   return (
     <div className="relative">
       {!isLast && (
@@ -430,9 +446,7 @@ const ExecutionStep = ({
           }`}
         >
           {/* STATUS ICON */}
-          <StepStatusIcon
-            status={step.status}
-          />
+          <StepStatusIcon status={step.status} />
 
           {/* STEP NAME */}
           <div className="min-w-0 flex-1">
@@ -573,9 +587,7 @@ const StepContent = ({
   );
 };
 
-const StepStatusIcon = ({
-  status,
-}) => {
+const StepStatusIcon = ({ status }) => {
   if (status === "failed") {
     return (
       <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-500/30 bg-[#0d0d0f]">
@@ -607,9 +619,7 @@ const StepStatusIcon = ({
   );
 };
 
-const ExecutionStatus = ({
-  status,
-}) => {
+const ExecutionStatus = ({ status }) => {
   const config = {
     Success: {
       wrapper:
@@ -702,9 +712,7 @@ const StepTab = ({
   );
 };
 
-const CopyButton = ({
-  value,
-}) => {
+const CopyButton = ({ value }) => {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(
@@ -748,9 +756,7 @@ const EmptySteps = () => {
   );
 };
 
-const formatStatus = (
-  status
-) => {
+const formatStatus = (status) => {
   switch (status) {
     case "success":
       return "Success";
@@ -769,9 +775,7 @@ const formatStatus = (
   }
 };
 
-const formatNodeName = (
-  type
-) => {
+const formatNodeName = (type) => {
   if (!type) {
     return "Unknown Step";
   }
@@ -783,9 +787,7 @@ const formatNodeName = (
     );
 };
 
-const capitalize = (
-  value
-) => {
+const capitalize = (value) => {
   if (!value) return "";
 
   return (
@@ -794,9 +796,7 @@ const capitalize = (
   );
 };
 
-const formatDuration = (
-  milliseconds
-) => {
+const formatDuration = (milliseconds) => {
   if (
     milliseconds === null ||
     milliseconds === undefined
@@ -813,9 +813,7 @@ const formatDuration = (
   ).toFixed(2)}s`;
 };
 
-const formatJSON = (
-  value
-) => {
+const formatJSON = (value) => {
   if (typeof value === "string") {
     return value;
   }
@@ -838,9 +836,7 @@ const formatJSON = (
   }
 };
 
-const formatRelativeTime = (
-  date
-) => {
+const formatRelativeTime = (date) => {
   const seconds = Math.floor(
     (Date.now() -
       date.getTime()) /
