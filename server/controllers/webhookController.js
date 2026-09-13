@@ -8,10 +8,57 @@ const Workspace = require("../models/Workspace");
 
 const workflowQueue = require("../services/queue/workflowQueue");
 
-const createWebhook = async (req, res) => {
+const verifyWebhookSignature = (req, secret) => {
+  if (!secret) {
+    return false;
+  }
+
+  const signature =
+    req.headers["x-flowpilot-signature"] ||
+    req.headers["x-hub-signature-256"];
+
+  if (!signature) {
+    return false;
+  }
+
+  const receivedSignature = signature.startsWith("sha256=")
+    ? signature.slice(7)
+    : signature;
+
+  if (!/^[0-9a-fA-F]{64}$/.test(receivedSignature)) {
+    return false;
+  }
+
+  const rawBody = req.rawBody;
+
+  if (!rawBody) {
+    return false;
+  }
+
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+
+  const receivedBuffer = Buffer.from(receivedSignature, "hex");
+  const expectedBuffer = Buffer.from(expectedSignature, "hex");
+
+  if (receivedBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(
+    receivedBuffer,
+    expectedBuffer
+  );
+};
+
+const createWebhook = async (req, res, next) => {
   try {
     const { name, workflowId, events } = req.body;
-    const workspaceId = req.headers["x-workspace-id"];
+
+    const workspaceId =
+      req.headers["x-workspace-id"];
 
     if (!name) {
       return res.status(400).json({
@@ -31,10 +78,11 @@ const createWebhook = async (req, res) => {
       });
     }
 
-    const workspace = await Workspace.findOne({
-      _id: workspaceId,
-      "members.user": req.user._id,
-    });
+    const workspace =
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user": req.user._id,
+      });
 
     if (!workspace) {
       return res.status(403).json({
@@ -43,11 +91,12 @@ const createWebhook = async (req, res) => {
       });
     }
 
-    const workflow = await Workflow.findOne({
-      _id: workflowId,
-      owner: req.user._id,
-      workspace: workspaceId,
-    });
+    const workflow =
+      await Workflow.findOne({
+        _id: workflowId,
+        owner: req.user._id,
+        workspace: workspaceId,
+      });
 
     if (!workflow) {
       return res.status(404).json({
@@ -59,9 +108,14 @@ const createWebhook = async (req, res) => {
       .randomBytes(6)
       .toString("hex");
 
+    const secret = crypto
+      .randomBytes(32)
+      .toString("hex");
+
     const webhook = await Webhook.create({
       name: name.trim(),
       publicId,
+      secret,
       owner: req.user._id,
       workspace: workspaceId,
       workflow: workflow._id,
@@ -69,24 +123,23 @@ const createWebhook = async (req, res) => {
       active: true,
     });
 
+    const webhookResponse =
+      webhook.toObject();
+
+    delete webhookResponse.secret;
+
     return res.status(201).json({
       message: "Webhook created successfully",
-      webhook,
+      webhook: webhookResponse,
+      secret,
       endpoint: `/api/webhooks/${publicId}`,
     });
   } catch (error) {
-    console.error(
-      "Create webhook error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getWebhooks = async (req, res) => {
+const getWebhooks = async (req, res, next) => {
   try {
     const workspaceId =
       req.headers["x-workspace-id"];
@@ -97,10 +150,11 @@ const getWebhooks = async (req, res) => {
       });
     }
 
-    const workspace = await Workspace.findOne({
-      _id: workspaceId,
-      "members.user": req.user._id,
-    });
+    const workspace =
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user": req.user._id,
+      });
 
     if (!workspace) {
       return res.status(403).json({
@@ -109,31 +163,27 @@ const getWebhooks = async (req, res) => {
       });
     }
 
-    const webhooks = await Webhook.find({
-      owner: req.user._id,
-      workspace: workspaceId,
-    })
-      .populate("workflow", "name")
-      .sort({ createdAt: -1 });
+    const webhooks =
+      await Webhook.find({
+        owner: req.user._id,
+        workspace: workspaceId,
+      })
+        .select("-secret")
+        .populate("workflow", "name")
+        .sort({ createdAt: -1 });
 
     return res.status(200).json({
       webhooks,
     });
   } catch (error) {
-    console.error(
-      "Get webhooks error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const toggleWebhook = async (req, res) => {
+const toggleWebhook = async (req, res, next) => {
   try {
     const { id } = req.params;
+
     const workspaceId =
       req.headers["x-workspace-id"];
 
@@ -143,10 +193,11 @@ const toggleWebhook = async (req, res) => {
       });
     }
 
-    const workspace = await Workspace.findOne({
-      _id: workspaceId,
-      "members.user": req.user._id,
-    });
+    const workspace =
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user": req.user._id,
+      });
 
     if (!workspace) {
       return res.status(403).json({
@@ -155,11 +206,12 @@ const toggleWebhook = async (req, res) => {
       });
     }
 
-    const webhook = await Webhook.findOne({
-      _id: id,
-      owner: req.user._id,
-      workspace: workspaceId,
-    });
+    const webhook =
+      await Webhook.findOne({
+        _id: id,
+        owner: req.user._id,
+        workspace: workspaceId,
+      }).select("-secret");
 
     if (!webhook) {
       return res.status(404).json({
@@ -171,25 +223,28 @@ const toggleWebhook = async (req, res) => {
 
     await webhook.save();
 
+    const webhookResponse =
+      webhook.toObject();
+
+    delete webhookResponse.secret;
+
     return res.status(200).json({
       message: "Webhook status updated",
-      webhook,
+      webhook: webhookResponse,
     });
   } catch (error) {
-    console.error(
-      "Toggle webhook error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getWebhookDeliveries = async (req, res) => {
+const getWebhookDeliveries = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { id } = req.params;
+
     const workspaceId =
       req.headers["x-workspace-id"];
 
@@ -199,10 +254,11 @@ const getWebhookDeliveries = async (req, res) => {
       });
     }
 
-    const workspace = await Workspace.findOne({
-      _id: workspaceId,
-      "members.user": req.user._id,
-    });
+    const workspace =
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user": req.user._id,
+      });
 
     if (!workspace) {
       return res.status(403).json({
@@ -211,11 +267,12 @@ const getWebhookDeliveries = async (req, res) => {
       });
     }
 
-    const webhook = await Webhook.findOne({
-      _id: id,
-      owner: req.user._id,
-      workspace: workspaceId,
-    });
+    const webhook =
+      await Webhook.findOne({
+        _id: id,
+        owner: req.user._id,
+        workspace: workspaceId,
+      });
 
     if (!webhook) {
       return res.status(404).json({
@@ -226,32 +283,30 @@ const getWebhookDeliveries = async (req, res) => {
     const deliveries =
       await WebhookDelivery.find({
         webhook: webhook._id,
-      }).sort({ receivedAt: -1 });
+      }).sort({
+        receivedAt: -1,
+      });
 
     return res.status(200).json({
       deliveries,
     });
   } catch (error) {
-    console.error(
-      "Get webhook deliveries error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const receiveWebhook = async (req, res) => {
+const receiveWebhook = async (req, res, next) => {
   const startedAt = Date.now();
 
   try {
     const { publicId } = req.params;
 
-    const webhook = await Webhook.findOne({
-      publicId,
-    }).populate("workflow");
+    const webhook =
+      await Webhook.findOne({
+        publicId,
+      })
+        .select("+secret")
+        .populate("workflow");
 
     if (!webhook) {
       return res.status(404).json({
@@ -265,6 +320,18 @@ const receiveWebhook = async (req, res) => {
       });
     }
 
+    const signatureValid =
+      verifyWebhookSignature(
+        req,
+        webhook.secret
+      );
+
+    if (!signatureValid) {
+      return res.status(401).json({
+        message: "Invalid webhook signature",
+      });
+    }
+
     if (!webhook.workspace) {
       return res.status(500).json({
         message:
@@ -274,7 +341,8 @@ const receiveWebhook = async (req, res) => {
 
     if (!webhook.workflow) {
       return res.status(500).json({
-        message: "Webhook workflow not found",
+        message:
+          "Webhook workflow not found",
       });
     }
 
@@ -425,7 +493,8 @@ const receiveWebhook = async (req, res) => {
       execution.status = "failed";
       execution.error =
         queueError.message;
-      execution.finishedAt = new Date();
+      execution.finishedAt =
+        new Date();
 
       await execution.save();
 
@@ -447,16 +516,7 @@ const receiveWebhook = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error(
-      "Receive webhook error:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Webhook processing failed",
-      error: error.message,
-    });
+    next(error);
   }
 };
 

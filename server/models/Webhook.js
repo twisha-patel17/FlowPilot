@@ -39,6 +39,12 @@ const webhookSchema = new mongoose.Schema(
       default: [],
     },
 
+    secret: {
+      type: String,
+      required: true,
+      select: false,
+    },
+
     active: {
       type: Boolean,
       default: true,

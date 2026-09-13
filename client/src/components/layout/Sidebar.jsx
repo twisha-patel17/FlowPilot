@@ -18,6 +18,7 @@ import {
 } from "react-icons/fi";
 
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { useAuth } from "../../context/AuthContext";
 import { createWorkspace } from "../../api/workspaceApi";
 import CreateWorkspaceModal from "../workspace/CreateWorkspaceModal";
 
@@ -62,6 +63,8 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
 
   const queryClient = useQueryClient();
 
+  const { user } = useAuth();
+
   const {
     workspaces,
     currentWorkspace,
@@ -104,9 +107,18 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         .toUpperCase()
     : "WS";
 
+  const userInitials = user?.name
+    ? user.name
+        .split(" ")
+        .map((word) => word[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "U";
+
   return (
     <>
-      {/* Mobile overlay */}
+      
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 md:hidden"
@@ -124,7 +136,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >
-        {/* Logo */}
+      
         <div className="flex h-[58px] items-center border-b border-zinc-800/70 px-4">
           <Link
             to="/app"
@@ -143,22 +155,26 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
           </Link>
         </div>
 
-        {/* Workspace */}
         <div className="relative px-2 pt-3">
           <button
             type="button"
-            onClick={() => setWorkspaceOpen((prev) => !prev)}
+            onClick={() =>
+              setWorkspaceOpen((prev) => !prev)
+            }
             className="flex h-10 w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/70 px-2.5 text-left transition hover:bg-zinc-800"
           >
             <div className="flex min-w-0 items-center gap-2">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-500 text-[10px] font-bold text-white">
-                {workspaceLoading ? "..." : workspaceInitials}
+                {workspaceLoading
+                  ? "..."
+                  : workspaceInitials}
               </span>
 
               <span className="truncate text-sm font-medium text-zinc-200">
                 {workspaceLoading
                   ? "Loading..."
-                  : currentWorkspace?.name || "No workspace"}
+                  : currentWorkspace?.name ||
+                    "No workspace"}
               </span>
             </div>
 
@@ -169,19 +185,17 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
             />
           </button>
 
-          {/* Workspace dropdown */}
           {workspaceOpen && (
             <div className="absolute left-2 right-2 top-[58px] z-50 overflow-hidden rounded-lg border border-zinc-800 bg-[#111113] shadow-xl">
-              {/* Dropdown header */}
               <div className="border-b border-zinc-800/70 px-3 py-2">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
                   Workspaces
                 </p>
               </div>
 
-              {/* Workspace list */}
               <div className="max-h-52 overflow-y-auto p-1">
-                {workspaces.length === 0 && !workspaceLoading ? (
+                {workspaces.length === 0 &&
+                !workspaceLoading ? (
                   <div className="px-3 py-3">
                     <p className="text-xs text-zinc-500">
                       No workspaces found.
@@ -197,7 +211,8 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                       .toUpperCase();
 
                     const isActive =
-                      currentWorkspace?._id === workspace._id;
+                      currentWorkspace?._id ===
+                      workspace._id;
 
                     return (
                       <button
@@ -236,7 +251,6 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                 )}
               </div>
 
-              {/* Create workspace */}
               <button
                 type="button"
                 onClick={() => {
@@ -252,7 +266,6 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
           )}
         </div>
 
-        {/* Navigation */}
         <nav className="mt-3 flex-1 px-2">
           <div className="space-y-1">
             {navigation.map((item) => {
@@ -278,7 +291,9 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                 >
                   <Icon className="h-4 w-4 shrink-0" />
 
-                  <span className="flex-1">{item.name}</span>
+                  <span className="flex-1">
+                    {item.name}
+                  </span>
 
                   {item.badge && (
                     <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
@@ -290,7 +305,6 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
             })}
           </div>
 
-          {/* Workspace section */}
           <div className="mt-6">
             <p className="px-3 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
               Workspace
@@ -317,30 +331,30 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
           </div>
         </nav>
 
-        {/* User */}
         <div className="border-t border-zinc-800/70 p-3">
           <div className="flex items-center gap-3 rounded-lg px-2 py-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500 text-xs font-semibold text-white">
-              TP
+              {userInitials}
             </div>
 
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-zinc-200">
-                Twisha Patel
+                {user?.name || "User"}
               </p>
 
               <p className="truncate text-xs text-zinc-600">
-                twisha@devmail.io
+                {user?.email || "No email"}
               </p>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Create Workspace Modal */}
       <CreateWorkspaceModal
         isOpen={createWorkspaceOpen}
-        onClose={() => setCreateWorkspaceOpen(false)}
+        onClose={() =>
+          setCreateWorkspaceOpen(false)
+        }
         onCreate={handleCreateWorkspace}
         loading={createWorkspaceMutation.isPending}
       />

@@ -12,7 +12,6 @@ const getWorkspace = async (workspaceId, userId) => {
   });
 };
 
-// Never expose integration credentials to the frontend.
 const sanitizeIntegration = (integration) => {
   const data = integration.toObject
     ? integration.toObject()
@@ -23,7 +22,7 @@ const sanitizeIntegration = (integration) => {
   return data;
 };
 
-const createIntegration = async (req, res) => {
+const createIntegration = async (req, res, next) => {
   try {
     const {
       name,
@@ -80,18 +79,11 @@ const createIntegration = async (req, res) => {
       integration: sanitizeIntegration(integration),
     });
   } catch (error) {
-    console.error(
-      "Create integration error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getIntegrations = async (req, res) => {
+const getIntegrations = async (req, res, next) => {
   try {
     const workspaceId =
       req.headers["x-workspace-id"];
@@ -125,18 +117,11 @@ const getIntegrations = async (req, res) => {
       ),
     });
   } catch (error) {
-    console.error(
-      "Get integrations error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getIntegration = async (req, res) => {
+const getIntegration = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -177,18 +162,11 @@ const getIntegration = async (req, res) => {
       integration: sanitizeIntegration(integration),
     });
   } catch (error) {
-    console.error(
-      "Get integration error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const updateIntegration = async (req, res) => {
+const updateIntegration = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -251,18 +229,11 @@ const updateIntegration = async (req, res) => {
       integration: sanitizeIntegration(integration),
     });
   } catch (error) {
-    console.error(
-      "Update integration error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const toggleIntegration = async (req, res) => {
+const toggleIntegration = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -312,18 +283,11 @@ const toggleIntegration = async (req, res) => {
       integration: sanitizeIntegration(integration),
     });
   } catch (error) {
-    console.error(
-      "Toggle integration error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const deleteIntegration = async (req, res) => {
+const deleteIntegration = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -366,14 +330,7 @@ const deleteIntegration = async (req, res) => {
         "Integration deleted successfully",
     });
   } catch (error) {
-    console.error(
-      "Delete integration error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 

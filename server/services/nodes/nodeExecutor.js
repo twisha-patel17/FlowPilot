@@ -2,6 +2,7 @@ const executeHttpNode = require("./httpNode");
 const executeFilterNode = require("./filterNode");
 const executeDiscordNode = require("./discordNode");
 const executeEmailNode = require("./emailNode");
+const executeConditionNode = require("./conditionNode");
 
 const executeManualNode = async (node, input) => {
   console.log("Executing manual node");
@@ -54,6 +55,9 @@ const executeNode = async (
         input,
         context
       );  
+    
+    case "condition":
+      return executeConditionNode(node, input);  
 
     case "webhook":
       return executeWebhookNode(node, input);

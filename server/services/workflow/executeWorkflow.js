@@ -95,8 +95,10 @@ const executeWorkflow = async (executionId) => {
       await execution.save();
       emitExecutionUpdate(execution);
 
+      let result;
+
       try {
-        const result = await executeNode(
+        result = await executeNode(
           currentNode,
           input,
           {
@@ -131,10 +133,70 @@ const executeWorkflow = async (executionId) => {
         throw error;
       }
 
-      const nextEdge = edges.find(
+      /*
+       * Find the next edge.
+       *
+       * Normal nodes:
+       *   source → target
+       *
+       * Condition nodes:
+       *   conditionResult === true
+       *      → edge with sourceHandle "true"
+       *
+       *   conditionResult === false
+       *      → edge with sourceHandle "false"
+       */
+
+      const outgoingEdges = edges.filter(
         (edge) =>
           edge.source === currentNode.id
       );
+
+      let nextEdge = null;
+
+      const currentNodeType =
+        currentNode.data?.type ||
+        currentNode.data?.nodeType ||
+        currentNode.type;
+
+      if (
+        currentNodeType === "condition"
+      ) {
+        if (outgoingEdges.length === 0) {
+          currentNode = null;
+          continue;
+        }
+
+        if (
+          typeof result.conditionResult !==
+          "boolean"
+        ) {
+          throw new Error(
+            "Condition node did not return a valid condition result"
+          );
+        }
+
+        const handle =
+          result.conditionResult
+            ? "true"
+            : "false";
+
+        nextEdge = outgoingEdges.find(
+          (edge) =>
+            edge.sourceHandle === handle
+        );
+
+        if (!nextEdge) {
+          console.log(
+            `No "${handle}" branch found for condition node`
+          );
+
+          currentNode = null;
+          continue;
+        }
+      } else {
+        nextEdge = outgoingEdges[0] || null;
+      }
 
       if (!nextEdge) {
         currentNode = null;

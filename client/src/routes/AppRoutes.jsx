@@ -12,6 +12,7 @@ import IntegrationsPage from "../pages/IntegrationsPage";
 import WebhooksPage from "../pages/WebhooksPage";
 import WebhookLogsPage from "../pages/WebhookLogsPage";
 import ExecutionDetailsPage from "../pages/ExecutionDetailsPage";
+import SettingsPage from "../pages/SettingsPage";
 
 import WorkflowBuilderPage from "../pages/WorkflowBuilderPage";
 
@@ -74,6 +75,11 @@ const AppRoutes = () => {
           <Route
             path="webhooks/:id/logs"
             element={<WebhookLogsPage />}
+          />
+
+          <Route
+            path="settings"
+            element={<SettingsPage />}
           />
 
         </Route>

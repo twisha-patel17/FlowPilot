@@ -8,6 +8,8 @@ require("dotenv").config();
 
 const redisConnection = require("./config/redis");
 
+const errorHandler = require("./middleware/errorMiddleware");
+
 const app = express();
 
 const authRoutes = require("./routes/authRoutes");
@@ -30,7 +32,14 @@ app.use(
   })
 );
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = Buffer.from(buf);
+    },
+  })
+);
+
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
@@ -48,6 +57,13 @@ app.use("/api/integrations", integrationRoutes);
 app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/schedules", scheduleRoutes);
 
+app.use((req, res, next) => {
+  const error = new Error(`Route not found: ${req.method} ${req.originalUrl}`);
+  error.statusCode = 404;
+  next(error);
+});
+
+app.use(errorHandler);
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -57,11 +73,10 @@ const io = new Server(server, {
   },
 });
 
-const {
-  initializeSocket,
-} = require("./services/socket/socket");
+const { initializeSocket } = require("./services/socket/socket");
 
 initializeSocket(io);
+
 connectDB();
 
 startScheduler();

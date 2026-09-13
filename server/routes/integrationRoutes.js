@@ -10,18 +10,32 @@ const {
 } = require("../controllers/integrationController");
 
 const protect = require("../middleware/authMiddleware");
+const validate = require("../middleware/validate");
+
+const {
+  createIntegrationSchema,
+  updateIntegrationSchema,
+} = require("../validators/integrationValidator");
 
 const router = express.Router();
 
 router.use(protect);
 
-router.post("/", createIntegration);
+router.post(
+  "/",
+  validate(createIntegrationSchema),
+  createIntegration
+);
 
 router.get("/", getIntegrations);
 
 router.get("/:id", getIntegration);
 
-router.patch("/:id", updateIntegration);
+router.patch(
+  "/:id",
+  validate(updateIntegrationSchema),
+  updateIntegration
+);
 
 router.patch("/:id/toggle", toggleIntegration);
 

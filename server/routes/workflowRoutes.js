@@ -10,18 +10,32 @@ const {
 } = require("../controllers/workflowController");
 
 const protect = require("../middleware/authMiddleware");
+const validate = require("../middleware/validate");
+
+const {
+  createWorkflowSchema,
+  updateWorkflowSchema,
+} = require("../validators/workflowValidator");
 
 const router = express.Router();
 
 router.use(protect);
 
-router.post("/", createWorkflow);
+router.post(
+  "/",
+  validate(createWorkflowSchema),
+  createWorkflow
+);
 
 router.get("/", getWorkflows);
 
 router.get("/:id", getWorkflow);
 
-router.patch("/:id", updateWorkflow);
+router.patch(
+  "/:id",
+  validate(updateWorkflowSchema),
+  updateWorkflow
+);
 
 router.delete("/:id", deleteWorkflow);
 

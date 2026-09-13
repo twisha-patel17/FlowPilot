@@ -10,7 +10,7 @@ const getWorkspace = async (workspaceId, userId) => {
   });
 };
 
-const getSchedules = async (req, res) => {
+const getSchedules = async (req, res, next) => {
   try {
     const workspaceId =
       req.headers["x-workspace-id"];
@@ -55,18 +55,11 @@ const getSchedules = async (req, res) => {
       schedules,
     });
   } catch (error) {
-    console.error(
-      "Get schedules error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getSchedule = async (req, res) => {
+const getSchedule = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -116,18 +109,11 @@ const getSchedule = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
-      "Get schedule error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const updateSchedule = async (req, res) => {
+const updateSchedule = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -247,9 +233,7 @@ const updateSchedule = async (req, res) => {
         timezone.trim();
     }
 
-    workflow.markModified(
-      "trigger"
-    );
+    workflow.markModified("trigger");
 
     await workflow.save();
 
@@ -267,18 +251,11 @@ const updateSchedule = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
-      "Update schedule error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const deleteSchedule = async (req, res) => {
+const deleteSchedule = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -321,9 +298,7 @@ const deleteSchedule = async (req, res) => {
       config: {},
     };
 
-    workflow.markModified(
-      "trigger"
-    );
+    workflow.markModified("trigger");
 
     await workflow.save();
 
@@ -332,14 +307,7 @@ const deleteSchedule = async (req, res) => {
         "Schedule removed successfully",
     });
   } catch (error) {
-    console.error(
-      "Delete schedule error:",
-      error
-    );
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 

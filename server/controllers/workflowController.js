@@ -1,7 +1,7 @@
 const Workflow = require("../models/Workflow");
 const Workspace = require("../models/Workspace");
 
-const createWorkflow = async (req, res) => {
+const createWorkflow = async (req, res, next) => {
   try {
     const { name, description, trigger, nodes, edges } = req.body;
     const workspaceId = req.headers["x-workspace-id"];
@@ -44,15 +44,11 @@ const createWorkflow = async (req, res) => {
       workflow,
     });
   } catch (error) {
-    console.error("Create workflow error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getWorkflows = async (req, res) => {
+const getWorkflows = async (req, res, next) => {
   try {
     const workspaceId = req.headers["x-workspace-id"];
 
@@ -82,15 +78,11 @@ const getWorkflows = async (req, res) => {
       workflows,
     });
   } catch (error) {
-    console.error("Get workflows error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getWorkflow = async (req, res) => {
+const getWorkflow = async (req, res, next) => {
   try {
     const { id } = req.params;
     const workspaceId = req.headers["x-workspace-id"];
@@ -128,15 +120,11 @@ const getWorkflow = async (req, res) => {
       workflow,
     });
   } catch (error) {
-    console.error("Get workflow error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const updateWorkflow = async (req, res) => {
+const updateWorkflow = async (req, res, next) => {
   try {
     const { id } = req.params;
     const {
@@ -179,14 +167,29 @@ const updateWorkflow = async (req, res) => {
       });
     }
 
-    if (name !== undefined) workflow.name = name;
+    if (name !== undefined) {
+      workflow.name = name;
+    }
+
     if (description !== undefined) {
       workflow.description = description;
     }
-    if (status !== undefined) workflow.status = status;
-    if (trigger !== undefined) workflow.trigger = trigger;
-    if (nodes !== undefined) workflow.nodes = nodes;
-    if (edges !== undefined) workflow.edges = edges;
+
+    if (status !== undefined) {
+      workflow.status = status;
+    }
+
+    if (trigger !== undefined) {
+      workflow.trigger = trigger;
+    }
+
+    if (nodes !== undefined) {
+      workflow.nodes = nodes;
+    }
+
+    if (edges !== undefined) {
+      workflow.edges = edges;
+    }
 
     await workflow.save();
 
@@ -195,15 +198,11 @@ const updateWorkflow = async (req, res) => {
       workflow,
     });
   } catch (error) {
-    console.error("Update workflow error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const deleteWorkflow = async (req, res) => {
+const deleteWorkflow = async (req, res, next) => {
   try {
     const { id } = req.params;
     const workspaceId = req.headers["x-workspace-id"];
@@ -241,15 +240,11 @@ const deleteWorkflow = async (req, res) => {
       message: "Workflow deleted successfully",
     });
   } catch (error) {
-    console.error("Delete workflow error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const toggleWorkflow = async (req, res) => {
+const toggleWorkflow = async (req, res, next) => {
   try {
     const { id } = req.params;
     const workspaceId = req.headers["x-workspace-id"];
@@ -295,11 +290,7 @@ const toggleWorkflow = async (req, res) => {
       workflow,
     });
   } catch (error) {
-    console.error("Toggle workflow error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 

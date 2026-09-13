@@ -8,6 +8,11 @@ const {
 } = require("../controllers/scheduleController");
 
 const protect = require("../middleware/authMiddleware");
+const validate = require("../middleware/validate");
+
+const {
+  updateScheduleSchema,
+} = require("../validators/scheduleValidator");
 
 const router = express.Router();
 
@@ -17,7 +22,11 @@ router.get("/", getSchedules);
 
 router.get("/:id", getSchedule);
 
-router.patch("/:id", updateSchedule);
+router.patch(
+  "/:id",
+  validate(updateScheduleSchema),
+  updateSchedule
+);
 
 router.delete("/:id", deleteSchedule);
 

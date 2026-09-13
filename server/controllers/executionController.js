@@ -3,7 +3,8 @@ const Execution = require("../models/Execution");
 const Workspace = require("../models/Workspace");
 
 const workflowQueue = require("../services/queue/workflowQueue");
-const createExecution = async (req, res) => {
+
+const createExecution = async (req, res, next) => {
   try {
     const { workflowId, input = {} } = req.body;
 
@@ -89,16 +90,11 @@ const createExecution = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("Create execution error:", error);
-
-    return res.status(500).json({
-      message: "Failed to create workflow execution",
-      error: error.message,
-    });
+    next(error);
   }
 };
 
-const getExecutions = async (req, res) => {
+const getExecutions = async (req, res, next) => {
   try {
     const workspaceId = req.headers["x-workspace-id"];
 
@@ -130,15 +126,11 @@ const getExecutions = async (req, res) => {
       executions,
     });
   } catch (error) {
-    console.error("Get executions error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getExecution = async (req, res) => {
+const getExecution = async (req, res, next) => {
   try {
     const { id } = req.params;
     const workspaceId = req.headers["x-workspace-id"];
@@ -176,11 +168,7 @@ const getExecution = async (req, res) => {
       execution,
     });
   } catch (error) {
-    console.error("Get execution error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 

@@ -7,12 +7,17 @@ const {
 } = require("../controllers/executionController");
 
 const protect = require("../middleware/authMiddleware");
+const validate = require("../middleware/validate");
+
+const {
+  createExecutionSchema,
+} = require("../validators/executionValidator");
 
 const router = express.Router();
 
 router.use(protect);
 
-router.post("/", createExecution);
+router.post("/", validate(createExecutionSchema), createExecution);
 
 router.get("/", getExecutions);
 

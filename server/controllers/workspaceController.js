@@ -1,6 +1,6 @@
 const Workspace = require("../models/Workspace");
 
-const createWorkspace = async (req, res) => {
+const createWorkspace = async (req, res, next) => {
   try {
     const { name } = req.body;
 
@@ -26,15 +26,11 @@ const createWorkspace = async (req, res) => {
       workspace,
     });
   } catch (error) {
-    console.error("Create workspace error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getWorkspaces = async (req, res) => {
+const getWorkspaces = async (req, res, next) => {
   try {
     const workspaces = await Workspace.find({
       "members.user": req.user._id,
@@ -44,15 +40,11 @@ const getWorkspaces = async (req, res) => {
       workspaces,
     });
   } catch (error) {
-    console.error("Get workspaces error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const getWorkspace = async (req, res) => {
+const getWorkspace = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -71,15 +63,11 @@ const getWorkspace = async (req, res) => {
       workspace,
     });
   } catch (error) {
-    console.error("Get workspace error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const updateWorkspace = async (req, res) => {
+const updateWorkspace = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -112,15 +100,11 @@ const updateWorkspace = async (req, res) => {
       workspace,
     });
   } catch (error) {
-    console.error("Update workspace error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
-const deleteWorkspace = async (req, res) => {
+const deleteWorkspace = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -139,11 +123,7 @@ const deleteWorkspace = async (req, res) => {
       message: "Workspace deleted successfully",
     });
   } catch (error) {
-    console.error("Delete workspace error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
+    next(error);
   }
 };
 
