@@ -2,64 +2,212 @@ const Execution = require("../../models/Execution");
 const executeNode = require("../nodes/nodeExecutor");
 const { emitExecutionUpdate } = require("../socket/socket");
 
-const executeWorkflow = async (executionId) => {
-  const execution = await Execution.findById(
-    executionId
-  ).populate("workflow");
+const {
+  acquireExecutionLock,
+  releaseExecutionLock,
+} = require("../lock/executionLock");
 
-  if (!execution) {
-    throw new Error("Execution not found");
+const validateWorkflowGraph = (nodes, edges) => {
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    throw new Error("Workflow has no nodes");
   }
 
-  if (!execution.workflow) {
-    throw new Error("Workflow not found");
+  const nodeIds = new Set();
+
+  for (const node of nodes) {
+    if (!node.id) {
+      throw new Error(
+        "Workflow contains a node without an ID"
+      );
+    }
+
+    if (nodeIds.has(node.id)) {
+      throw new Error(
+        `Duplicate workflow node ID: ${node.id}`
+      );
+    }
+
+    nodeIds.add(node.id);
   }
 
-  const workflow = execution.workflow;
+  for (const edge of edges) {
+    if (!edge.source || !edge.target) {
+      throw new Error(
+        "Workflow contains an invalid edge"
+      );
+    }
 
-  if (
-    !execution.workspace ||
-    !workflow.workspace ||
-    execution.workspace.toString() !==
-      workflow.workspace.toString()
-  ) {
+    if (!nodeIds.has(edge.source)) {
+      throw new Error(
+        `Edge source node not found: ${edge.source}`
+      );
+    }
+
+    if (!nodeIds.has(edge.target)) {
+      throw new Error(
+        `Edge target node not found: ${edge.target}`
+      );
+    }
+  }
+
+  const targetNodeIds = new Set(
+    edges.map((edge) => edge.target)
+  );
+
+  const startNodes = nodes.filter(
+    (node) => !targetNodeIds.has(node.id)
+  );
+
+  if (startNodes.length === 0) {
     throw new Error(
-      "Execution and workflow belong to different workspaces"
+      "Workflow has no starting node"
     );
   }
 
+  if (startNodes.length > 1) {
+    throw new Error(
+      "Workflow must have exactly one starting node"
+    );
+  }
+
+  return startNodes[0];
+};
+
+const executeWorkflow = async (
+  executionId,
+  attemptNumber = 1
+) => {
+  let lock = null;
+
+  const currentAttempt =
+    Number(attemptNumber) >= 1
+      ? Number(attemptNumber)
+      : 1;
+
   try {
+    
+    let execution = await Execution.findById(
+      executionId
+    );
+
+    if (!execution) {
+      throw new Error("Execution not found");
+    }
+
+    if (execution.status === "success") {
+      console.log(
+        `Execution already completed: ${execution._id}`
+      );
+
+      return execution;
+    }
+
+    if (!execution.workflowSnapshot) {
+      throw new Error(
+        "Workflow snapshot not found for execution"
+      );
+    }
+
+    if (execution.attempt > currentAttempt) {
+      console.log(
+        `Ignoring stale workflow attempt: ` +
+        `${execution._id} | ` +
+        `Job attempt: ${currentAttempt} | ` +
+        `Current execution attempt: ${execution.attempt}`
+      );
+
+      return execution;
+    }
+
+    lock = await acquireExecutionLock(
+      executionId
+    );
+
+    if (!lock) {
+      const error = new Error(
+        "Execution is already being processed"
+      );
+
+      error.code = "EXECUTION_LOCKED";
+
+      throw error;
+    }
+
+    console.log(
+      `Execution lock acquired: ${executionId}`
+    );
+
+    execution = await Execution.findById(
+      executionId
+    );
+
+    if (!execution) {
+      throw new Error("Execution not found");
+    }
+
+    if (execution.status === "success") {
+      console.log(
+        `Execution completed before locked worker started: ` +
+        `${execution._id}`
+      );
+
+      return execution;
+    }
+
+    if (execution.attempt > currentAttempt) {
+      console.log(
+        `Ignoring stale locked attempt: ` +
+        `${execution._id} | ` +
+        `Job attempt: ${currentAttempt} | ` +
+        `Current execution attempt: ${execution.attempt}`
+      );
+
+      return execution;
+    }
+
+    const workflow =
+      execution.workflowSnapshot;
+
+    if (
+      !execution.workspace ||
+      !workflow.workspace ||
+      execution.workspace.toString() !==
+        workflow.workspace.toString()
+    ) {
+      throw new Error(
+        "Execution and workflow belong to different workspaces"
+      );
+    }
+
+    execution.attempt = currentAttempt;
     execution.status = "running";
     execution.startedAt = new Date();
+    execution.finishedAt = null;
     execution.error = null;
 
     await execution.save();
     emitExecutionUpdate(execution);
 
     console.log(
-      `Starting workflow: ${workflow.name}`
+      `Starting workflow: ${workflow.name} | ` +
+      `Attempt: ${currentAttempt}`
     );
 
-    const nodes = workflow.nodes || [];
-    const edges = workflow.edges || [];
+    const nodes = Array.isArray(workflow.nodes)
+      ? workflow.nodes
+      : [];
 
-    if (nodes.length === 0) {
-      throw new Error("Workflow has no nodes");
-    }
+    const edges = Array.isArray(workflow.edges)
+      ? workflow.edges
+      : [];
 
-    const targetNodeIds = new Set(
-      edges.map((edge) => edge.target)
+    let currentNode = validateWorkflowGraph(
+      nodes,
+      edges
     );
-
-    let currentNode = nodes.find(
-      (node) => !targetNodeIds.has(node.id)
-    );
-
-    if (!currentNode) {
-      currentNode = nodes[0];
-    }
 
     let input = execution.input || {};
+
     const visitedNodes = new Set();
 
     while (currentNode) {
@@ -71,18 +219,23 @@ const executeWorkflow = async (executionId) => {
 
       visitedNodes.add(currentNode.id);
 
+      const nodeType =
+        currentNode.data?.type ||
+        currentNode.data?.nodeType ||
+        currentNode.type ||
+        "unknown";
+
       console.log(
-        `Executing node: ${currentNode.id || "unknown"}`
+        `Executing node: ${currentNode.id} ` +
+        `(${nodeType}) | Attempt: ${currentAttempt}`
       );
 
       const stepStartedAt = Date.now();
 
       const step = {
-        nodeId: currentNode.id || null,
-        type:
-          currentNode.data?.type ||
-          currentNode.type ||
-          "unknown",
+        nodeId: currentNode.id,
+        type: nodeType,
+        attempt: currentAttempt,
         status: "running",
         input,
         output: {},
@@ -107,11 +260,20 @@ const executeWorkflow = async (executionId) => {
           }
         );
 
-        step.status = result.success
-          ? "success"
-          : "failed";
+        if (
+          !result ||
+          result.success === false
+        ) {
+          throw new Error(
+            result?.error ||
+              `Node execution failed: ${currentNode.id}`
+          );
+        }
 
-        step.output = result.output || {};
+        step.status = "success";
+
+        step.output =
+          result.output || {};
 
         step.duration =
           Date.now() - stepStartedAt;
@@ -119,10 +281,14 @@ const executeWorkflow = async (executionId) => {
         await execution.save();
         emitExecutionUpdate(execution);
 
-        input = result.output || {};
+        input =
+          result.output || {};
       } catch (error) {
         step.status = "failed";
-        step.error = error.message;
+
+        step.error =
+          error.message ||
+          "Node execution failed";
 
         step.duration =
           Date.now() - stepStartedAt;
@@ -133,20 +299,6 @@ const executeWorkflow = async (executionId) => {
         throw error;
       }
 
-      /*
-       * Find the next edge.
-       *
-       * Normal nodes:
-       *   source → target
-       *
-       * Condition nodes:
-       *   conditionResult === true
-       *      → edge with sourceHandle "true"
-       *
-       *   conditionResult === false
-       *      → edge with sourceHandle "false"
-       */
-
       const outgoingEdges = edges.filter(
         (edge) =>
           edge.source === currentNode.id
@@ -154,14 +306,7 @@ const executeWorkflow = async (executionId) => {
 
       let nextEdge = null;
 
-      const currentNodeType =
-        currentNode.data?.type ||
-        currentNode.data?.nodeType ||
-        currentNode.type;
-
-      if (
-        currentNodeType === "condition"
-      ) {
+      if (nodeType === "condition") {
         if (outgoingEdges.length === 0) {
           currentNode = null;
           continue;
@@ -195,22 +340,25 @@ const executeWorkflow = async (executionId) => {
           continue;
         }
       } else {
-        nextEdge = outgoingEdges[0] || null;
+      
+        nextEdge =
+          outgoingEdges[0] || null;
       }
 
       if (!nextEdge) {
         currentNode = null;
-      } else {
-        currentNode = nodes.find(
-          (node) =>
-            node.id === nextEdge.target
-        );
+        continue;
+      }
 
-        if (!currentNode) {
-          throw new Error(
-            `Next node not found: ${nextEdge.target}`
-          );
-        }
+      currentNode = nodes.find(
+        (node) =>
+          node.id === nextEdge.target
+      );
+
+      if (!currentNode) {
+        throw new Error(
+          `Next node not found: ${nextEdge.target}`
+        );
       }
     }
 
@@ -222,22 +370,66 @@ const executeWorkflow = async (executionId) => {
     emitExecutionUpdate(execution);
 
     console.log(
-      `Workflow completed successfully: ${workflow.name}`
+      `Workflow completed successfully: ` +
+      `${workflow.name} | ` +
+      `Attempt: ${currentAttempt}`
     );
 
     return execution;
   } catch (error) {
+ 
+    if (error.code === "EXECUTION_LOCKED") {
+      console.log(
+        `Execution already locked: ` +
+        `${executionId} | ` +
+        `Attempt: ${currentAttempt}`
+      );
+
+      throw error;
+    }
+
     console.error(
-      "Workflow execution error:",
+      `Workflow execution error | ` +
+      `Attempt: ${currentAttempt}:`,
       error
     );
 
-    execution.error = error.message;
+    const failedExecution =
+      await Execution.findById(
+        executionId
+      );
 
-    await execution.save();
-    emitExecutionUpdate(execution);
+    if (failedExecution) {
+      failedExecution.error =
+        error.message ||
+        "Workflow execution failed";
+
+      await failedExecution.save();
+      emitExecutionUpdate(
+        failedExecution
+      );
+    }
 
     throw error;
+  } finally {
+
+    if (lock) {
+      try {
+        await releaseExecutionLock(
+          lock.lockKey,
+          lock.lockToken
+        );
+
+        console.log(
+          `Execution lock released: ${executionId}`
+        );
+      } catch (releaseError) {
+        console.error(
+          `Failed to release execution lock: ${executionId}`,
+          releaseError
+        );
+      }
+    }
   }
 };
 

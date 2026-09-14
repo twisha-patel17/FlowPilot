@@ -3,6 +3,7 @@ const executeFilterNode = require("./filterNode");
 const executeDiscordNode = require("./discordNode");
 const executeEmailNode = require("./emailNode");
 const executeConditionNode = require("./conditionNode");
+const executeMongoDBNode = require("./mongodbNode");
 
 const executeManualNode = async (node, input) => {
   console.log("Executing manual node");

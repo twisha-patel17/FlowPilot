@@ -51,20 +51,26 @@ const ExecutionDetailsPage = () => {
   /*
    * Join the execution-specific Socket.IO room.
    *
-   * Backend emits:
-   * "execution-update"
-   *
-   * to:
-   * execution:<executionId>
+   * The socket waits for connection before joining.
+   * This also handles automatic Socket.IO reconnects.
    */
   useEffect(() => {
     if (!id || !workspaceId) return;
 
-    socket.emit("join-execution", id);
+    const joinExecutionRoom = () => {
+      socket.emit("join-execution", id);
+    };
 
-    const handleExecutionUpdate = (updatedExecution) => {
-      if (!updatedExecution?._id) return;
+    const handleExecutionUpdate = (
+      updatedExecution
+    ) => {
+      if (!updatedExecution?._id) {
+        return;
+      }
 
+      /*
+       * Ignore updates belonging to another workspace.
+       */
       if (
         updatedExecution.workspace &&
         updatedExecution.workspace.toString() !==
@@ -73,6 +79,9 @@ const ExecutionDetailsPage = () => {
         return;
       }
 
+      /*
+       * Update execution detail cache.
+       */
       queryClient.setQueryData(
         ["execution", id, workspaceId],
         {
@@ -80,6 +89,9 @@ const ExecutionDetailsPage = () => {
         }
       );
 
+      /*
+       * Update execution list cache if it exists.
+       */
       queryClient.setQueryData(
         ["executions", workspaceId],
         (currentData) => {
@@ -90,9 +102,13 @@ const ExecutionDetailsPage = () => {
           const existingIndex =
             currentData.executions.findIndex(
               (item) =>
-                item._id === updatedExecution._id
+                item._id ===
+                updatedExecution._id
             );
 
+          /*
+           * Execution does not exist in the list yet.
+           */
           if (existingIndex === -1) {
             return {
               ...currentData,
@@ -103,12 +119,17 @@ const ExecutionDetailsPage = () => {
             };
           }
 
+          /*
+           * Update existing execution.
+           */
           const updatedExecutions = [
             ...currentData.executions,
           ];
 
           updatedExecutions[existingIndex] = {
-            ...updatedExecutions[existingIndex],
+            ...updatedExecutions[
+              existingIndex
+            ],
             ...updatedExecution,
           };
 
@@ -120,20 +141,56 @@ const ExecutionDetailsPage = () => {
       );
     };
 
+    /*
+     * Join when the socket connects.
+     *
+     * This also fires again after an automatic reconnect.
+     */
+    socket.on(
+      "connect",
+      joinExecutionRoom
+    );
+
+    /*
+     * Listen for live execution updates.
+     */
     socket.on(
       "execution-update",
       handleExecutionUpdate
     );
 
+    /*
+     * If the socket is already connected,
+     * join immediately.
+     */
+    if (socket.connected) {
+      joinExecutionRoom();
+    }
+
+    /*
+     * Cleanup when leaving the page.
+     */
     return () => {
-      socket.emit("leave-execution", id);
+      socket.emit(
+        "leave-execution",
+        id
+      );
+
+      socket.off(
+        "connect",
+        joinExecutionRoom
+      );
 
       socket.off(
         "execution-update",
         handleExecutionUpdate
       );
     };
-  }, [id, workspaceId, queryClient]);
+  }, [
+    id,
+    workspaceId,
+    queryClient,
+  ]);
 
   const totalDuration = useMemo(() => {
     if (
@@ -144,8 +201,12 @@ const ExecutionDetailsPage = () => {
     }
 
     const duration =
-      new Date(execution.finishedAt).getTime() -
-      new Date(execution.startedAt).getTime();
+      new Date(
+        execution.finishedAt
+      ).getTime() -
+      new Date(
+        execution.startedAt
+      ).getTime();
 
     return formatDuration(duration);
   }, [execution]);
@@ -230,7 +291,9 @@ const ExecutionDetailsPage = () => {
     ? execution._id.slice(-4)
     : "----";
 
-  const status = formatStatus(execution.status);
+  const status = formatStatus(
+    execution.status
+  );
 
   const workflowName =
     execution.workflow?.name ||
@@ -270,7 +333,9 @@ const ExecutionDetailsPage = () => {
           </h1>
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <ExecutionStatus status={status} />
+            <ExecutionStatus
+              status={status}
+            />
 
             <span className="text-xs text-zinc-500">
               Duration: {totalDuration}
@@ -283,7 +348,9 @@ const ExecutionDetailsPage = () => {
             <span className="text-xs text-zinc-500">
               Started{" "}
               {startedAt
-                ? formatRelativeTime(startedAt)
+                ? formatRelativeTime(
+                    startedAt
+                  )
                 : "—"}
             </span>
           </div>
@@ -300,7 +367,8 @@ const ExecutionDetailsPage = () => {
         <InfoCard
           label="Trigger"
           value={capitalize(
-            execution.trigger || "manual"
+            execution.trigger ||
+              "manual"
           )}
         />
 
@@ -323,16 +391,20 @@ const ExecutionDetailsPage = () => {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-zinc-800/70 bg-[#0d0d0f]">
-          {execution.steps?.length > 0 ? (
+          {execution.steps?.length >
+          0 ? (
             <div className="p-4 sm:p-6">
               {execution.steps.map(
                 (step, index) => {
                   const isExpanded =
-                    expandedStep === index;
+                    expandedStep ===
+                    index;
 
                   const isLast =
                     index ===
-                    execution.steps.length - 1;
+                    execution.steps
+                      .length -
+                      1;
 
                   return (
                     <ExecutionStep
@@ -340,7 +412,9 @@ const ExecutionDetailsPage = () => {
                       step={step}
                       index={index}
                       isLast={isLast}
-                      isExpanded={isExpanded}
+                      isExpanded={
+                        isExpanded
+                      }
                       onToggle={() => {
                         setExpandedStep(
                           isExpanded
@@ -348,14 +422,23 @@ const ExecutionDetailsPage = () => {
                             : index
                         );
 
+                        /*
+                         * When opening a step,
+                         * default to Error if it
+                         * failed, otherwise Output.
+                         */
                         setActiveTab(
                           step.error
                             ? "error"
                             : "output"
                         );
                       }}
-                      activeTab={activeTab}
-                      onTabChange={setActiveTab}
+                      activeTab={
+                        activeTab
+                      }
+                      onTabChange={
+                        setActiveTab
+                      }
                     />
                   );
                 }
@@ -385,17 +468,25 @@ const ExecutionDetailsPage = () => {
               Input
             </span>
 
-            <CopyButton value={execution.input || {}} />
+            <CopyButton
+              value={
+                execution.input ||
+                {}
+              }
+            />
           </div>
 
           <pre className="max-h-80 overflow-auto p-4 font-mono text-xs leading-5 text-zinc-400">
-            {formatJSON(execution.input || {})}
+            {formatJSON(
+              execution.input || {}
+            )}
           </pre>
         </div>
       </section>
 
       {/* EXECUTION ERROR */}
-      {execution.status === "failed" &&
+      {execution.status ===
+        "failed" &&
         execution.error && (
           <div className="overflow-hidden rounded-xl border border-red-500/20 bg-red-500/[0.04]">
             <div className="flex items-start gap-3 p-4 sm:p-5">
@@ -446,12 +537,16 @@ const ExecutionStep = ({
           }`}
         >
           {/* STATUS ICON */}
-          <StepStatusIcon status={step.status} />
+          <StepStatusIcon
+            status={step.status}
+          />
 
           {/* STEP NAME */}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-zinc-200">
-              {formatNodeName(step.type)}
+              {formatNodeName(
+                step.type
+              )}
             </p>
 
             {step.nodeId && (
@@ -463,7 +558,9 @@ const ExecutionStep = ({
 
           {/* DURATION */}
           <span className="shrink-0 font-mono text-xs text-zinc-600">
-            {formatDuration(step.duration)}
+            {formatDuration(
+              step.duration
+            )}
           </span>
 
           {/* CHEVRON */}
@@ -482,29 +579,46 @@ const ExecutionStep = ({
             {/* TABS */}
             <div className="flex items-center gap-5 border-b border-zinc-800/70 px-4 pt-3">
               <StepTab
-                active={activeTab === "input"}
+                active={
+                  activeTab ===
+                  "input"
+                }
                 onClick={() =>
-                  onTabChange("input")
+                  onTabChange(
+                    "input"
+                  )
                 }
               >
                 Input
               </StepTab>
 
               <StepTab
-                active={activeTab === "output"}
+                active={
+                  activeTab ===
+                  "output"
+                }
                 onClick={() =>
-                  onTabChange("output")
+                  onTabChange(
+                    "output"
+                  )
                 }
               >
                 Output
               </StepTab>
 
               <StepTab
-                active={activeTab === "error"}
-                onClick={() =>
-                  onTabChange("error")
+                active={
+                  activeTab ===
+                  "error"
                 }
-                danger={!!step.error}
+                onClick={() =>
+                  onTabChange(
+                    "error"
+                  )
+                }
+                danger={
+                  !!step.error
+                }
               >
                 Error
               </StepTab>
@@ -523,7 +637,9 @@ const ExecutionStep = ({
               </span>
 
               <span className="font-mono text-[10px] text-zinc-600">
-                {formatDuration(step.duration)}
+                {formatDuration(
+                  step.duration
+                )}
               </span>
             </div>
           </div>
@@ -541,7 +657,9 @@ const StepContent = ({
 
   if (activeTab === "input") {
     value = step.input || {};
-  } else if (activeTab === "error") {
+  } else if (
+    activeTab === "error"
+  ) {
     value = step.error || null;
   } else {
     value = step.output || {};
@@ -587,7 +705,9 @@ const StepContent = ({
   );
 };
 
-const StepStatusIcon = ({ status }) => {
+const StepStatusIcon = ({
+  status,
+}) => {
   if (status === "failed") {
     return (
       <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-500/30 bg-[#0d0d0f]">
@@ -619,7 +739,9 @@ const StepStatusIcon = ({ status }) => {
   );
 };
 
-const ExecutionStatus = ({ status }) => {
+const ExecutionStatus = ({
+  status,
+}) => {
   const config = {
     Success: {
       wrapper:
@@ -647,7 +769,8 @@ const ExecutionStatus = ({ status }) => {
   };
 
   const current =
-    config[status] || config.Pending;
+    config[status] ||
+    config.Pending;
 
   return (
     <span
@@ -712,7 +835,9 @@ const StepTab = ({
   );
 };
 
-const CopyButton = ({ value }) => {
+const CopyButton = ({
+  value,
+}) => {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(
@@ -756,7 +881,9 @@ const EmptySteps = () => {
   );
 };
 
-const formatStatus = (status) => {
+const formatStatus = (
+  status
+) => {
   switch (status) {
     case "success":
       return "Success";
@@ -775,7 +902,9 @@ const formatStatus = (status) => {
   }
 };
 
-const formatNodeName = (type) => {
+const formatNodeName = (
+  type
+) => {
   if (!type) {
     return "Unknown Step";
   }
@@ -787,7 +916,9 @@ const formatNodeName = (type) => {
     );
 };
 
-const capitalize = (value) => {
+const capitalize = (
+  value
+) => {
   if (!value) return "";
 
   return (
@@ -796,7 +927,9 @@ const capitalize = (value) => {
   );
 };
 
-const formatDuration = (milliseconds) => {
+const formatDuration = (
+  milliseconds
+) => {
   if (
     milliseconds === null ||
     milliseconds === undefined
@@ -813,7 +946,9 @@ const formatDuration = (milliseconds) => {
   ).toFixed(2)}s`;
 };
 
-const formatJSON = (value) => {
+const formatJSON = (
+  value
+) => {
   if (typeof value === "string") {
     return value;
   }
@@ -836,7 +971,9 @@ const formatJSON = (value) => {
   }
 };
 
-const formatRelativeTime = (date) => {
+const formatRelativeTime = (
+  date
+) => {
   const seconds = Math.floor(
     (Date.now() -
       date.getTime()) /
@@ -874,3 +1011,4 @@ const formatRelativeTime = (date) => {
 };
 
 export default ExecutionDetailsPage;
+

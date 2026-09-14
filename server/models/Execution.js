@@ -8,6 +8,11 @@ const executionSchema = new mongoose.Schema(
       required: true,
     },
 
+    workflowSnapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -39,9 +44,9 @@ const executionSchema = new mongoose.Schema(
     },
 
     input: {
-  type: mongoose.Schema.Types.Mixed,
-  default: {},
-},
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
 
     scheduledAt: {
       type: Date,
@@ -63,6 +68,12 @@ const executionSchema = new mongoose.Schema(
       default: null,
     },
 
+    attempt: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+
     steps: {
       type: [
         {
@@ -74,6 +85,12 @@ const executionSchema = new mongoose.Schema(
           type: {
             type: String,
             default: "unknown",
+          },
+
+          attempt: {
+            type: Number,
+            default: 1,
+            min: 1,
           },
 
           status: {

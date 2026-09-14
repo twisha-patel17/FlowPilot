@@ -29,7 +29,8 @@ const createExecution = async (req, res, next) => {
 
     if (!workspace) {
       return res.status(403).json({
-        message: "You do not have access to this workspace",
+        message:
+          "You do not have access to this workspace",
       });
     }
 
@@ -45,12 +46,28 @@ const createExecution = async (req, res, next) => {
       });
     }
 
+    const workflowSnapshot = {
+      _id: workflow._id,
+      name: workflow.name,
+      workspace: workflow.workspace,
+      trigger: workflow.trigger,
+      nodes: workflow.nodes || [],
+      edges: workflow.edges || [],
+    };
+
     const execution = await Execution.create({
       workflow: workflow._id,
+
+      workflowSnapshot,
+
       owner: req.user._id,
+
       workspace: workspaceId,
+
       status: "pending",
+
       trigger: "manual",
+
       input,
     });
 
@@ -58,7 +75,8 @@ const createExecution = async (req, res, next) => {
       const job = await workflowQueue.add(
         "execute-workflow",
         {
-          executionId: execution._id.toString(),
+          executionId:
+            execution._id.toString(),
         }
       );
 
@@ -68,12 +86,17 @@ const createExecution = async (req, res, next) => {
       );
 
       return res.status(201).json({
-        message: "Workflow execution queued successfully",
+        message:
+          "Workflow execution queued successfully",
+
         execution,
       });
     } catch (queueError) {
       execution.status = "failed";
-      execution.error = queueError.message;
+
+      execution.error =
+        "Failed to queue workflow execution";
+
       execution.finishedAt = new Date();
 
       await execution.save();
@@ -84,8 +107,9 @@ const createExecution = async (req, res, next) => {
       );
 
       return res.status(500).json({
-        message: "Failed to queue workflow execution",
-        error: queueError.message,
+        message:
+          "Failed to queue workflow execution",
+
         execution,
       });
     }
@@ -111,7 +135,8 @@ const getExecutions = async (req, res, next) => {
 
     if (!workspace) {
       return res.status(403).json({
-        message: "You do not have access to this workspace",
+        message:
+          "You do not have access to this workspace",
       });
     }
 
@@ -133,7 +158,9 @@ const getExecutions = async (req, res, next) => {
 const getExecution = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const workspaceId = req.headers["x-workspace-id"];
+
+    const workspaceId =
+      req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -148,7 +175,8 @@ const getExecution = async (req, res, next) => {
 
     if (!workspace) {
       return res.status(403).json({
-        message: "You do not have access to this workspace",
+        message:
+          "You do not have access to this workspace",
       });
     }
 
@@ -156,7 +184,10 @@ const getExecution = async (req, res, next) => {
       _id: id,
       owner: req.user._id,
       workspace: workspaceId,
-    }).populate("workflow", "name workspace");
+    }).populate(
+      "workflow",
+      "name workspace"
+    );
 
     if (!execution) {
       return res.status(404).json({

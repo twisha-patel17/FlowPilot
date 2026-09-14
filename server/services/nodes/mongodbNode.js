@@ -1,6 +1,5 @@
 const { MongoClient } = require("mongodb");
 const getIntegration = require("../integrations/getIntegration");
-const executeMongoDBNode = require("./mongodbNode");
 
 const executeMongoDBNode = async (
   node,
@@ -52,18 +51,25 @@ const executeMongoDBNode = async (
     await client.connect();
 
     const db = client.db(databaseName);
-    const collection = db.collection(collectionName);
+    const collection =
+      db.collection(collectionName);
 
-    let result;
+    let output;
 
     switch (operation) {
       case "insert": {
         const document =
           config.document || input;
 
-        result = await collection.insertOne(
-          document
-        );
+        const result =
+          await collection.insertOne(document);
+
+        output = {
+          operation: "insert",
+          insertedId:
+            result.insertedId.toString(),
+          document,
+        };
 
         break;
       }
@@ -72,10 +78,19 @@ const executeMongoDBNode = async (
         const filter =
           config.filter || {};
 
-        result = await collection
-          .find(filter)
-          .limit(Number(config.limit) || 20)
-          .toArray();
+        const documents =
+          await collection
+            .find(filter)
+            .limit(
+              Number(config.limit) || 20
+            )
+            .toArray();
+
+        output = {
+          operation: "find",
+          count: documents.length,
+          documents,
+        };
 
         break;
       }
@@ -87,10 +102,21 @@ const executeMongoDBNode = async (
         const update =
           config.update || {};
 
-        result = await collection.updateMany(
-          filter,
-          { $set: update }
-        );
+        const result =
+          await collection.updateMany(
+            filter,
+            {
+              $set: update,
+            }
+          );
+
+        output = {
+          operation: "update",
+          matchedCount:
+            result.matchedCount,
+          modifiedCount:
+            result.modifiedCount,
+        };
 
         break;
       }
@@ -99,9 +125,14 @@ const executeMongoDBNode = async (
         const filter =
           config.filter || {};
 
-        result = await collection.deleteMany(
-          filter
-        );
+        const result =
+          await collection.deleteMany(filter);
+
+        output = {
+          operation: "delete",
+          deletedCount:
+            result.deletedCount,
+        };
 
         break;
       }
@@ -118,10 +149,7 @@ const executeMongoDBNode = async (
 
     return {
       success: true,
-      output: {
-        operation,
-        result,
-      },
+      output,
     };
   } finally {
     await client.close();
