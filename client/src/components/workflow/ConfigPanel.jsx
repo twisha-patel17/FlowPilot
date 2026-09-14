@@ -1057,7 +1057,6 @@ const HttpConfig = ({ config, onChange }) => {
     </div>
   );
 };
-
 const MongoConfig = ({ config, onChange }) => {
   const { currentWorkspace } = useWorkspace();
 
@@ -1088,6 +1087,75 @@ const MongoConfig = ({ config, onChange }) => {
       label: integration.name || "MongoDB Connection",
     })),
   ];
+
+  const getJsonValue = (value) => {
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (value && typeof value === "object") {
+      return JSON.stringify(value, null, 2);
+    }
+
+    return "";
+  };
+
+  const handleJsonChange = (key, value) => {
+    // Keep the user's text in the editor while typing.
+    onChange(key, value);
+  };
+
+  const handleJsonBlur = (key, value) => {
+    if (!value.trim()) {
+      onChange(key, {});
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(value);
+
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        return;
+      }
+
+      onChange(key, parsed);
+    } catch {
+      // Invalid JSON stays in the textarea.
+      // It will not be converted into a backend config object.
+    }
+  };
+
+  const JsonField = ({
+    label,
+    configKey,
+    placeholder,
+    rows = 5,
+  }) => {
+    const value = getJsonValue(config[configKey]);
+
+    return (
+      <TextareaField
+        label={label}
+        value={value}
+        onChange={(nextValue) =>
+          handleJsonChange(configKey, nextValue)
+        }
+        onBlur={(event) =>
+          handleJsonBlur(
+            configKey,
+            event.target.value
+          )
+        }
+        placeholder={placeholder}
+        rows={rows}
+        mono
+      />
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -1128,6 +1196,15 @@ const MongoConfig = ({ config, onChange }) => {
         )}
 
       <Field
+        label="Database"
+        value={config.database || ""}
+        onChange={(value) =>
+          onChange("database", value)
+        }
+        placeholder="flowpilot"
+      />
+
+      <Field
         label="Collection"
         value={config.collection || ""}
         onChange={(value) =>
@@ -1139,18 +1216,18 @@ const MongoConfig = ({ config, onChange }) => {
       <Field
         label="Operation"
         type="select"
-        value={config.operation || "find"}
+        value={config.operation || "insert"}
         onChange={(value) =>
           onChange("operation", value)
         }
         options={[
           {
-            value: "find",
-            label: "Find",
-          },
-          {
             value: "insert",
             label: "Insert",
+          },
+          {
+            value: "find",
+            label: "Find",
           },
           {
             value: "update",
@@ -1162,9 +1239,81 @@ const MongoConfig = ({ config, onChange }) => {
           },
         ]}
       />
+
+      {config.operation === "insert" && (
+        // eslint-disable-next-line react-hooks/static-components
+        <JsonField
+          label="Document"
+          configKey="document"
+          placeholder='{"name":"Twisha","role":"student"}'
+          rows={7}
+        />
+      )}
+
+      {config.operation === "find" && (
+        <>
+          // eslint-disable-next-line react-hooks/static-components
+          <JsonField
+            label="Filter"
+            configKey="filter"
+            placeholder='{"role":"student"}'
+            rows={5}
+          />
+
+          <Field
+            label="Limit"
+            type="number"
+            value={config.limit || "20"}
+            onChange={(value) =>
+              onChange("limit", value)
+            }
+            placeholder="20"
+          />
+        </>
+      )}
+
+      {config.operation === "update" && (
+        <>
+          <JsonField
+            label="Filter"
+            configKey="filter"
+            placeholder='{"email":"user@example.com"}'
+            rows={5}
+          />
+
+          <JsonField
+            label="Update"
+            configKey="update"
+            placeholder='{"status":"active"}'
+            rows={5}
+          />
+        </>
+      )}
+
+      {config.operation === "delete" && (
+        <JsonField
+          label="Filter"
+          configKey="filter"
+          placeholder='{"status":"inactive"}'
+          rows={5}
+        />
+      )}
+
+      <div className="rounded-md border border-zinc-800/70 bg-zinc-900/50 px-3 py-2.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+          MongoDB connection
+        </p>
+
+        <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+          The selected integration supplies the MongoDB
+          connection URI. Database and collection determine
+          where the operation runs.
+        </p>
+      </div>
     </div>
   );
 };
+
 const GenericConfig = ({ selectedNode }) => {
   return (
     <div className="space-y-4">
@@ -1264,6 +1413,7 @@ const TextareaField = ({
   label,
   value,
   onChange,
+  onBlur,
   placeholder = "",
   rows = 5,
   mono = false,
@@ -1280,6 +1430,7 @@ const TextareaField = ({
         onChange={(event) =>
           onChange(event.target.value)
         }
+        onBlur={onBlur}
         placeholder={placeholder}
         className={`w-full resize-none rounded-md border border-zinc-800 bg-[#111114] px-3 py-2 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500 ${
           mono ? "font-mono text-[11px]" : ""

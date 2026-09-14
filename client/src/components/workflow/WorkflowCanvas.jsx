@@ -127,7 +127,6 @@ const nodeConfig = {
 };
 
 const FlowPilotNode = ({ data, selected }) => {
-  
   const nodeType = data?.type || "manual";
 
   const config =
@@ -142,6 +141,8 @@ const FlowPilotNode = ({ data, selected }) => {
     data?.config?.summary ||
     data?.config?.value ||
     config.description;
+
+  const isCondition = nodeType === "condition";
 
   return (
     <div
@@ -163,6 +164,7 @@ const FlowPilotNode = ({ data, selected }) => {
         }}
       />
 
+      {/* HEADER */}
       <div className="flex items-center gap-2.5 border-b border-zinc-800/70 px-3 py-2.5">
         <div
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${config.iconStyle}`}
@@ -177,6 +179,7 @@ const FlowPilotNode = ({ data, selected }) => {
         </div>
       </div>
 
+      {/* CONTENT */}
       <div className="px-3 py-3">
         <p
           className={`break-words text-[11px] leading-5 ${
@@ -189,6 +192,7 @@ const FlowPilotNode = ({ data, selected }) => {
         </p>
       </div>
 
+      {/* FOOTER */}
       <div className="flex items-center justify-between border-t border-zinc-800/60 px-3 py-2">
         <span className="text-[10px] uppercase tracking-wide text-zinc-600">
           {config.category}
@@ -201,20 +205,62 @@ const FlowPilotNode = ({ data, selected }) => {
         )}
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        isConnectable={true}
-        className={`!z-50 !h-3 !w-3 !border-2 !border-[#111113] ${
-          selected
-            ? "!bg-violet-500"
-            : "!bg-zinc-500"
-        }`}
-        style={{
-          cursor: "crosshair",
-          pointerEvents: "auto",
-        }}
-      />
+      {isCondition ? (
+        <>
+          {/* TRUE */}
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="true"
+            isConnectable={true}
+            className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-emerald-500"
+            style={{
+              left: "30%",
+              cursor: "crosshair",
+              pointerEvents: "auto",
+            }}
+          />
+
+          {/* FALSE */}
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="false"
+            isConnectable={true}
+            className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-red-400"
+            style={{
+              left: "70%",
+              cursor: "crosshair",
+              pointerEvents: "auto",
+            }}
+          />
+
+          {/* BRANCH LABELS */}
+          <span className="pointer-events-none absolute -bottom-6 left-[30%] -translate-x-1/2 text-[9px] font-medium text-emerald-400">
+            TRUE
+          </span>
+
+          <span className="pointer-events-none absolute -bottom-6 left-[70%] -translate-x-1/2 text-[9px] font-medium text-red-400">
+            FALSE
+          </span>
+        </>
+      ) : (
+        /* NORMAL OUTPUT HANDLE */
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          isConnectable={true}
+          className={`!z-50 !h-3 !w-3 !border-2 !border-[#111113] ${
+            selected
+              ? "!bg-violet-500"
+              : "!bg-zinc-500"
+          }`}
+          style={{
+            cursor: "crosshair",
+            pointerEvents: "auto",
+          }}
+        />
+      )}
     </div>
   );
 };

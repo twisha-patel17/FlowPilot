@@ -56,6 +56,13 @@ const executeNode = async (
         context
       );  
     
+    case "mongodb":
+      return executeMongoDBNode(
+        node,
+        input,
+        context
+      );  
+    
     case "condition":
       return executeConditionNode(node, input);  
 
