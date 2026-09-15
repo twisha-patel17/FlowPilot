@@ -4,28 +4,48 @@ const Workspace = require("../models/Workspace");
 
 const workflowQueue = require("../services/queue/workflowQueue");
 
-const createExecution = async (req, res, next) => {
-  try {
-    const { workflowId, input = {} } = req.body;
+const {
+  cancelExecution,
+} = require("../services/workflow/executionCancellation");
 
-    const workspaceId = req.headers["x-workspace-id"];
+const {
+  emitExecutionUpdate,
+} = require("../services/socket/socket");
+
+const createExecution = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const {
+      workflowId,
+      input = {},
+    } = req.body;
+
+    const workspaceId =
+      req.headers["x-workspace-id"];
 
     if (!workflowId) {
       return res.status(400).json({
-        message: "Workflow ID is required",
+        message:
+          "Workflow ID is required",
       });
     }
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await Workspace.findOne({
-      _id: workspaceId,
-      "members.user": req.user._id,
-    });
+    const workspace =
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user":
+          req.user._id,
+      });
 
     if (!workspace) {
       return res.status(403).json({
@@ -34,11 +54,12 @@ const createExecution = async (req, res, next) => {
       });
     }
 
-    const workflow = await Workflow.findOne({
-      _id: workflowId,
-      owner: req.user._id,
-      workspace: workspaceId,
-    });
+    const workflow =
+      await Workflow.findOne({
+        _id: workflowId,
+        owner: req.user._id,
+        workspace: workspaceId,
+      });
 
     if (!workflow) {
       return res.status(404).json({
@@ -55,30 +76,32 @@ const createExecution = async (req, res, next) => {
       edges: workflow.edges || [],
     };
 
-    const execution = await Execution.create({
-      workflow: workflow._id,
+    const execution =
+      await Execution.create({
+        workflow: workflow._id,
 
-      workflowSnapshot,
+        workflowSnapshot,
 
-      owner: req.user._id,
+        owner: req.user._id,
 
-      workspace: workspaceId,
+        workspace: workspaceId,
 
-      status: "pending",
+        status: "pending",
 
-      trigger: "manual",
+        trigger: "manual",
 
-      input,
-    });
+        input,
+      });
 
     try {
-      const job = await workflowQueue.add(
-        "execute-workflow",
-        {
-          executionId:
-            execution._id.toString(),
-        }
-      );
+      const job =
+        await workflowQueue.add(
+          "execute-workflow",
+          {
+            executionId:
+              execution._id.toString(),
+          }
+        );
 
       console.log(
         `Workflow execution queued: ` +
@@ -92,12 +115,14 @@ const createExecution = async (req, res, next) => {
         execution,
       });
     } catch (queueError) {
-      execution.status = "failed";
+      execution.status =
+        "failed";
 
       execution.error =
         "Failed to queue workflow execution";
 
-      execution.finishedAt = new Date();
+      execution.finishedAt =
+        new Date();
 
       await execution.save();
 
@@ -118,20 +143,28 @@ const createExecution = async (req, res, next) => {
   }
 };
 
-const getExecutions = async (req, res, next) => {
+const getExecutions = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const workspaceId = req.headers["x-workspace-id"];
+    const workspaceId =
+      req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await Workspace.findOne({
-      _id: workspaceId,
-      "members.user": req.user._id,
-    });
+    const workspace =
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user":
+          req.user._id,
+      });
 
     if (!workspace) {
       return res.status(403).json({
@@ -140,12 +173,18 @@ const getExecutions = async (req, res, next) => {
       });
     }
 
-    const executions = await Execution.find({
-      owner: req.user._id,
-      workspace: workspaceId,
-    })
-      .populate("workflow", "name")
-      .sort({ createdAt: -1 });
+    const executions =
+      await Execution.find({
+        owner: req.user._id,
+        workspace: workspaceId,
+      })
+        .populate(
+          "workflow",
+          "name"
+        )
+        .sort({
+          createdAt: -1,
+        });
 
     return res.status(200).json({
       executions,
@@ -155,23 +194,31 @@ const getExecutions = async (req, res, next) => {
   }
 };
 
-const getExecution = async (req, res, next) => {
+const getExecution = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
     const workspaceId =
       req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await Workspace.findOne({
-      _id: workspaceId,
-      "members.user": req.user._id,
-    });
+    const workspace =
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user":
+          req.user._id,
+      });
 
     if (!workspace) {
       return res.status(403).json({
@@ -180,18 +227,20 @@ const getExecution = async (req, res, next) => {
       });
     }
 
-    const execution = await Execution.findOne({
-      _id: id,
-      owner: req.user._id,
-      workspace: workspaceId,
-    }).populate(
-      "workflow",
-      "name workspace"
-    );
+    const execution =
+      await Execution.findOne({
+        _id: id,
+        owner: req.user._id,
+        workspace: workspaceId,
+      }).populate(
+        "workflow",
+        "name workspace"
+      );
 
     if (!execution) {
       return res.status(404).json({
-        message: "Execution not found",
+        message:
+          "Execution not found",
       });
     }
 
@@ -203,8 +252,186 @@ const getExecution = async (req, res, next) => {
   }
 };
 
+/*
+ * Cancel a pending or running execution.
+ */
+const cancelExecutionController =
+  async (req, res, next) => {
+    try {
+      const { id } =
+        req.params;
+
+      const workspaceId =
+        req.headers["x-workspace-id"];
+
+      if (!workspaceId) {
+        return res.status(400).json({
+          message:
+            "Workspace is required",
+        });
+      }
+
+      /*
+       * Verify workspace membership.
+       */
+      const workspace =
+        await Workspace.findOne({
+          _id: workspaceId,
+          "members.user":
+            req.user._id,
+        });
+
+      if (!workspace) {
+        return res.status(403).json({
+          message:
+            "You do not have access to this workspace",
+        });
+      }
+
+      /*
+       * Atomically transition:
+       *
+       * pending/running → cancelled
+       *
+       * This prevents two cancellation
+       * requests from racing.
+       */
+      const execution =
+        await Execution.findOneAndUpdate(
+          {
+            _id: id,
+
+            owner:
+              req.user._id,
+
+            workspace:
+              workspaceId,
+
+            status: {
+              $in: [
+                "pending",
+                "running",
+              ],
+            },
+          },
+          {
+            $set: {
+              status: "cancelled",
+
+              error:
+                "Workflow execution was cancelled",
+
+              finishedAt:
+                new Date(),
+
+              cancelledAt:
+                new Date(),
+            },
+          },
+          {
+            new: true,
+          }
+        );
+
+      if (!execution) {
+        /*
+         * Determine why cancellation failed
+         * so the API can return a useful response.
+         */
+        const existingExecution =
+          await Execution.findOne({
+            _id: id,
+            owner:
+              req.user._id,
+            workspace:
+              workspaceId,
+          });
+
+        if (!existingExecution) {
+          return res.status(404).json({
+            message:
+              "Execution not found",
+          });
+        }
+
+        if (
+          existingExecution.status ===
+          "cancelled"
+        ) {
+          return res.status(409).json({
+            message:
+              "Execution is already cancelled",
+            execution:
+              existingExecution,
+          });
+        }
+
+        if (
+          existingExecution.status ===
+          "success"
+        ) {
+          return res.status(409).json({
+            message:
+              "Successful executions cannot be cancelled",
+            execution:
+              existingExecution,
+          });
+        }
+
+        if (
+          existingExecution.status ===
+          "failed"
+        ) {
+          return res.status(409).json({
+            message:
+              "Failed executions cannot be cancelled",
+            execution:
+              existingExecution,
+          });
+        }
+
+        return res.status(409).json({
+          message:
+            "Execution cannot be cancelled in its current state",
+          execution:
+            existingExecution,
+        });
+      }
+
+      /*
+       * Signal an active workflow.
+       *
+       * If the workflow is still pending and
+       * hasn't started, this simply returns false.
+       */
+      const signalSent =
+        cancelExecution(id);
+
+      emitExecutionUpdate(
+        execution
+      );
+
+      console.log(
+        `Execution cancelled: ${id} | ` +
+        `Active signal: ${signalSent}`
+      );
+
+      return res.status(200).json({
+        message:
+          "Workflow execution cancelled successfully",
+
+        execution,
+
+        signalSent,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
 module.exports = {
   createExecution,
   getExecutions,
   getExecution,
+  cancelExecutionController,
 };

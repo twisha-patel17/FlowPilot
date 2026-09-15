@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Execution = require("../../models/Execution");
 const executeNode = require("../nodes/nodeExecutor");
 const { emitExecutionUpdate } = require("../socket/socket");
@@ -7,9 +8,26 @@ const {
   releaseExecutionLock,
 } = require("../lock/executionLock");
 
-const validateWorkflowGraph = (nodes, edges) => {
-  if (!Array.isArray(nodes) || nodes.length === 0) {
-    throw new Error("Workflow has no nodes");
+const {
+  registerExecution,
+  unregisterExecution,
+} = require("./executionCancellation");
+
+const WORKFLOW_TIMEOUT =
+  Number(process.env.WORKFLOW_TIMEOUT_MS) ||
+  5 * 60 * 1000;
+
+const validateWorkflowGraph = (
+  nodes,
+  edges
+) => {
+  if (
+    !Array.isArray(nodes) ||
+    nodes.length === 0
+  ) {
+    throw new Error(
+      "Workflow has no nodes"
+    );
   }
 
   const nodeIds = new Set();
@@ -55,7 +73,8 @@ const validateWorkflowGraph = (nodes, edges) => {
   );
 
   const startNodes = nodes.filter(
-    (node) => !targetNodeIds.has(node.id)
+    (node) =>
+      !targetNodeIds.has(node.id)
   );
 
   if (startNodes.length === 0) {
@@ -73,6 +92,125 @@ const validateWorkflowGraph = (nodes, edges) => {
   return startNodes[0];
 };
 
+const createTimeoutError = () => {
+  const error = new Error(
+    "Workflow execution timed out"
+  );
+
+  error.code = "WORKFLOW_TIMEOUT";
+
+  return error;
+};
+
+const createCancellationError = () => {
+  const error = new Error(
+    "Workflow execution was cancelled"
+  );
+
+  error.code = "EXECUTION_CANCELLED";
+
+  return error;
+};
+
+const throwIfCancelled = (
+  signal
+) => {
+  if (signal?.aborted) {
+    throw createCancellationError();
+  }
+};
+
+const withTimeout = (
+  promise,
+  timeoutMs,
+  controller
+) => {
+  let timeoutId;
+
+  const timeoutPromise =
+    new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        console.error(
+          `Workflow node timeout reached after ${timeoutMs}ms`
+        );
+
+        if (controller) {
+          controller.abort();
+        }
+
+        reject(
+          createTimeoutError()
+        );
+      }, timeoutMs);
+    });
+
+  return Promise.race([
+    promise,
+    timeoutPromise,
+  ]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+};
+
+const appendStep = async (
+  executionId,
+  attempt,
+  step
+) => {
+  const result =
+    await Execution.updateOne(
+      {
+        _id: executionId,
+        status: "running",
+        attempt,
+      },
+      {
+        $push: {
+          steps: step,
+        },
+      }
+    );
+
+  return result.modifiedCount === 1;
+};
+
+const updateStep = async (
+  executionId,
+  attempt,
+  stepId,
+  updates
+) => {
+  const result =
+    await Execution.updateOne(
+      {
+        _id: executionId,
+        status: "running",
+        attempt,
+        "steps._id": stepId,
+      },
+      {
+        $set: Object.fromEntries(
+          Object.entries(updates).map(
+            ([key, value]) => [
+              `steps.$.${key}`,
+              value,
+            ]
+          )
+        ),
+      }
+    );
+
+  return result.modifiedCount === 1;
+};
+
+const getLatestExecution = async (
+  executionId
+) => {
+  return Execution.findById(
+    executionId
+  );
+};
+
 const executeWorkflow = async (
   executionId,
   attemptNumber = 1
@@ -84,19 +222,44 @@ const executeWorkflow = async (
       ? Number(attemptNumber)
       : 1;
 
+  const workflowStartedAt =
+    Date.now();
+
+  const controller =
+    new AbortController();
+
+  const signal =
+    controller.signal;
+
+  let registered = false;
+
   try {
-    
-    let execution = await Execution.findById(
-      executionId
-    );
+    let execution =
+      await Execution.findById(
+        executionId
+      );
 
     if (!execution) {
-      throw new Error("Execution not found");
+      throw new Error(
+        "Execution not found"
+      );
     }
 
-    if (execution.status === "success") {
+    if (
+      execution.status === "success"
+    ) {
       console.log(
         `Execution already completed: ${execution._id}`
+      );
+
+      return execution;
+    }
+
+    if (
+      execution.status === "cancelled"
+    ) {
+      console.log(
+        `Execution already cancelled: ${execution._id}`
       );
 
       return execution;
@@ -108,7 +271,10 @@ const executeWorkflow = async (
       );
     }
 
-    if (execution.attempt > currentAttempt) {
+    if (
+      execution.attempt >
+      currentAttempt
+    ) {
       console.log(
         `Ignoring stale workflow attempt: ` +
         `${execution._id} | ` +
@@ -119,16 +285,18 @@ const executeWorkflow = async (
       return execution;
     }
 
-    lock = await acquireExecutionLock(
-      executionId
-    );
+    lock =
+      await acquireExecutionLock(
+        executionId
+      );
 
     if (!lock) {
       const error = new Error(
         "Execution is already being processed"
       );
 
-      error.code = "EXECUTION_LOCKED";
+      error.code =
+        "EXECUTION_LOCKED";
 
       throw error;
     }
@@ -137,15 +305,30 @@ const executeWorkflow = async (
       `Execution lock acquired: ${executionId}`
     );
 
-    execution = await Execution.findById(
-      executionId
-    );
+    execution =
+      await Execution.findById(
+        executionId
+      );
 
     if (!execution) {
-      throw new Error("Execution not found");
+      throw new Error(
+        "Execution not found"
+      );
     }
 
-    if (execution.status === "success") {
+    if (
+      execution.status === "cancelled"
+    ) {
+      console.log(
+        `Execution cancelled before claim: ${executionId}`
+      );
+
+      return execution;
+    }
+
+    if (
+      execution.status === "success"
+    ) {
       console.log(
         `Execution completed before locked worker started: ` +
         `${execution._id}`
@@ -154,7 +337,10 @@ const executeWorkflow = async (
       return execution;
     }
 
-    if (execution.attempt > currentAttempt) {
+    if (
+      execution.attempt >
+      currentAttempt
+    ) {
       console.log(
         `Ignoring stale locked attempt: ` +
         `${execution._id} | ` +
@@ -164,6 +350,109 @@ const executeWorkflow = async (
 
       return execution;
     }
+
+    const claimedExecution =
+      await Execution.findOneAndUpdate(
+        {
+          _id: executionId,
+
+          status: {
+            $in: [
+              "pending",
+              "running",
+            ],
+          },
+
+          attempt: {
+            $lte: currentAttempt,
+          },
+        },
+        {
+          $set: {
+            status: "running",
+            startedAt: new Date(),
+            finishedAt: null,
+            cancelledAt: null,
+            error: null,
+            attempt: currentAttempt,
+          },
+        },
+        {
+          new: true,
+        }
+      );
+
+    if (!claimedExecution) {
+      const latestExecution =
+        await getLatestExecution(
+          executionId
+        );
+
+      if (
+        latestExecution?.status ===
+        "success"
+      ) {
+        return latestExecution;
+      }
+
+      if (
+        latestExecution?.status ===
+        "cancelled"
+      ) {
+        return latestExecution;
+      }
+
+      if (
+        latestExecution &&
+        latestExecution.attempt >
+          currentAttempt
+      ) {
+        return latestExecution;
+      }
+
+      throw new Error(
+        "Execution could not be atomically claimed"
+      );
+    }
+
+    execution =
+      claimedExecution;
+
+    registerExecution(
+      executionId,
+      controller
+    );
+
+    registered = true;
+
+    throwIfCancelled(signal);
+
+    const cancellationCheck =
+      await getLatestExecution(
+        executionId
+      );
+
+    if (!cancellationCheck) {
+      throw new Error(
+        "Execution not found"
+      );
+    }
+
+    if (
+      cancellationCheck.status ===
+      "cancelled"
+    ) {
+      controller.abort();
+
+      throw createCancellationError();
+    }
+
+    execution =
+      cancellationCheck;
+
+    emitExecutionUpdate(
+      execution
+    );
 
     const workflow =
       execution.workflowSnapshot;
@@ -179,45 +468,63 @@ const executeWorkflow = async (
       );
     }
 
-    execution.attempt = currentAttempt;
-    execution.status = "running";
-    execution.startedAt = new Date();
-    execution.finishedAt = null;
-    execution.error = null;
-
-    await execution.save();
-    emitExecutionUpdate(execution);
-
     console.log(
       `Starting workflow: ${workflow.name} | ` +
-      `Attempt: ${currentAttempt}`
+      `Attempt: ${currentAttempt} | ` +
+      `Timeout: ${WORKFLOW_TIMEOUT}ms`
     );
 
-    const nodes = Array.isArray(workflow.nodes)
-      ? workflow.nodes
-      : [];
+    const nodes =
+      Array.isArray(workflow.nodes)
+        ? workflow.nodes
+        : [];
 
-    const edges = Array.isArray(workflow.edges)
-      ? workflow.edges
-      : [];
+    const edges =
+      Array.isArray(workflow.edges)
+        ? workflow.edges
+        : [];
 
-    let currentNode = validateWorkflowGraph(
-      nodes,
-      edges
-    );
+    let currentNode =
+      validateWorkflowGraph(
+        nodes,
+        edges
+      );
 
-    let input = execution.input || {};
+    let input =
+      execution.input || {};
 
-    const visitedNodes = new Set();
+    const visitedNodes =
+      new Set();
 
     while (currentNode) {
-      if (visitedNodes.has(currentNode.id)) {
+      throwIfCancelled(signal);
+
+      const workflowElapsed =
+        Date.now() -
+        workflowStartedAt;
+
+      if (
+        workflowElapsed >=
+        WORKFLOW_TIMEOUT
+      ) {
+        controller.abort();
+
+        throw createTimeoutError();
+      }
+
+      if (
+        visitedNodes.has(
+          currentNode.id
+        )
+      ) {
         throw new Error(
           "Workflow contains a cycle"
         );
       }
 
-      visitedNodes.add(currentNode.id);
+      visitedNodes.add(
+        currentNode.id
+      );
 
       const nodeType =
         currentNode.data?.type ||
@@ -227,12 +534,18 @@ const executeWorkflow = async (
 
       console.log(
         `Executing node: ${currentNode.id} ` +
-        `(${nodeType}) | Attempt: ${currentAttempt}`
+        `(${nodeType}) | ` +
+        `Attempt: ${currentAttempt}`
       );
 
-      const stepStartedAt = Date.now();
+      const stepStartedAt =
+        Date.now();
+
+      const stepId =
+        new mongoose.Types.ObjectId();
 
       const step = {
+        _id: stepId,
         nodeId: currentNode.id,
         type: nodeType,
         attempt: currentAttempt,
@@ -243,22 +556,113 @@ const executeWorkflow = async (
         duration: 0,
       };
 
-      execution.steps.push(step);
+      const stepCreated =
+        await appendStep(
+          executionId,
+          currentAttempt,
+          step
+        );
 
-      await execution.save();
-      emitExecutionUpdate(execution);
+      if (!stepCreated) {
+        const latestExecution =
+          await getLatestExecution(
+            executionId
+          );
+
+        if (
+          latestExecution?.status ===
+          "cancelled"
+        ) {
+          throw createCancellationError();
+        }
+
+        throw new Error(
+          "Workflow step could not be created because execution state changed"
+        );
+      }
+
+      execution =
+        await getLatestExecution(
+          executionId
+        );
+
+      if (!execution) {
+        throw new Error(
+          "Execution not found"
+        );
+      }
+
+      emitExecutionUpdate(
+        execution
+      );
+
+      throwIfCancelled(signal);
+
+      const elapsed =
+        Date.now() -
+        workflowStartedAt;
+
+      const remainingTime =
+        WORKFLOW_TIMEOUT -
+        elapsed;
+
+      if (remainingTime <= 0) {
+        controller.abort();
+
+        const timeoutError =
+          createTimeoutError();
+
+        await updateStep(
+          executionId,
+          currentAttempt,
+          stepId,
+          {
+            status: "failed",
+            error:
+              timeoutError.message,
+            duration:
+              Date.now() -
+              stepStartedAt,
+          }
+        );
+
+        execution =
+          await getLatestExecution(
+            executionId
+          );
+
+        if (execution) {
+          emitExecutionUpdate(
+            execution
+          );
+        }
+
+        throw timeoutError;
+      }
 
       let result;
 
       try {
-        result = await executeNode(
-          currentNode,
-          input,
-          {
-            userId: execution.owner,
-            workspaceId: execution.workspace,
-          }
-        );
+        result =
+          await withTimeout(
+            executeNode(
+              currentNode,
+              input,
+              {
+                userId:
+                  execution.owner,
+
+                workspaceId:
+                  execution.workspace,
+
+                signal,
+              }
+            ),
+            remainingTime,
+            controller
+          );
+
+        throwIfCancelled(signal);
 
         if (
           !result ||
@@ -270,44 +674,147 @@ const executeWorkflow = async (
           );
         }
 
-        step.status = "success";
+        const stepUpdated =
+          await updateStep(
+            executionId,
+            currentAttempt,
+            stepId,
+            {
+              status: "success",
+              output:
+                result.output || {},
+              duration:
+                Date.now() -
+                stepStartedAt,
+            }
+          );
 
-        step.output =
-          result.output || {};
+        if (!stepUpdated) {
+          const latestExecution =
+            await getLatestExecution(
+              executionId
+            );
 
-        step.duration =
-          Date.now() - stepStartedAt;
+          if (
+            latestExecution?.status ===
+            "cancelled"
+          ) {
+            throw createCancellationError();
+          }
 
-        await execution.save();
-        emitExecutionUpdate(execution);
+          throw new Error(
+            "Workflow step could not be completed because execution state changed"
+          );
+        }
+
+        execution =
+          await getLatestExecution(
+            executionId
+          );
+
+        if (!execution) {
+          throw new Error(
+            "Execution not found"
+          );
+        }
+
+        emitExecutionUpdate(
+          execution
+        );
 
         input =
           result.output || {};
       } catch (error) {
-        step.status = "failed";
+        if (
+          signal.aborted
+        ) {
+          error =
+            error.code ===
+            "WORKFLOW_TIMEOUT"
+              ? error
+              : createCancellationError();
+        }
 
-        step.error =
-          error.message ||
-          "Node execution failed";
+        const stepError =
+          error.code ===
+          "WORKFLOW_TIMEOUT"
+            ? "Workflow execution timed out"
+            : error.code ===
+              "EXECUTION_CANCELLED"
+              ? "Workflow execution was cancelled"
+              : error.code ===
+                "ERR_CANCELED"
+              ? "Workflow execution timed out"
+              : error.message ||
+                "Node execution failed";
 
-        step.duration =
-          Date.now() - stepStartedAt;
+        await updateStep(
+          executionId,
+          currentAttempt,
+          stepId,
+          {
+            status: "failed",
+            error: stepError,
+            duration:
+              Date.now() -
+              stepStartedAt,
+          }
+        );
 
-        await execution.save();
-        emitExecutionUpdate(execution);
+        execution =
+          await getLatestExecution(
+            executionId
+          );
+
+        if (execution) {
+          emitExecutionUpdate(
+            execution
+          );
+        }
 
         throw error;
       }
 
-      const outgoingEdges = edges.filter(
-        (edge) =>
-          edge.source === currentNode.id
-      );
+      throwIfCancelled(signal);
+
+      if (
+        Date.now() -
+          workflowStartedAt >=
+        WORKFLOW_TIMEOUT
+      ) {
+        controller.abort();
+
+        throw createTimeoutError();
+      }
+
+      const outgoingEdges =
+        edges.filter(
+          (edge) =>
+            edge.source ===
+            currentNode.id
+        );
 
       let nextEdge = null;
 
-      if (nodeType === "condition") {
-        if (outgoingEdges.length === 0) {
+      /*
+       * CONDITION BRANCHING
+       *
+       * ConditionConfig returns:
+       *
+       * conditionResult: true / false
+       *
+       * WorkflowCanvas handles:
+       *
+       * true  → sourceHandle="true"
+       * false → sourceHandle="false"
+       */
+      if (
+        nodeType === "condition"
+      ) {
+        if (
+          outgoingEdges.length ===
+          0
+        ) {
           currentNode = null;
           continue;
         }
@@ -326,10 +833,12 @@ const executeWorkflow = async (
             ? "true"
             : "false";
 
-        nextEdge = outgoingEdges.find(
-          (edge) =>
-            edge.sourceHandle === handle
-        );
+        nextEdge =
+          outgoingEdges.find(
+            (edge) =>
+              edge.sourceHandle ===
+              handle
+          );
 
         if (!nextEdge) {
           console.log(
@@ -339,10 +848,74 @@ const executeWorkflow = async (
           currentNode = null;
           continue;
         }
-      } else {
-      
+      }
+
+      /*
+       * SWITCH BRANCHING
+       *
+       * switchNode.js returns:
+       *
+       * case-0
+       * case-1
+       * case-2
+       * ...
+       * default
+       *
+       * WorkflowCanvas uses the same IDs
+       * for its source handles.
+       */
+      else if (
+        nodeType === "switch"
+      ) {
+        if (
+          outgoingEdges.length ===
+          0
+        ) {
+          currentNode = null;
+          continue;
+        }
+
+        const selectedHandle =
+          result.switchResult
+            ?.selectedHandle;
+
+        if (
+          typeof selectedHandle !==
+          "string" ||
+          !selectedHandle
+        ) {
+          throw new Error(
+            "Switch node did not return a valid selected handle"
+          );
+        }
+
         nextEdge =
-          outgoingEdges[0] || null;
+          outgoingEdges.find(
+            (edge) =>
+              edge.sourceHandle ===
+              selectedHandle
+          );
+
+        if (!nextEdge) {
+          console.log(
+            `No "${selectedHandle}" branch found for switch node`
+          );
+
+          currentNode = null;
+          continue;
+        }
+      }
+
+      /*
+       * NORMAL NODE
+       *
+       * Nodes without branching simply
+       * follow their first outgoing edge.
+       */
+      else {
+        nextEdge =
+          outgoingEdges[0] ||
+          null;
       }
 
       if (!nextEdge) {
@@ -350,10 +923,12 @@ const executeWorkflow = async (
         continue;
       }
 
-      currentNode = nodes.find(
-        (node) =>
-          node.id === nextEdge.target
-      );
+      currentNode =
+        nodes.find(
+          (node) =>
+            node.id ===
+            nextEdge.target
+        );
 
       if (!currentNode) {
         throw new Error(
@@ -362,23 +937,146 @@ const executeWorkflow = async (
       }
     }
 
-    execution.status = "success";
-    execution.error = null;
-    execution.finishedAt = new Date();
+    throwIfCancelled(signal);
 
-    await execution.save();
-    emitExecutionUpdate(execution);
+    if (
+      Date.now() -
+        workflowStartedAt >=
+      WORKFLOW_TIMEOUT
+    ) {
+      controller.abort();
+
+      throw createTimeoutError();
+    }
+
+    const completedExecution =
+      await Execution.findOneAndUpdate(
+        {
+          _id: executionId,
+
+          status: "running",
+
+          attempt: currentAttempt,
+        },
+        {
+          $set: {
+            status: "success",
+            error: null,
+            finishedAt: new Date(),
+          },
+        },
+        {
+          new: true,
+        }
+      );
+
+    if (!completedExecution) {
+      const latestExecution =
+        await getLatestExecution(
+          executionId
+        );
+
+      if (
+        latestExecution?.status ===
+        "cancelled"
+      ) {
+        return latestExecution;
+      }
+
+      throw new Error(
+        "Execution could not be completed atomically"
+      );
+    }
+
+    execution =
+      completedExecution;
+
+    emitExecutionUpdate(
+      execution
+    );
 
     console.log(
       `Workflow completed successfully: ` +
       `${workflow.name} | ` +
-      `Attempt: ${currentAttempt}`
+      `Attempt: ${currentAttempt} | ` +
+      `Duration: ${
+        Date.now() -
+        workflowStartedAt
+      }ms`
     );
 
     return execution;
   } catch (error) {
- 
-    if (error.code === "EXECUTION_LOCKED") {
+    if (
+      error.code ===
+      "EXECUTION_CANCELLED"
+    ) {
+      console.log(
+        `Workflow execution cancelled: ` +
+        `${executionId} | ` +
+        `Attempt: ${currentAttempt}`
+      );
+
+      const cancelledExecution =
+        await Execution.findOneAndUpdate(
+          {
+            _id: executionId,
+
+            status: {
+              $in: [
+                "pending",
+                "running",
+              ],
+            },
+
+            attempt: currentAttempt,
+          },
+          {
+            $set: {
+              status: "cancelled",
+
+              error:
+                "Workflow execution was cancelled",
+
+              finishedAt:
+                new Date(),
+
+              cancelledAt:
+                new Date(),
+            },
+          },
+          {
+            new: true,
+          }
+        );
+
+      if (cancelledExecution) {
+        emitExecutionUpdate(
+          cancelledExecution
+        );
+
+        return cancelledExecution;
+      }
+
+      const latestExecution =
+        await getLatestExecution(
+          executionId
+        );
+
+      if (
+        latestExecution?.status ===
+        "cancelled"
+      ) {
+        return latestExecution;
+      }
+
+      throw error;
+    }
+
+    if (
+      error.code ===
+      "EXECUTION_LOCKED"
+    ) {
       console.log(
         `Execution already locked: ` +
         `${executionId} | ` +
@@ -388,6 +1086,22 @@ const executeWorkflow = async (
       throw error;
     }
 
+    const latestExecution =
+      await getLatestExecution(
+        executionId
+      );
+
+    if (
+      latestExecution?.status ===
+      "cancelled"
+    ) {
+      console.log(
+        `Execution was cancelled while processing: ${executionId}`
+      );
+
+      return latestExecution;
+    }
+
     console.error(
       `Workflow execution error | ` +
       `Attempt: ${currentAttempt}:`,
@@ -395,16 +1109,32 @@ const executeWorkflow = async (
     );
 
     const failedExecution =
-      await Execution.findById(
-        executionId
+      await Execution.findOneAndUpdate(
+        {
+          _id: executionId,
+
+          status: {
+            $in: [
+              "running",
+              "pending",
+            ],
+          },
+
+          attempt: currentAttempt,
+        },
+        {
+          $set: {
+            error:
+              error.message ||
+              "Workflow execution failed",
+          },
+        },
+        {
+          new: true,
+        }
       );
 
     if (failedExecution) {
-      failedExecution.error =
-        error.message ||
-        "Workflow execution failed";
-
-      await failedExecution.save();
       emitExecutionUpdate(
         failedExecution
       );
@@ -412,12 +1142,18 @@ const executeWorkflow = async (
 
     throw error;
   } finally {
+    if (registered) {
+      unregisterExecution(
+        executionId
+      );
+    }
 
     if (lock) {
       try {
         await releaseExecutionLock(
           lock.lockKey,
-          lock.lockToken
+          lock.lockToken,
+          lock.renewalTimer
         );
 
         console.log(

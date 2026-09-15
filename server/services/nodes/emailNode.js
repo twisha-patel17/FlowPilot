@@ -15,7 +15,8 @@ const executeEmailNode = async (
     provider: "email",
   });
 
-  const credentials = integration.credentials || {};
+  const credentials =
+    integration.credentials || {};
 
   const {
     host,
@@ -27,63 +28,117 @@ const executeEmailNode = async (
   } = credentials;
 
   if (!host) {
-    throw new Error("Email SMTP host is missing");
+    throw new Error(
+      "Email SMTP host is missing"
+    );
   }
 
   if (!username) {
-    throw new Error("Email username is missing");
+    throw new Error(
+      "Email username is missing"
+    );
   }
 
   if (!password) {
-    throw new Error("Email password is missing");
+    throw new Error(
+      "Email password is missing"
+    );
   }
 
   if (!from) {
-    throw new Error("Email sender address is missing");
+    throw new Error(
+      "Email sender address is missing"
+    );
   }
 
   if (!config.to) {
-    throw new Error("Email recipient is required");
+    throw new Error(
+      "Email recipient is required"
+    );
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port: Number(port) || 587,
-    secure: Boolean(secure),
-    auth: {
-      user: username,
-      pass: password,
-    },
-  });
+  const transporter =
+    nodemailer.createTransport({
+      host,
+      port: Number(port) || 587,
+      secure: Boolean(secure),
+      auth: {
+        user: username,
+        pass: password,
+      },
+    });
+
+  const abortHandler = () => {
+    console.log(
+      "Email node cancellation requested"
+    );
+
+    transporter.close();
+  };
+
+  if (context.signal) {
+    if (context.signal.aborted) {
+      transporter.close();
+
+      throw new Error(
+        "Email node execution was cancelled"
+      );
+    }
+
+    context.signal.addEventListener(
+      "abort",
+      abortHandler,
+      { once: true }
+    );
+  }
 
   const subject =
-    config.subject || "FlowPilot Workflow";
+    config.subject ||
+    "FlowPilot Workflow";
 
   const text =
     config.message ||
     config.body ||
     JSON.stringify(input);
 
-  const info = await transporter.sendMail({
-    from,
-    to: config.to,
-    subject,
-    text,
-  });
+  try {
+    const info =
+      await transporter.sendMail({
+        from,
+        to: config.to,
+        subject,
+        text,
+      });
 
-  console.log(
-    `Email sent successfully: ${info.messageId}`
-  );
+    if (context.signal?.aborted) {
+      throw new Error(
+        "Email node execution was cancelled"
+      );
+    }
 
-  return {
-    success: true,
-    output: {
-      messageId: info.messageId,
-      to: config.to,
-      subject,
-      input,
-    },
-  };
+    console.log(
+      `Email sent successfully: ${info.messageId}`
+    );
+
+    return {
+      success: true,
+      output: {
+        messageId: info.messageId,
+        to: config.to,
+        subject,
+        input,
+      },
+    };
+  } finally {
+    if (context.signal) {
+      context.signal.removeEventListener(
+        "abort",
+        abortHandler
+      );
+    }
+
+    transporter.close();
+  }
 };
 
 module.exports = executeEmailNode;

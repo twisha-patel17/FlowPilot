@@ -143,6 +143,23 @@ const FlowPilotNode = ({ data, selected }) => {
     config.description;
 
   const isCondition = nodeType === "condition";
+  const isSwitch = nodeType === "switch";
+
+  /*
+   * Switch cases are stored by ConfigPanel as:
+   *
+   * "bug, feature, docs"
+   *
+   * Convert them into an array so the canvas can
+   * dynamically render one output handle per case.
+   */
+  const switchCases =
+    isSwitch && typeof data?.config?.cases === "string"
+      ? data.config.cases
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
 
   return (
     <div
@@ -205,9 +222,11 @@ const FlowPilotNode = ({ data, selected }) => {
         )}
       </div>
 
+      {/* OUTPUT HANDLES */}
+
       {isCondition ? (
         <>
-          {/* TRUE */}
+          {/* TRUE HANDLE */}
           <Handle
             type="source"
             position={Position.Bottom}
@@ -221,7 +240,7 @@ const FlowPilotNode = ({ data, selected }) => {
             }}
           />
 
-          {/* FALSE */}
+          {/* FALSE HANDLE */}
           <Handle
             type="source"
             position={Position.Bottom}
@@ -235,13 +254,111 @@ const FlowPilotNode = ({ data, selected }) => {
             }}
           />
 
-          {/* BRANCH LABELS */}
+          {/* TRUE LABEL */}
           <span className="pointer-events-none absolute -bottom-6 left-[30%] -translate-x-1/2 text-[9px] font-medium text-emerald-400">
             TRUE
           </span>
 
+          {/* FALSE LABEL */}
           <span className="pointer-events-none absolute -bottom-6 left-[70%] -translate-x-1/2 text-[9px] font-medium text-red-400">
             FALSE
+          </span>
+        </>
+      ) : isSwitch ? (
+        <>
+          {/*
+           * SWITCH OUTPUTS
+           *
+           * Example:
+           *
+           * cases = "bug, feature, docs"
+           *
+           * Handles:
+           * case-0 → bug
+           * case-1 → feature
+           * case-2 → docs
+           * default → anything else
+           */}
+
+          {switchCases.map((caseValue, index) => {
+            const totalOutputs =
+              switchCases.length + 1;
+
+            const leftPosition =
+              ((index + 1) /
+                (totalOutputs + 1)) *
+              100;
+
+            return (
+              <Handle
+                key={`case-${index}`}
+                type="source"
+                position={Position.Bottom}
+                id={`case-${index}`}
+                isConnectable={true}
+                className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-amber-500"
+                style={{
+                  left: `${leftPosition}%`,
+                  cursor: "crosshair",
+                  pointerEvents: "auto",
+                }}
+              />
+            );
+          })}
+
+          {/* DEFAULT HANDLE */}
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="default"
+            isConnectable={true}
+            className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-zinc-500"
+            style={{
+              left: `${
+                ((switchCases.length + 1) /
+                  (switchCases.length + 2)) *
+                100
+              }%`,
+              cursor: "crosshair",
+              pointerEvents: "auto",
+            }}
+          />
+
+          {/* CASE LABELS */}
+          {switchCases.map((caseValue, index) => {
+            const totalOutputs =
+              switchCases.length + 1;
+
+            const leftPosition =
+              ((index + 1) /
+                (totalOutputs + 1)) *
+              100;
+
+            return (
+              <span
+                key={`label-${index}`}
+                className="pointer-events-none absolute -bottom-6 -translate-x-1/2 whitespace-nowrap text-[9px] font-medium text-amber-400"
+                style={{
+                  left: `${leftPosition}%`,
+                }}
+              >
+                {caseValue}
+              </span>
+            );
+          })}
+
+          {/* DEFAULT LABEL */}
+          <span
+            className="pointer-events-none absolute -bottom-6 -translate-x-1/2 whitespace-nowrap text-[9px] font-medium text-zinc-500"
+            style={{
+              left: `${
+                ((switchCases.length + 1) /
+                  (switchCases.length + 2)) *
+                100
+              }%`,
+            }}
+          >
+            DEFAULT
           </span>
         </>
       ) : (
@@ -275,7 +392,6 @@ const WorkflowCanvas = ({
   initialNodes = [],
   initialEdges = [],
 }) => {
- 
   const normalizedNodes = initialNodes.map(
     (node) => {
       const actualType =
@@ -366,17 +482,20 @@ const WorkflowCanvas = ({
   );
 
   const onNodeClick = useCallback(
-  (event, node) => {
-    event.stopPropagation();
+    (event, node) => {
+      event.stopPropagation();
 
-    console.log("Node selected:", node);
+      console.log(
+        "Node selected:",
+        node
+      );
 
-    if (onNodeSelect) {
-      onNodeSelect(node);
-    }
-  },
-  [onNodeSelect]
-);
+      if (onNodeSelect) {
+        onNodeSelect(node);
+      }
+    },
+    [onNodeSelect]
+  );
 
   const onPaneClick = useCallback(() => {
     if (onNodeSelect) {
@@ -384,11 +503,15 @@ const WorkflowCanvas = ({
     }
   }, [onNodeSelect]);
 
-  const onDragOver = useCallback((event) => {
-    event.preventDefault();
+  const onDragOver = useCallback(
+    (event) => {
+      event.preventDefault();
 
-    event.dataTransfer.dropEffect = "move";
-  }, []);
+      event.dataTransfer.dropEffect =
+        "move";
+    },
+    []
+  );
 
   const onDrop = useCallback(
     (event) => {

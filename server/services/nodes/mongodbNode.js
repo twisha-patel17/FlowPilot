@@ -15,7 +15,8 @@ const executeMongoDBNode = async (
     provider: "mongodb",
   });
 
-  const uri = integration.credentials?.uri;
+  const uri =
+    integration.credentials?.uri;
 
   if (!uri) {
     throw new Error(
@@ -45,12 +46,54 @@ const executeMongoDBNode = async (
   const operation =
     config.operation || "insert";
 
-  const client = new MongoClient(uri);
+  const client = new MongoClient(uri, {
+    serverSelectionTimeoutMS: 10000,
+  });
+
+  const checkAborted = () => {
+    if (context.signal?.aborted) {
+      const error = new Error(
+        "MongoDB node execution was cancelled"
+      );
+
+      error.code = "NODE_CANCELLED";
+
+      throw error;
+    }
+  };
+
+  const abortHandler = () => {
+    console.log(
+      "MongoDB node cancellation requested"
+    );
+
+    client.close().catch(() => {});
+  };
+
+  if (context.signal) {
+    if (context.signal.aborted) {
+      throw new Error(
+        "MongoDB node execution was cancelled"
+      );
+    }
+
+    context.signal.addEventListener(
+      "abort",
+      abortHandler,
+      { once: true }
+    );
+  }
 
   try {
+    checkAborted();
+
     await client.connect();
 
-    const db = client.db(databaseName);
+    checkAborted();
+
+    const db =
+      client.db(databaseName);
+
     const collection =
       db.collection(collectionName);
 
@@ -61,8 +104,14 @@ const executeMongoDBNode = async (
         const document =
           config.document || input;
 
+        checkAborted();
+
         const result =
-          await collection.insertOne(document);
+          await collection.insertOne(
+            document
+          );
+
+        checkAborted();
 
         output = {
           operation: "insert",
@@ -78,6 +127,8 @@ const executeMongoDBNode = async (
         const filter =
           config.filter || {};
 
+        checkAborted();
+
         const documents =
           await collection
             .find(filter)
@@ -85,6 +136,8 @@ const executeMongoDBNode = async (
               Number(config.limit) || 20
             )
             .toArray();
+
+        checkAborted();
 
         output = {
           operation: "find",
@@ -102,6 +155,8 @@ const executeMongoDBNode = async (
         const update =
           config.update || {};
 
+        checkAborted();
+
         const result =
           await collection.updateMany(
             filter,
@@ -109,6 +164,8 @@ const executeMongoDBNode = async (
               $set: update,
             }
           );
+
+        checkAborted();
 
         output = {
           operation: "update",
@@ -125,8 +182,14 @@ const executeMongoDBNode = async (
         const filter =
           config.filter || {};
 
+        checkAborted();
+
         const result =
-          await collection.deleteMany(filter);
+          await collection.deleteMany(
+            filter
+          );
+
+        checkAborted();
 
         output = {
           operation: "delete",
@@ -152,8 +215,16 @@ const executeMongoDBNode = async (
       output,
     };
   } finally {
-    await client.close();
+    if (context.signal) {
+      context.signal.removeEventListener(
+        "abort",
+        abortHandler
+      );
+    }
+
+    await client.close().catch(() => {});
   }
 };
 
-module.exports = executeMongoDBNode;
+module.exports =
+  executeMongoDBNode;

@@ -44,6 +44,8 @@ const executeDiscordNode = async (
       headers: {
         "Content-Type": "application/json",
       },
+
+      signal: context.signal || undefined,
     }
   );
 

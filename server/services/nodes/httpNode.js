@@ -15,12 +15,16 @@ const executeHttpNode = async (
   let url = config.url;
 
   if (!url) {
-    throw new Error("HTTP node URL is required");
+    throw new Error(
+      "HTTP node URL is required"
+    );
   }
 
-  let headers = config.headers || {};
+  let headers =
+    config.headers || {};
 
-  let body = config.body || {};
+  let body =
+    config.body || {};
 
   if (
     typeof body === "string" &&
@@ -35,27 +39,35 @@ const executeHttpNode = async (
     }
   }
 
-  /*
-   * HTTP integration is optional.
-   *
-   * If integrationId exists, load the connected
-   * HTTP integration and use its credentials.
-   */
   if (config.integrationId) {
-    const integration = await getIntegration({
-      integrationId: config.integrationId,
-      userId: context.userId,
-      workspaceId: context.workspaceId,
-      provider: "http",
-    });
+    const integration =
+      await getIntegration({
+        integrationId:
+          config.integrationId,
+
+        userId:
+          context.userId,
+
+        workspaceId:
+          context.workspaceId,
+
+        provider: "http",
+      });
 
     const credentials =
       integration.credentials || {};
 
     if (credentials.baseUrl) {
       url =
-        `${credentials.baseUrl.replace(/\/$/, "")}` +
-        `${url.startsWith("/") ? url : `/${url}`}`;
+        `${credentials.baseUrl.replace(
+          /\/$/,
+          ""
+        )}` +
+        `${
+          url.startsWith("/")
+            ? url
+            : `/${url}`
+        }`;
     }
 
     if (credentials.headers) {
@@ -68,7 +80,8 @@ const executeHttpNode = async (
     if (credentials.token) {
       headers = {
         ...headers,
-        Authorization: `Bearer ${credentials.token}`,
+        Authorization:
+          `Bearer ${credentials.token}`,
       };
     }
   }
@@ -81,14 +94,19 @@ const executeHttpNode = async (
     method,
     url,
     headers,
+
     data:
       method === "GET"
         ? undefined
         : body,
+
+    signal:
+      context.signal || undefined,
   });
 
   return {
     success: true,
+
     output: {
       status: response.status,
       data: response.data,
@@ -98,4 +116,5 @@ const executeHttpNode = async (
   };
 };
 
-module.exports = executeHttpNode;
+module.exports =
+  executeHttpNode;

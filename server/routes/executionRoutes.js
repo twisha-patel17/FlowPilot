@@ -4,23 +4,43 @@ const {
   createExecution,
   getExecutions,
   getExecution,
+  cancelExecutionController,
 } = require("../controllers/executionController");
 
-const protect = require("../middleware/authMiddleware");
-const validate = require("../middleware/validate");
+const protect =
+  require("../middleware/authMiddleware");
+
+const validate =
+  require("../middleware/validate");
 
 const {
   createExecutionSchema,
 } = require("../validators/executionValidator");
 
-const router = express.Router();
+const router =
+  express.Router();
 
 router.use(protect);
 
-router.post("/", validate(createExecutionSchema), createExecution);
+router.post(
+  "/",
+  validate(createExecutionSchema),
+  createExecution
+);
 
-router.get("/", getExecutions);
+router.get(
+  "/",
+  getExecutions
+);
 
-router.get("/:id", getExecution);
+router.post(
+  "/:id/cancel",
+  cancelExecutionController
+);
+
+router.get(
+  "/:id",
+  getExecution
+);
 
 module.exports = router;

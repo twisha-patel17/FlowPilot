@@ -27,7 +27,13 @@ const executionSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "running", "success", "failed"],
+      enum: [
+        "pending",
+        "running",
+        "success",
+        "failed",
+        "cancelled",
+      ],
       default: "pending",
     },
 
@@ -59,6 +65,11 @@ const executionSchema = new mongoose.Schema(
     },
 
     finishedAt: {
+      type: Date,
+      default: null,
+    },
+
+    cancelledAt: {
       type: Date,
       default: null,
     },
@@ -144,7 +155,9 @@ executionSchema.index(
     unique: true,
     partialFilterExpression: {
       trigger: "schedule",
-      scheduledAt: { $type: "date" },
+      scheduledAt: {
+        $type: "date",
+      },
     },
   }
 );

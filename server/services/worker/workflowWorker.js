@@ -39,6 +39,12 @@ const updateWebhookDelivery = async (
       error || "Workflow execution failed";
   }
 
+  if (status === "cancelled") {
+    webhookDelivery.responseCode = 499;
+    webhookDelivery.error =
+      error || "Workflow execution was cancelled";
+  }
+
   webhookDelivery.duration =
     Date.now() -
     new Date(
@@ -73,12 +79,31 @@ const workflowWorker = new Worker(
       );
     }
 
-    /*
-     * Never execute an already successful
-     * workflow again.
-     */
     if (
-      existingExecution.status === "success"
+      existingExecution.status ===
+      "cancelled"
+    ) {
+      console.log(
+        `Execution already cancelled: ${executionId}`
+      );
+
+      await updateWebhookDelivery(
+        executionId,
+        "cancelled",
+        existingExecution.error
+      );
+
+      return {
+        executionId,
+        status: "cancelled",
+        attempt:
+          existingExecution.attempt,
+      };
+    }
+
+    if (
+      existingExecution.status ===
+      "success"
     ) {
       console.log(
         `Execution already completed: ${executionId}`
@@ -87,16 +112,11 @@ const workflowWorker = new Worker(
       return {
         executionId,
         status: "success",
+        attempt:
+          existingExecution.attempt,
       };
     }
 
-    /*
-     * BullMQ attemptsMade is zero-based.
-     *
-     * attempt 1 -> attemptsMade 0
-     * attempt 2 -> attemptsMade 1
-     * attempt 3 -> attemptsMade 2
-     */
     const currentAttempt =
       job.attemptsMade + 1;
 
@@ -107,11 +127,6 @@ const workflowWorker = new Worker(
       `Workflow attempt: ${currentAttempt}/${attemptsAllowed}`
     );
 
-    await updateWebhookDelivery(
-      executionId,
-      "running"
-    );
-
     try {
       const execution =
         await executeWorkflow(
@@ -119,18 +134,47 @@ const workflowWorker = new Worker(
           currentAttempt
         );
 
-      /*
-       * Workflow completed normally.
-       */
-      await updateWebhookDelivery(
-        executionId,
+      if (
+        execution.status ===
+        "cancelled"
+      ) {
+        await updateWebhookDelivery(
+          executionId,
+          "cancelled",
+          execution.error
+        );
+
+        console.log(
+          `Workflow execution cancelled: ` +
+          `${execution._id} | ` +
+          `Attempt: ${currentAttempt}`
+        );
+
+        return {
+          executionId:
+            execution._id.toString(),
+
+          status: "cancelled",
+
+          attempt: currentAttempt,
+        };
+      }
+
+      if (
+        execution.status ===
         "success"
-      );
+      ) {
+        await updateWebhookDelivery(
+          executionId,
+          "success"
+        );
+      }
 
       console.log(
         `Workflow execution finished: ` +
         `${execution._id} | ` +
-        `Attempt: ${currentAttempt}`
+        `Attempt: ${currentAttempt} | ` +
+        `Status: ${execution.status}`
       );
 
       return {
@@ -142,20 +186,44 @@ const workflowWorker = new Worker(
         attempt: currentAttempt,
       };
     } catch (error) {
-      /*
-       * IMPORTANT:
-       *
-       * This is NOT a workflow failure.
-       *
-       * Another worker already owns the Redis lock
-       * for this execution.
-       *
-       * Do not retry.
-       * Do not mark the execution as failed.
-       * Do not modify the execution state.
-       */
+ 
       if (
-        error.code === "EXECUTION_LOCKED"
+        error.code ===
+        "EXECUTION_CANCELLED"
+      ) {
+        const cancelledExecution =
+          await Execution.findById(
+            executionId
+          );
+
+        if (
+          cancelledExecution
+            ?.status === "cancelled"
+        ) {
+          await updateWebhookDelivery(
+            executionId,
+            "cancelled",
+            cancelledExecution.error
+          );
+
+          console.log(
+            `Workflow cancellation handled: ` +
+            `${executionId} | ` +
+            `Attempt: ${currentAttempt}`
+          );
+
+          return {
+            executionId,
+            status: "cancelled",
+            attempt: currentAttempt,
+          };
+        }
+
+      }
+
+      if (
+        error.code ===
+        "EXECUTION_LOCKED"
       ) {
         console.log(
           `Duplicate execution ignored: ` +
@@ -171,11 +239,50 @@ const workflowWorker = new Worker(
         };
       }
 
-      /*
-       * Normal workflow failure.
-       *
-       * Let BullMQ control the retry.
-       */
+      const latestExecution =
+        await Execution.findById(
+          executionId
+        );
+
+      if (
+        latestExecution?.status ===
+        "cancelled"
+      ) {
+        await updateWebhookDelivery(
+          executionId,
+          "cancelled",
+          latestExecution.error
+        );
+
+        console.log(
+          `Execution was cancelled before retry: ` +
+          `${executionId}`
+        );
+
+        return {
+          executionId,
+          status: "cancelled",
+          attempt: currentAttempt,
+        };
+      }
+
+      if (
+        latestExecution?.status ===
+        "success"
+      ) {
+        console.log(
+          `Execution completed by another worker: ` +
+          `${executionId}`
+        );
+
+        return {
+          executionId,
+          status: "success",
+          attempt:
+            latestExecution.attempt,
+        };
+      }
+
       const nextAttempt =
         currentAttempt + 1;
 
@@ -183,32 +290,49 @@ const workflowWorker = new Worker(
         nextAttempt <= attemptsAllowed;
 
       if (canRetry) {
-        const execution =
-          await Execution.findById(
-            executionId
+        const retryingExecution =
+          await Execution.findOneAndUpdate(
+            {
+              _id: executionId,
+
+              status: "running",
+
+              attempt: currentAttempt,
+            },
+            {
+              $set: {
+                status: "pending",
+
+                finishedAt: null,
+
+                error:
+                  `Retrying workflow execution... ` +
+                  `Attempt ${nextAttempt} ` +
+                  `of ${attemptsAllowed}`,
+              },
+            },
+            {
+              new: true,
+            }
           );
 
-        if (execution) {
-          execution.status = "pending";
+        if (retryingExecution) {
+          emitExecutionUpdate(
+            retryingExecution
+          );
 
-          execution.finishedAt = null;
-
-          execution.error =
-            `Retrying workflow execution... ` +
-            `Attempt ${nextAttempt} ` +
-            `of ${attemptsAllowed}`;
-
-          await execution.save();
-
-          emitExecutionUpdate(execution);
+          console.log(
+            `Workflow execution will retry: ` +
+            `${executionId} | ` +
+            `Next attempt: ${nextAttempt}` +
+            `/${attemptsAllowed}`
+          );
+        } else {
+          console.log(
+            `Retry state update skipped because ` +
+            `execution state changed: ${executionId}`
+          );
         }
-
-        console.log(
-          `Workflow execution will retry: ` +
-          `${executionId} | ` +
-          `Next attempt: ${nextAttempt} ` +
-          `/ ${attemptsAllowed}`
-        );
       } else {
         console.log(
           `No retries remaining for workflow execution: ` +
@@ -217,10 +341,6 @@ const workflowWorker = new Worker(
         );
       }
 
-      /*
-       * Re-throw so BullMQ performs the
-       * configured retry/backoff.
-       */
       throw error;
     }
   },
@@ -252,19 +372,43 @@ workflowWorker.on(
       return;
     }
 
+    const executionId =
+      job.data?.executionId;
+
+    if (!executionId) {
+      return;
+    }
+
+    /*
+     * A cancelled execution must never enter
+     * the final failure handler.
+     */
+    const currentExecution =
+      await Execution.findById(
+        executionId
+      );
+
+    if (
+      currentExecution?.status ===
+      "cancelled"
+    ) {
+      console.log(
+        `Cancelled execution will not be marked failed: ` +
+        `${executionId}`
+      );
+
+      await updateWebhookDelivery(
+        executionId,
+        "cancelled",
+        currentExecution.error
+      );
+
+      return;
+    }
+
     const attemptsAllowed =
       job.opts.attempts || 1;
 
-    /*
-     * attemptsMade represents the number
-     * of attempts already made after failure.
-     *
-     * For 3 allowed attempts:
-     *
-     * attempt 1 -> attemptsMade = 1
-     * attempt 2 -> attemptsMade = 2
-     * attempt 3 -> attemptsMade = 3
-     */
     const attemptsMade =
       job.attemptsMade;
 
@@ -277,46 +421,80 @@ workflowWorker.on(
 
     try {
       const execution =
-        await Execution.findById(
-          job.data.executionId
+        await Execution.findOneAndUpdate(
+          {
+            _id: executionId,
+
+            status: {
+              $in: [
+                "pending",
+                "running",
+              ],
+            },
+
+            attempt: attemptsMade,
+          },
+          {
+            $set: {
+              status: "failed",
+
+              error:
+                error.message ||
+                "Workflow execution failed",
+
+              finishedAt: new Date(),
+            },
+          },
+          {
+            new: true,
+          }
         );
 
       if (!execution) {
-        console.error(
-          `Execution not found after final failure: ` +
-          `${job.data.executionId}`
-        );
+        const latestExecution =
+          await Execution.findById(
+            executionId
+          );
+
+        if (
+          latestExecution?.status ===
+          "cancelled"
+        ) {
+          await updateWebhookDelivery(
+            executionId,
+            "cancelled",
+            latestExecution.error
+          );
+
+          console.log(
+            `Execution was cancelled before ` +
+            `final failure handling: ${executionId}`
+          );
+
+          return;
+        }
+
+        if (
+          latestExecution?.status ===
+          "success"
+        ) {
+          console.log(
+            `Execution completed successfully before ` +
+            `final failure handler: ${latestExecution._id}`
+          );
+        } else {
+          console.log(
+            `Final failure update skipped because ` +
+            `execution state changed: ${executionId}`
+          );
+        }
 
         return;
       }
 
-      /*
-       * Prevent another final-failure
-       * handler from overwriting a successful
-       * execution.
-       */
-      if (
-        execution.status === "success"
-      ) {
-        console.log(
-          `Execution completed successfully before final failure handler: ` +
-          `${execution._id}`
-        );
-
-        return;
-      }
-
-      execution.status = "failed";
-
-      execution.error =
-        error.message ||
-        "Workflow execution failed";
-
-      execution.finishedAt = new Date();
-
-      await execution.save();
-
-      emitExecutionUpdate(execution);
+      emitExecutionUpdate(
+        execution
+      );
 
       await updateWebhookDelivery(
         execution._id,
