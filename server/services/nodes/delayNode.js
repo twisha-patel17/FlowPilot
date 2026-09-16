@@ -6,38 +6,63 @@ const executeDelayNode = async (
   const config =
     node.data?.config || {};
 
-  const rawDelay =
-    config.delay ??
+  const rawDuration =
     config.duration ??
+    config.delay ??
     config.delayMs;
 
   if (
-    rawDelay === undefined ||
-    rawDelay === null ||
-    rawDelay === ""
+    rawDuration === undefined ||
+    rawDuration === null ||
+    rawDuration === ""
   ) {
     throw new Error(
       "Delay duration is required"
     );
   }
 
-  const delayMs =
-    Number(rawDelay);
+  const duration =
+    Number(rawDuration);
 
   if (
-    !Number.isFinite(delayMs) ||
-    delayMs < 0
+    !Number.isFinite(duration) ||
+    duration < 0
   ) {
     throw new Error(
       "Delay duration must be a valid non-negative number"
     );
   }
 
-  if (!Number.isInteger(delayMs)) {
+  if (!Number.isInteger(duration)) {
     throw new Error(
-      "Delay duration must be a whole number of milliseconds"
+      "Delay duration must be a whole number"
     );
   }
+
+  const unit =
+    typeof config.unit === "string"
+      ? config.unit.trim().toLowerCase()
+      : "seconds";
+
+  const unitMultipliers = {
+    seconds: 1000,
+    minutes: 60 * 1000,
+    hours: 60 * 60 * 1000,
+  };
+
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      unitMultipliers,
+      unit
+    )
+  ) {
+    throw new Error(
+      `Unsupported delay unit: ${unit}`
+    );
+  }
+
+  const delayMs =
+    duration * unitMultipliers[unit];
 
   const maxDelayMs =
     Number(
@@ -51,7 +76,7 @@ const executeDelayNode = async (
   }
 
   console.log(
-    `Executing delay node: ${delayMs}ms`
+    `Executing delay node: ${duration} ${unit} (${delayMs}ms)`
   );
 
   if (
@@ -148,7 +173,7 @@ const executeDelayNode = async (
   }
 
   console.log(
-    `Delay completed: ${delayMs}ms`
+    `Delay completed: ${duration} ${unit} (${delayMs}ms)`
   );
 
   return {

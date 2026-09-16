@@ -14,6 +14,10 @@ import {
   FiDatabase,
 } from "react-icons/fi";
 
+import { useWorkspace } from "../../context/WorkspaceContext";
+import { useQuery } from "@tanstack/react-query";
+import { getIntegrations } from "../../api/integrationApi";
+
 const nodeIcons = {
   manual: FiZap,
   webhook: FiLink,
@@ -29,7 +33,6 @@ const nodeIcons = {
   mongodb: FiDatabase,
 };
 
-// eslint-disable-next-line no-unused-vars
 const supportedNodeTypes = [
   "github",
   "webhook",
@@ -44,10 +47,6 @@ const supportedNodeTypes = [
   "http",
   "mongodb",
 ];
-
-import { useWorkspace } from "../../context/WorkspaceContext";
-import { useQuery } from "@tanstack/react-query";
-import { getIntegrations } from "../../api/integrationApi";
 
 const ConfigPanel = ({
   selectedNode,
@@ -79,10 +78,16 @@ const ConfigPanel = ({
 
   const Icon = nodeIcons[nodeType] || FiZap;
 
-  const config = selectedNode.data?.config || {};
+  const config =
+    selectedNode.data?.config || {};
 
-  const updateConfig = (key, value) => {
-    if (!onNodeUpdate) return;
+  const updateConfig = (
+    key,
+    value
+  ) => {
+    if (!onNodeUpdate) {
+      return;
+    }
 
     const updatedNode = {
       ...selectedNode,
@@ -206,7 +211,6 @@ const ConfigPanel = ({
 
   return (
     <aside className="flex h-full w-full flex-col border-l border-zinc-800/70 bg-[#0d0d0f]">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-zinc-800/70 px-4 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-violet-400">
@@ -219,7 +223,8 @@ const ConfigPanel = ({
             </p>
 
             <h2 className="mt-0.5 truncate text-sm font-semibold text-zinc-100">
-              {selectedNode.data?.label || "Node"}
+              {selectedNode.data?.label ||
+                "Node"}
             </h2>
           </div>
         </div>
@@ -234,27 +239,47 @@ const ConfigPanel = ({
         </button>
       </div>
 
-      {/* Configuration */}
       <div className="flex-1 overflow-y-auto p-4">
         {renderConfig()}
       </div>
     </aside>
   );
 };
-const GithubConfig = ({ config, onChange }) => {
-  const { currentWorkspace } = useWorkspace();
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["integrations", currentWorkspace?._id],
-    queryFn: () => getIntegrations(currentWorkspace._id),
-    enabled: !!currentWorkspace?._id,
+const GithubConfig = ({
+  config,
+  onChange,
+}) => {
+  const {
+    currentWorkspace,
+  } = useWorkspace();
+
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: [
+      "integrations",
+      currentWorkspace?._id,
+    ],
+
+    queryFn: () =>
+      getIntegrations(
+        currentWorkspace._id
+      ),
+
+    enabled:
+      !!currentWorkspace?._id,
   });
 
   const githubIntegrations =
     data?.integrations?.filter(
       (integration) =>
-        integration.provider === "github" &&
-        integration.status === "connected"
+        integration.provider ===
+          "github" &&
+        integration.status ===
+          "connected"
     ) || [];
 
   const connectionOptions = [
@@ -262,14 +287,20 @@ const GithubConfig = ({ config, onChange }) => {
       value: "",
       label: isLoading
         ? "Loading GitHub connections..."
-        : githubIntegrations.length === 0
-        ? "No GitHub connections"
-        : "Select GitHub connection",
+        : githubIntegrations.length ===
+            0
+          ? "No GitHub connections"
+          : "Select GitHub connection",
     },
-    ...githubIntegrations.map((integration) => ({
-      value: integration._id,
-      label: integration.name || "GitHub Connection",
-    })),
+
+    ...githubIntegrations.map(
+      (integration) => ({
+        value: integration._id,
+        label:
+          integration.name ||
+          "GitHub Connection",
+      })
+    ),
   ];
 
   return (
@@ -282,39 +313,53 @@ const GithubConfig = ({ config, onChange }) => {
       <Field
         label="Connection"
         type="select"
-        value={config.integrationId || ""}
+        value={
+          config.integrationId || ""
+        }
         onChange={(value) =>
-          onChange("integrationId", value)
+          onChange(
+            "integrationId",
+            value
+          )
         }
         options={connectionOptions}
       />
 
       {isError && (
         <p className="text-[11px] text-red-400">
-          Failed to load GitHub connections.
+          Failed to load GitHub
+          connections.
         </p>
       )}
 
       {!isLoading &&
         !isError &&
-        githubIntegrations.length === 0 && (
+        githubIntegrations.length ===
+          0 && (
           <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
             <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
               No connection
             </p>
 
             <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Connect a GitHub integration from the
-              Integrations page before using this trigger.
+              Connect a GitHub
+              integration from the
+              Integrations page before
+              using this trigger.
             </p>
           </div>
         )}
 
       <Field
         label="Repository"
-        value={config.repository || ""}
+        value={
+          config.repository || ""
+        }
         onChange={(value) =>
-          onChange("repository", value)
+          onChange(
+            "repository",
+            value
+          )
         }
         placeholder="owner/repository"
       />
@@ -322,7 +367,9 @@ const GithubConfig = ({ config, onChange }) => {
       <Field
         label="Event"
         type="select"
-        value={config.event || "issues"}
+        value={
+          config.event || "issues"
+        }
         onChange={(value) =>
           onChange("event", value)
         }
@@ -349,7 +396,9 @@ const GithubConfig = ({ config, onChange }) => {
       <Field
         label="Action"
         type="select"
-        value={config.action || "opened"}
+        value={
+          config.action || "opened"
+        }
         onChange={(value) =>
           onChange("action", value)
         }
@@ -378,7 +427,10 @@ const GithubConfig = ({ config, onChange }) => {
   );
 };
 
-const WebhookConfig = ({ config, onChange }) => {
+const WebhookConfig = ({
+  config,
+  onChange,
+}) => {
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -389,7 +441,9 @@ const WebhookConfig = ({ config, onChange }) => {
       <Field
         label="HTTP Method"
         type="select"
-        value={config.method || "POST"}
+        value={
+          config.method || "POST"
+        }
         onChange={(value) =>
           onChange("method", value)
         }
@@ -420,31 +474,74 @@ const WebhookConfig = ({ config, onChange }) => {
         </label>
 
         <div className="rounded-md border border-zinc-800 bg-[#111114] px-3 py-2.5 text-[11px] text-zinc-500">
-          Generated after saving the workflow.
+          Generated after saving
+          the workflow.
         </div>
       </div>
     </div>
   );
 };
-const ScheduleConfig = ({ config, onChange }) => {
-  const selectedDays = config.days || [];
+
+const ScheduleConfig = ({
+  config,
+  onChange,
+}) => {
+  const selectedDays =
+    Array.isArray(config.days)
+      ? config.days
+      : [];
+
+  const frequency =
+    config.frequency || "daily";
 
   const days = [
-    { value: "Mon", label: "Monday" },
-    { value: "Tue", label: "Tuesday" },
-    { value: "Wed", label: "Wednesday" },
-    { value: "Thu", label: "Thursday" },
-    { value: "Fri", label: "Friday" },
-    { value: "Sat", label: "Saturday" },
-    { value: "Sun", label: "Sunday" },
+    {
+      value: "Mon",
+      label: "Monday",
+    },
+    {
+      value: "Tue",
+      label: "Tuesday",
+    },
+    {
+      value: "Wed",
+      label: "Wednesday",
+    },
+    {
+      value: "Thu",
+      label: "Thursday",
+    },
+    {
+      value: "Fri",
+      label: "Friday",
+    },
+    {
+      value: "Sat",
+      label: "Saturday",
+    },
+    {
+      value: "Sun",
+      label: "Sunday",
+    },
   ];
 
-  const handleDayToggle = (day) => {
-    const updatedDays = selectedDays.includes(day)
-      ? selectedDays.filter((item) => item !== day)
-      : [...selectedDays, day];
+  const handleDayToggle = (
+    day
+  ) => {
+    const updatedDays =
+      selectedDays.includes(day)
+        ? selectedDays.filter(
+            (item) => item !== day
+          )
+        : [
+            ...selectedDays,
+            day,
+          ];
 
-    onChange("days", updatedDays);
+    onChange(
+      "days",
+      updatedDays
+    );
   };
 
   return (
@@ -457,9 +554,12 @@ const ScheduleConfig = ({ config, onChange }) => {
       <Field
         label="Frequency"
         type="select"
-        value={config.frequency || "daily"}
+        value={frequency}
         onChange={(value) =>
-          onChange("frequency", value)
+          onChange(
+            "frequency",
+            value
+          )
         }
         options={[
           {
@@ -481,8 +581,8 @@ const ScheduleConfig = ({ config, onChange }) => {
         ]}
       />
 
-      {/* Custom days */}
-      {config.frequency === "custom" && (
+      {frequency ===
+        "custom" && (
         <div className="space-y-2">
           <label className="text-xs font-medium text-zinc-400">
             Days
@@ -491,14 +591,18 @@ const ScheduleConfig = ({ config, onChange }) => {
           <div className="space-y-2">
             {days.map((day) => {
               const selected =
-                selectedDays.includes(day.value);
+                selectedDays.includes(
+                  day.value
+                );
 
               return (
                 <button
                   key={day.value}
                   type="button"
                   onClick={() =>
-                    handleDayToggle(day.value)
+                    handleDayToggle(
+                      day.value
+                    )
                   }
                   className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-xs transition ${
                     selected
@@ -506,7 +610,9 @@ const ScheduleConfig = ({ config, onChange }) => {
                       : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"
                   }`}
                 >
-                  <span>{day.label}</span>
+                  <span>
+                    {day.label}
+                  </span>
 
                   <span
                     className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
@@ -515,16 +621,20 @@ const ScheduleConfig = ({ config, onChange }) => {
                         : "border-zinc-700"
                     }`}
                   >
-                    {selected ? "✓" : ""}
+                    {selected
+                      ? "✓"
+                      : ""}
                   </span>
                 </button>
               );
             })}
           </div>
 
-          {selectedDays.length === 0 && (
+          {selectedDays.length ===
+            0 && (
             <p className="text-[11px] text-amber-400">
-              Select at least one day.
+              Select at least one
+              day.
             </p>
           )}
         </div>
@@ -533,7 +643,9 @@ const ScheduleConfig = ({ config, onChange }) => {
       <Field
         label="Time"
         type="time"
-        value={config.time || "20:00"}
+        value={
+          config.time || "20:00"
+        }
         onChange={(value) =>
           onChange("time", value)
         }
@@ -543,10 +655,14 @@ const ScheduleConfig = ({ config, onChange }) => {
         label="Timezone"
         type="select"
         value={
-          config.timezone || "Asia/Kolkata"
+          config.timezone ||
+          "Asia/Kolkata"
         }
         onChange={(value) =>
-          onChange("timezone", value)
+          onChange(
+            "timezone",
+            value
+          )
         }
         options={[
           {
@@ -559,17 +675,20 @@ const ScheduleConfig = ({ config, onChange }) => {
           },
           {
             value: "America/New_York",
-            label: "America/New_York",
+            label:
+              "America/New_York",
           },
           {
             value: "Europe/London",
-            label: "Europe/London",
+            label:
+              "Europe/London",
           },
         ]}
       />
     </div>
   );
 };
+
 const ManualConfig = () => {
   return (
     <div className="space-y-5">
@@ -579,14 +698,19 @@ const ManualConfig = () => {
       />
 
       <p className="text-xs leading-5 text-zinc-500">
-        This workflow can be started manually from
-        the workflow page or through the API.
+        This workflow can be
+        started manually from the
+        workflow page or through the
+        API.
       </p>
     </div>
   );
 };
 
-const FilterConfig = ({ config, onChange }) => {
+const FilterConfig = ({
+  config,
+  onChange,
+}) => {
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -606,9 +730,14 @@ const FilterConfig = ({ config, onChange }) => {
       <Field
         label="Operator"
         type="select"
-        value={config.operator || "equals"}
+        value={
+          config.operator || "equals"
+        }
         onChange={(value) =>
-          onChange("operator", value)
+          onChange(
+            "operator",
+            value
+          )
         }
         options={[
           {
@@ -628,6 +757,14 @@ const FilterConfig = ({ config, onChange }) => {
             label: "Starts with",
           },
           {
+            value: "greater_than",
+            label: "Greater than",
+          },
+          {
+            value: "less_than",
+            label: "Less than",
+          },
+          {
             value: "exists",
             label: "Exists",
           },
@@ -636,7 +773,9 @@ const FilterConfig = ({ config, onChange }) => {
 
       <Field
         label="Value"
-        value={config.value || ""}
+        value={
+          config.value ?? ""
+        }
         onChange={(value) =>
           onChange("value", value)
         }
@@ -646,7 +785,10 @@ const FilterConfig = ({ config, onChange }) => {
   );
 };
 
-const ConditionConfig = ({ config, onChange }) => {
+const ConditionConfig = ({
+  config,
+  onChange,
+}) => {
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -666,9 +808,15 @@ const ConditionConfig = ({ config, onChange }) => {
       <Field
         label="Operator"
         type="select"
-        value={config.operator || "equals"}
+        value={
+          config.operator ||
+          "equals"
+        }
         onChange={(value) =>
-          onChange("operator", value)
+          onChange(
+            "operator",
+            value
+          )
         }
         options={[
           {
@@ -683,12 +831,26 @@ const ConditionConfig = ({ config, onChange }) => {
             value: "contains",
             label: "Contains",
           },
+          {
+            value: "greater_than",
+            label: "Greater than",
+          },
+          {
+            value: "less_than",
+            label: "Less than",
+          },
+          {
+            value: "exists",
+            label: "Exists",
+          },
         ]}
       />
 
       <Field
         label="Value"
-        value={config.value || ""}
+        value={
+          config.value ?? ""
+        }
         onChange={(value) =>
           onChange("value", value)
         }
@@ -698,7 +860,10 @@ const ConditionConfig = ({ config, onChange }) => {
   );
 };
 
-const SwitchConfig = ({ config, onChange }) => {
+const SwitchConfig = ({
+  config,
+  onChange,
+}) => {
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -723,11 +888,27 @@ const SwitchConfig = ({ config, onChange }) => {
         }
         placeholder="bug, feature, docs"
       />
+
+      <div className="rounded-md border border-zinc-800/70 bg-zinc-900/50 px-3 py-2.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+          Branches
+        </p>
+
+        <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+          Each comma-separated
+          case creates a separate
+          branch. Unmatched values
+          use the default branch.
+        </p>
+      </div>
     </div>
   );
 };
 
-const DelayConfig = ({ config, onChange }) => {
+const DelayConfig = ({
+  config,
+  onChange,
+}) => {
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -738,9 +919,14 @@ const DelayConfig = ({ config, onChange }) => {
       <Field
         label="Duration"
         type="number"
-        value={config.duration || "5"}
+        value={
+          config.duration ?? "5"
+        }
         onChange={(value) =>
-          onChange("duration", value)
+          onChange(
+            "duration",
+            value
+          )
         }
         placeholder="5"
       />
@@ -748,9 +934,15 @@ const DelayConfig = ({ config, onChange }) => {
       <Field
         label="Unit"
         type="select"
-        value={config.unit || "minutes"}
+        value={
+          config.unit ||
+          "minutes"
+        }
         onChange={(value) =>
-          onChange("unit", value)
+          onChange(
+            "unit",
+            value
+          )
         }
         options={[
           {
@@ -770,20 +962,41 @@ const DelayConfig = ({ config, onChange }) => {
     </div>
   );
 };
-const DiscordConfig = ({ config, onChange }) => {
-  const { currentWorkspace } = useWorkspace();
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["integrations", currentWorkspace?._id],
-    queryFn: () => getIntegrations(currentWorkspace._id),
-    enabled: !!currentWorkspace?._id,
+const DiscordConfig = ({
+  config,
+  onChange,
+}) => {
+  const {
+    currentWorkspace,
+  } = useWorkspace();
+
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: [
+      "integrations",
+      currentWorkspace?._id,
+    ],
+
+    queryFn: () =>
+      getIntegrations(
+        currentWorkspace._id
+      ),
+
+    enabled:
+      !!currentWorkspace?._id,
   });
 
   const discordIntegrations =
     data?.integrations?.filter(
       (integration) =>
-        integration.provider === "discord" &&
-        integration.status === "connected"
+        integration.provider ===
+          "discord" &&
+        integration.status ===
+          "connected"
     ) || [];
 
   const connectionOptions = [
@@ -791,14 +1004,20 @@ const DiscordConfig = ({ config, onChange }) => {
       value: "",
       label: isLoading
         ? "Loading Discord connections..."
-        : discordIntegrations.length === 0
-        ? "No Discord connections"
-        : "Select Discord connection",
+        : discordIntegrations.length ===
+            0
+          ? "No Discord connections"
+          : "Select Discord connection",
     },
-    ...discordIntegrations.map((integration) => ({
-      value: integration._id,
-      label: integration.name || "Discord Connection",
-    })),
+
+    ...discordIntegrations.map(
+      (integration) => ({
+        value: integration._id,
+        label:
+          integration.name ||
+          "Discord Connection",
+      })
+    ),
   ];
 
   return (
@@ -811,62 +1030,66 @@ const DiscordConfig = ({ config, onChange }) => {
       <Field
         label="Connection"
         type="select"
-        value={config.integrationId || ""}
+        value={
+          config.integrationId || ""
+        }
         onChange={(value) =>
-          onChange("integrationId", value)
+          onChange(
+            "integrationId",
+            value
+          )
         }
         options={connectionOptions}
       />
 
       {isError && (
         <p className="text-[11px] text-red-400">
-          Failed to load Discord connections.
+          Failed to load Discord
+          connections.
         </p>
       )}
 
       {!isLoading &&
         !isError &&
-        discordIntegrations.length === 0 && (
+        discordIntegrations.length ===
+          0 && (
           <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
             <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
               No connection
             </p>
 
             <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Connect a Discord integration from the
-              Integrations page before using this node.
+              Connect a Discord
+              integration from the
+              Integrations page before
+              using this node.
             </p>
           </div>
         )}
 
       <Field
         label="Channel"
-        type="select"
-        value={config.channel || "#development"}
-        onChange={(value) =>
-          onChange("channel", value)
+        value={
+          config.channel ||
+          "#development"
         }
-        options={[
-          {
-            value: "#development",
-            label: "#development",
-          },
-          {
-            value: "#general",
-            label: "#general",
-          },
-          {
-            value: "#alerts",
-            label: "#alerts",
-          },
-        ]}
+        onChange={(value) =>
+          onChange(
+            "channel",
+            value
+          )
+        }
+        placeholder="#development"
       />
 
       <TextareaField
         label="Message"
         value={config.message || ""}
         onChange={(value) =>
-          onChange("message", value)
+          onChange(
+            "message",
+            value
+          )
         }
         placeholder="Enter message"
         rows={4}
@@ -878,27 +1101,49 @@ const DiscordConfig = ({ config, onChange }) => {
         </p>
 
         <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-          Select a connected Discord integration to
-          send this message.
+          Select a connected Discord
+          integration to send this
+          message.
         </p>
       </div>
     </div>
   );
 };
-const EmailConfig = ({ config, onChange }) => {
-  const { currentWorkspace } = useWorkspace();
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["integrations", currentWorkspace?._id],
-    queryFn: () => getIntegrations(currentWorkspace._id),
-    enabled: !!currentWorkspace?._id,
+const EmailConfig = ({
+  config,
+  onChange,
+}) => {
+  const {
+    currentWorkspace,
+  } = useWorkspace();
+
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: [
+      "integrations",
+      currentWorkspace?._id,
+    ],
+
+    queryFn: () =>
+      getIntegrations(
+        currentWorkspace._id
+      ),
+
+    enabled:
+      !!currentWorkspace?._id,
   });
 
   const emailIntegrations =
     data?.integrations?.filter(
       (integration) =>
-        integration.provider === "email" &&
-        integration.status === "connected"
+        integration.provider ===
+          "email" &&
+        integration.status ===
+          "connected"
     ) || [];
 
   const connectionOptions = [
@@ -906,14 +1151,20 @@ const EmailConfig = ({ config, onChange }) => {
       value: "",
       label: isLoading
         ? "Loading email connections..."
-        : emailIntegrations.length === 0
-        ? "No email connections"
-        : "Select email connection",
+        : emailIntegrations.length ===
+            0
+          ? "No email connections"
+          : "Select email connection",
     },
-    ...emailIntegrations.map((integration) => ({
-      value: integration._id,
-      label: integration.name || "Email Connection",
-    })),
+
+    ...emailIntegrations.map(
+      (integration) => ({
+        value: integration._id,
+        label:
+          integration.name ||
+          "Email Connection",
+      })
+    ),
   ];
 
   return (
@@ -926,30 +1177,39 @@ const EmailConfig = ({ config, onChange }) => {
       <Field
         label="Connection"
         type="select"
-        value={config.integrationId || ""}
+        value={
+          config.integrationId || ""
+        }
         onChange={(value) =>
-          onChange("integrationId", value)
+          onChange(
+            "integrationId",
+            value
+          )
         }
         options={connectionOptions}
       />
 
       {isError && (
         <p className="text-[11px] text-red-400">
-          Failed to load email connections.
+          Failed to load email
+          connections.
         </p>
       )}
 
       {!isLoading &&
         !isError &&
-        emailIntegrations.length === 0 && (
+        emailIntegrations.length ===
+          0 && (
           <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
             <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
               No connection
             </p>
 
             <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Connect an email integration from the
-              Integrations page before using this node.
+              Connect an email
+              integration from the
+              Integrations page before
+              using this node.
             </p>
           </div>
         )}
@@ -965,9 +1225,14 @@ const EmailConfig = ({ config, onChange }) => {
 
       <Field
         label="Subject"
-        value={config.subject || ""}
+        value={
+          config.subject || ""
+        }
         onChange={(value) =>
-          onChange("subject", value)
+          onChange(
+            "subject",
+            value
+          )
         }
         placeholder="Email subject"
       />
@@ -976,7 +1241,10 @@ const EmailConfig = ({ config, onChange }) => {
         label="Message"
         value={config.message || ""}
         onChange={(value) =>
-          onChange("message", value)
+          onChange(
+            "message",
+            value
+          )
         }
         placeholder="Write your email..."
         rows={5}
@@ -985,7 +1253,10 @@ const EmailConfig = ({ config, onChange }) => {
   );
 };
 
-const HttpConfig = ({ config, onChange }) => {
+const HttpConfig = ({
+  config,
+  onChange,
+}) => {
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -996,9 +1267,14 @@ const HttpConfig = ({ config, onChange }) => {
       <Field
         label="Method"
         type="select"
-        value={config.method || "GET"}
+        value={
+          config.method || "GET"
+        }
         onChange={(value) =>
-          onChange("method", value)
+          onChange(
+            "method",
+            value
+          )
         }
         options={[
           {
@@ -1037,7 +1313,10 @@ const HttpConfig = ({ config, onChange }) => {
         label="Request Body"
         value={config.body || ""}
         onChange={(value) =>
-          onChange("body", value)
+          onChange(
+            "body",
+            value
+          )
         }
         placeholder='{"message":"Hello"}'
         rows={6}
@@ -1050,27 +1329,50 @@ const HttpConfig = ({ config, onChange }) => {
         </p>
 
         <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-          Use GET for APIs that only retrieve data.
-          Use POST, PUT, or PATCH when sending data.
+          Use GET for APIs that
+          only retrieve data. Use
+          POST, PUT, or PATCH when
+          sending data.
         </p>
       </div>
     </div>
   );
 };
-const MongoConfig = ({ config, onChange }) => {
-  const { currentWorkspace } = useWorkspace();
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["integrations", currentWorkspace?._id],
-    queryFn: () => getIntegrations(currentWorkspace._id),
-    enabled: !!currentWorkspace?._id,
+const MongoConfig = ({
+  config,
+  onChange,
+}) => {
+  const {
+    currentWorkspace,
+  } = useWorkspace();
+
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: [
+      "integrations",
+      currentWorkspace?._id,
+    ],
+
+    queryFn: () =>
+      getIntegrations(
+        currentWorkspace._id
+      ),
+
+    enabled:
+      !!currentWorkspace?._id,
   });
 
   const mongoIntegrations =
     data?.integrations?.filter(
       (integration) =>
-        integration.provider === "mongodb" &&
-        integration.status === "connected"
+        integration.provider ===
+          "mongodb" &&
+        integration.status ===
+          "connected"
     ) || [];
 
   const connectionOptions = [
@@ -1078,54 +1380,82 @@ const MongoConfig = ({ config, onChange }) => {
       value: "",
       label: isLoading
         ? "Loading MongoDB connections..."
-        : mongoIntegrations.length === 0
-        ? "No MongoDB connections"
-        : "Select MongoDB connection",
+        : mongoIntegrations.length ===
+            0
+          ? "No MongoDB connections"
+          : "Select MongoDB connection",
     },
-    ...mongoIntegrations.map((integration) => ({
-      value: integration._id,
-      label: integration.name || "MongoDB Connection",
-    })),
+
+    ...mongoIntegrations.map(
+      (integration) => ({
+        value: integration._id,
+        label:
+          integration.name ||
+          "MongoDB Connection",
+      })
+    ),
   ];
 
-  const getJsonValue = (value) => {
-    if (typeof value === "string") {
+  const getJsonValue = (
+    value
+  ) => {
+    if (
+      typeof value ===
+      "string"
+    ) {
       return value;
     }
 
-    if (value && typeof value === "object") {
-      return JSON.stringify(value, null, 2);
+    if (
+      value &&
+      typeof value ===
+        "object"
+    ) {
+      return JSON.stringify(
+        value,
+        null,
+        2
+      );
     }
 
     return "";
   };
 
-  const handleJsonChange = (key, value) => {
-    // Keep the user's text in the editor while typing.
+  const handleJsonChange = (
+    key,
+    value
+  ) => {
     onChange(key, value);
   };
 
-  const handleJsonBlur = (key, value) => {
+  const handleJsonBlur = (
+    key,
+    value
+  ) => {
     if (!value.trim()) {
       onChange(key, {});
       return;
     }
 
     try {
-      const parsed = JSON.parse(value);
+      const parsed =
+        JSON.parse(value);
 
       if (
         parsed === null ||
-        typeof parsed !== "object" ||
+        typeof parsed !==
+          "object" ||
         Array.isArray(parsed)
       ) {
         return;
       }
 
-      onChange(key, parsed);
+      onChange(
+        key,
+        parsed
+      );
     } catch {
-      // Invalid JSON stays in the textarea.
-      // It will not be converted into a backend config object.
+      // Keep invalid JSON as typed.
     }
   };
 
@@ -1135,14 +1465,20 @@ const MongoConfig = ({ config, onChange }) => {
     placeholder,
     rows = 5,
   }) => {
-    const value = getJsonValue(config[configKey]);
+    const value =
+      getJsonValue(
+        config[configKey]
+      );
 
     return (
       <TextareaField
         label={label}
         value={value}
         onChange={(nextValue) =>
-          handleJsonChange(configKey, nextValue)
+          handleJsonChange(
+            configKey,
+            nextValue
+          )
         }
         onBlur={(event) =>
           handleJsonBlur(
@@ -1167,48 +1503,67 @@ const MongoConfig = ({ config, onChange }) => {
       <Field
         label="Connection"
         type="select"
-        value={config.integrationId || ""}
+        value={
+          config.integrationId || ""
+        }
         onChange={(value) =>
-          onChange("integrationId", value)
+          onChange(
+            "integrationId",
+            value
+          )
         }
         options={connectionOptions}
       />
 
       {isError && (
         <p className="text-[11px] text-red-400">
-          Failed to load MongoDB connections.
+          Failed to load MongoDB
+          connections.
         </p>
       )}
 
       {!isLoading &&
         !isError &&
-        mongoIntegrations.length === 0 && (
+        mongoIntegrations.length ===
+          0 && (
           <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
             <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
               No connection
             </p>
 
             <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Connect a MongoDB integration from the
-              Integrations page before using this node.
+              Connect a MongoDB
+              integration from the
+              Integrations page before
+              using this node.
             </p>
           </div>
         )}
 
       <Field
         label="Database"
-        value={config.database || ""}
+        value={
+          config.database || ""
+        }
         onChange={(value) =>
-          onChange("database", value)
+          onChange(
+            "database",
+            value
+          )
         }
         placeholder="flowpilot"
       />
 
       <Field
         label="Collection"
-        value={config.collection || ""}
+        value={
+          config.collection || ""
+        }
         onChange={(value) =>
-          onChange("collection", value)
+          onChange(
+            "collection",
+            value
+          )
         }
         placeholder="users"
       />
@@ -1216,9 +1571,15 @@ const MongoConfig = ({ config, onChange }) => {
       <Field
         label="Operation"
         type="select"
-        value={config.operation || "insert"}
+        value={
+          config.operation ||
+          "insert"
+        }
         onChange={(value) =>
-          onChange("operation", value)
+          onChange(
+            "operation",
+            value
+          )
         }
         options={[
           {
@@ -1240,8 +1601,8 @@ const MongoConfig = ({ config, onChange }) => {
         ]}
       />
 
-      {config.operation === "insert" && (
-        // eslint-disable-next-line react-hooks/static-components
+      {config.operation ===
+        "insert" && (
         <JsonField
           label="Document"
           configKey="document"
@@ -1250,9 +1611,9 @@ const MongoConfig = ({ config, onChange }) => {
         />
       )}
 
-      {config.operation === "find" && (
+      {config.operation ===
+        "find" && (
         <>
-          // eslint-disable-next-line react-hooks/static-components
           <JsonField
             label="Filter"
             configKey="filter"
@@ -1263,16 +1624,22 @@ const MongoConfig = ({ config, onChange }) => {
           <Field
             label="Limit"
             type="number"
-            value={config.limit || "20"}
+            value={
+              config.limit ?? "20"
+            }
             onChange={(value) =>
-              onChange("limit", value)
+              onChange(
+                "limit",
+                value
+              )
             }
             placeholder="20"
           />
         </>
       )}
 
-      {config.operation === "update" && (
+      {config.operation ===
+        "update" && (
         <>
           <JsonField
             label="Filter"
@@ -1290,7 +1657,8 @@ const MongoConfig = ({ config, onChange }) => {
         </>
       )}
 
-      {config.operation === "delete" && (
+      {config.operation ===
+        "delete" && (
         <JsonField
           label="Filter"
           configKey="filter"
@@ -1305,8 +1673,10 @@ const MongoConfig = ({ config, onChange }) => {
         </p>
 
         <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-          The selected integration supplies the MongoDB
-          connection URI. Database and collection determine
+          The selected integration
+          supplies the MongoDB
+          connection URI. Database
+          and collection determine
           where the operation runs.
         </p>
       </div>
@@ -1314,19 +1684,22 @@ const MongoConfig = ({ config, onChange }) => {
   );
 };
 
-const GenericConfig = ({ selectedNode }) => {
+const GenericConfig = ({
+  selectedNode,
+}) => {
   return (
     <div className="space-y-4">
       <SectionTitle
         label="Node configuration"
         title={
-          selectedNode.data?.label || "Node"
+          selectedNode.data?.label ||
+          "Node"
         }
       />
 
       <p className="text-xs leading-5 text-zinc-500">
-        Configuration options for this node will
-        appear here.
+        Configuration options for
+        this node will appear here.
       </p>
     </div>
   );
@@ -1349,7 +1722,10 @@ const TestButton = () => {
   );
 };
 
-const SectionTitle = ({ label, title }) => {
+const SectionTitle = ({
+  label,
+  title,
+}) => {
   return (
     <div>
       <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-600">
@@ -1381,25 +1757,35 @@ const Field = ({
         <select
           value={value}
           onChange={(event) =>
-            onChange(event.target.value)
+            onChange(
+              event.target.value
+            )
           }
           className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none focus:border-violet-500"
         >
-          {options.map((option) => (
-            <option
-              key={option.value}
-              value={option.value}
-            >
-              {option.label}
-            </option>
-          ))}
+          {options.map(
+            (option) => (
+              <option
+                key={
+                  option.value
+                }
+                value={
+                  option.value
+                }
+              >
+                {option.label}
+              </option>
+            )
+          )}
         </select>
       ) : (
         <input
           type={type}
           value={value}
           onChange={(event) =>
-            onChange(event.target.value)
+            onChange(
+              event.target.value
+            )
           }
           placeholder={placeholder}
           className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
@@ -1428,12 +1814,16 @@ const TextareaField = ({
         rows={rows}
         value={value}
         onChange={(event) =>
-          onChange(event.target.value)
+          onChange(
+            event.target.value
+          )
         }
         onBlur={onBlur}
         placeholder={placeholder}
         className={`w-full resize-none rounded-md border border-zinc-800 bg-[#111114] px-3 py-2 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500 ${
-          mono ? "font-mono text-[11px]" : ""
+          mono
+            ? "font-mono text-[11px]"
+            : ""
         }`}
       />
     </div>

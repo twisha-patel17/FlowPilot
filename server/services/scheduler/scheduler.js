@@ -4,6 +4,7 @@ const Workflow = require("../../models/Workflow");
 const Execution = require("../../models/Execution");
 
 const workflowQueue = require("../queue/workflowQueue");
+const redisConnection = require("../../config/redis");
 
 const DEFAULT_TIMEZONE = "Asia/Kolkata";
 
@@ -23,21 +24,20 @@ const getLocalDateParts = (
   date,
   timezone
 ) => {
-  const formatter =
-    new Intl.DateTimeFormat(
-      "en-GB",
-      {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        weekday: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }
-    );
+  const formatter = new Intl.DateTimeFormat(
+    "en-GB",
+    {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }
+  );
 
   const parts =
     formatter.formatToParts(date);
@@ -46,8 +46,7 @@ const getLocalDateParts = (
 
   for (const part of parts) {
     if (part.type !== "literal") {
-      values[part.type] =
-        part.value;
+      values[part.type] = part.value;
     }
   }
 
@@ -98,18 +97,17 @@ const getScheduledAt = (
     .split(":")
     .map(Number);
 
-  const utcGuess =
-    new Date(
-      Date.UTC(
-        local.year,
-        local.month - 1,
-        local.day,
-        hours,
-        minutes,
-        0,
-        0
-      )
-    );
+  const utcGuess = new Date(
+    Date.UTC(
+      local.year,
+      local.month - 1,
+      local.day,
+      hours,
+      minutes,
+      0,
+      0
+    )
+  );
 
   const offsetFormatter =
     new Intl.DateTimeFormat(
@@ -128,17 +126,15 @@ const getScheduledAt = (
   const offsetPart =
     offsetParts.find(
       (part) =>
-        part.type ===
-        "timeZoneName"
+        part.type === "timeZoneName"
     );
 
   const offset =
     offsetPart?.value || "GMT";
 
-  const match =
-    offset.match(
-      /GMT([+-])(\d{2}):?(\d{2})?/
-    );
+  const match = offset.match(
+    /GMT([+-])(\d{2}):?(\d{2})?/
+  );
 
   if (!match) {
     return utcGuess;
@@ -175,8 +171,7 @@ const shouldRunSchedule = (
   now
 ) => {
   const config =
-    workflow.trigger?.config ||
-    {};
+    workflow.trigger?.config || {};
 
   const frequency =
     config.frequency;
@@ -188,18 +183,15 @@ const shouldRunSchedule = (
     config.timezone ||
     DEFAULT_TIMEZONE;
 
-  if (!frequency) {
-    return false;
-  }
-
-  if (!scheduledTime) {
+  if (
+    !frequency ||
+    !scheduledTime
+  ) {
     return false;
   }
 
   if (
-    !isValidTimezone(
-      timezone
-    )
+    !isValidTimezone(timezone)
   ) {
     console.error(
       `Invalid timezone "${timezone}" ` +
@@ -242,6 +234,29 @@ const shouldRunSchedule = (
     return false;
   }
 
+  if (
+    frequency === "custom"
+  ) {
+    const days =
+      Array.isArray(config.days)
+        ? config.days
+        : [];
+
+    if (
+      days.length === 0
+    ) {
+      return false;
+    }
+
+    if (
+      !days.includes(
+        local.weekday
+      )
+    ) {
+      return false;
+    }
+  }
+
   return true;
 };
 
@@ -274,7 +289,6 @@ const createScheduledExecution =
     };
 
     try {
-   
       const execution =
         await Execution.create({
           workflow:
@@ -301,6 +315,7 @@ const createScheduledExecution =
 
       return execution;
     } catch (error) {
+     
       if (
         error.code === 11000
       ) {
@@ -318,7 +333,10 @@ const createScheduledExecution =
   };
 
 const queueScheduledExecution =
-  async (execution, workflow) => {
+  async (
+    execution,
+    workflow
+  ) => {
     try {
       const job =
         await workflowQueue.add(
@@ -338,7 +356,7 @@ const queueScheduledExecution =
 
       return job;
     } catch (error) {
-     
+      
       await Execution.findOneAndUpdate(
         {
           _id:
@@ -436,50 +454,55 @@ const processWorkflow =
       );
     }
   };
+let schedulerTask = null;
 
 const startScheduler = () => {
-  console.log(
-    "Scheduler started"
-  );
+  if (schedulerTask) {
+    console.log("Scheduler already running");
+    return;
+  }
 
-  cron.schedule(
+  console.log("Scheduler started");
+
+  schedulerTask = cron.schedule(
     "* * * * *",
     async () => {
       try {
-        const now =
-          new Date();
+        const now = new Date();
 
-        const workflows =
-          await Workflow.find({
-            status: "active",
-            "trigger.type":
-              "schedule",
-          });
+        const workflows = await Workflow.find({
+          status: "active",
+          "trigger.type": "schedule",
+        });
 
-        if (
-          workflows.length === 0
-        ) {
+        if (!workflows.length) {
           return;
         }
 
-        for (
-          const workflow
-          of workflows
-        ) {
-          await processWorkflow(
-            workflow,
-            now
-          );
-        }
+        console.log(
+          `Checking ${workflows.length} scheduled workflows`
+        );
+
+        await Promise.all(
+          workflows.map((workflow) =>
+            processWorkflow(
+              workflow,
+              now
+            )
+          )
+        );
+
       } catch (error) {
         console.error(
           "Scheduler error:",
           error
         );
       }
+    },
+    {
+      timezone: DEFAULT_TIMEZONE,
     }
   );
 };
 
-module.exports =
-  startScheduler;
+module.exports =startScheduler;
