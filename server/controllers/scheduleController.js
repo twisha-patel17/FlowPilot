@@ -34,7 +34,9 @@ const getWorkspace = async (
   workspaceId,
   userId
 ) => {
-  if (!workspaceId) return null;
+  if (!workspaceId) {
+    return null;
+  }
 
   return Workspace.findOne({
     _id: workspaceId,
@@ -144,7 +146,9 @@ const getSchedule = async (
     }
 
     return res.status(200).json({
-      schedule: formatSchedule(workflow),
+      schedule: formatSchedule(
+        workflow
+      ),
     });
   } catch (error) {
     next(error);
@@ -247,7 +251,7 @@ const updateSchedule = async (
     }
 
     /*
-     * Custom days
+     * Days
      */
     if (days !== undefined) {
       if (
@@ -273,8 +277,9 @@ const updateSchedule = async (
         });
       }
 
-      const uniqueDays =
-        [...new Set(days)];
+      const uniqueDays = [
+        ...new Set(days),
+      ];
 
       if (
         uniqueDays.length !==
@@ -286,12 +291,22 @@ const updateSchedule = async (
         });
       }
 
+      if (
+        nextFrequency !== "custom"
+      ) {
+        return res.status(400).json({
+          message:
+            "Schedule days can only be used with custom frequency",
+        });
+      }
+
       workflow.trigger.config.days =
         uniqueDays;
     }
 
     /*
-     * Custom frequency requires days.
+     * Custom frequency requires
+     * at least one selected day.
      */
     if (
       nextFrequency === "custom" &&
@@ -305,13 +320,14 @@ const updateSchedule = async (
     }
 
     /*
-     * Non-custom schedules do not need
-     * a custom days array.
+     * Non-custom schedules should
+     * not retain custom days.
      */
     if (
       nextFrequency !== "custom"
     ) {
-      delete workflow.trigger.config.days;
+      delete workflow.trigger.config
+        .days;
     }
 
     /*
@@ -386,6 +402,7 @@ const updateSchedule = async (
     return res.status(200).json({
       message:
         "Schedule updated successfully",
+
       schedule:
         formatSchedule(workflow),
     });
