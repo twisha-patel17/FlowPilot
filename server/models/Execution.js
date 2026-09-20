@@ -6,6 +6,7 @@ const executionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Workflow",
       required: true,
+      index: true,
     },
 
     workflowSnapshot: {
@@ -17,12 +18,14 @@ const executionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
 
     workspace: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Workspace",
       required: true,
+      index: true,
     },
 
     status: {
@@ -35,6 +38,7 @@ const executionSchema = new mongoose.Schema(
         "cancelled",
       ],
       default: "pending",
+      index: true,
     },
 
     trigger: {
@@ -47,6 +51,7 @@ const executionSchema = new mongoose.Schema(
         "http",
       ],
       default: "manual",
+      index: true,
     },
 
     input: {
@@ -57,6 +62,7 @@ const executionSchema = new mongoose.Schema(
     scheduledAt: {
       type: Date,
       default: null,
+      index: true,
     },
 
     startedAt: {
@@ -77,6 +83,7 @@ const executionSchema = new mongoose.Schema(
     error: {
       type: String,
       default: null,
+      maxlength: 5000,
     },
 
     attempt: {
@@ -91,11 +98,13 @@ const executionSchema = new mongoose.Schema(
           nodeId: {
             type: String,
             default: null,
+            maxlength: 200,
           },
 
           type: {
             type: String,
             default: "unknown",
+            maxlength: 100,
           },
 
           attempt: {
@@ -128,11 +137,13 @@ const executionSchema = new mongoose.Schema(
           error: {
             type: String,
             default: null,
+            maxlength: 5000,
           },
 
           duration: {
             type: Number,
             default: 0,
+            min: 0,
           },
         },
       ],
@@ -143,6 +154,22 @@ const executionSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+executionSchema.index({
+  workspace: 1,
+  createdAt: -1,
+});
+
+executionSchema.index({
+  workflow: 1,
+  createdAt: -1,
+});
+
+executionSchema.index({
+  workspace: 1,
+  status: 1,
+  createdAt: -1,
+});
 
 executionSchema.index(
   {

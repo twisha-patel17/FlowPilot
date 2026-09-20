@@ -4,14 +4,19 @@ const createWorkspace = async (req, res, next) => {
   try {
     const { name } = req.body;
 
-    if (!name || !name.trim()) {
+    const trimmedName =
+      typeof name === "string"
+        ? name.trim()
+        : "";
+
+    if (!trimmedName) {
       return res.status(400).json({
         message: "Workspace name is required",
       });
     }
 
     const workspace = await Workspace.create({
-      name: name.trim(),
+      name: trimmedName,
       owner: req.user._id,
       members: [
         {
@@ -34,7 +39,9 @@ const getWorkspaces = async (req, res, next) => {
   try {
     const workspaces = await Workspace.find({
       "members.user": req.user._id,
-    }).sort({ createdAt: 1 });
+    })
+      .sort({ createdAt: 1 })
+      .lean();
 
     return res.status(200).json({
       workspaces,
@@ -51,7 +58,7 @@ const getWorkspace = async (req, res, next) => {
     const workspace = await Workspace.findOne({
       _id: id,
       "members.user": req.user._id,
-    });
+    }).lean();
 
     if (!workspace) {
       return res.status(404).json({
@@ -84,13 +91,18 @@ const updateWorkspace = async (req, res, next) => {
     }
 
     if (name !== undefined) {
-      if (!name.trim()) {
+      const trimmedName =
+        typeof name === "string"
+          ? name.trim()
+          : "";
+
+      if (!trimmedName) {
         return res.status(400).json({
           message: "Workspace name is required",
         });
       }
 
-      workspace.name = name.trim();
+      workspace.name = trimmedName;
     }
 
     await workspace.save();

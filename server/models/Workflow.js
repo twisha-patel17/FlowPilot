@@ -6,6 +6,7 @@ const workflowSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      minlength: 2,
       maxlength: 100,
     },
 
@@ -20,19 +21,21 @@ const workflowSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
 
-    // Workspace this workflow belongs to
     workspace: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Workspace",
       required: true,
+      index: true,
     },
 
     status: {
       type: String,
       enum: ["active", "inactive"],
       default: "inactive",
+      index: true,
     },
 
     trigger: {
@@ -69,6 +72,19 @@ const workflowSchema = new mongoose.Schema(
   }
 );
 
-const Workflow = mongoose.model("Workflow", workflowSchema);
+workflowSchema.index({
+  workspace: 1,
+  status: 1,
+});
+
+workflowSchema.index({
+  status: 1,
+  "trigger.type": 1,
+});
+
+const Workflow = mongoose.model(
+  "Workflow",
+  workflowSchema
+);
 
 module.exports = Workflow;

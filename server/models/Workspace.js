@@ -6,12 +6,15 @@ const workspaceSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      minlength: 2,
+      maxlength: 100,
     },
 
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
 
     members: [
@@ -19,6 +22,7 @@ const workspaceSchema = new mongoose.Schema(
         user: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "User",
+          required: true,
         },
 
         role: {
@@ -33,6 +37,10 @@ const workspaceSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+workspaceSchema.index({
+  "members.user": 1,
+});
 
 module.exports = mongoose.model(
   "Workspace",

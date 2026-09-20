@@ -1,11 +1,24 @@
 const Joi = require("joi");
 
+const passwordSchema = Joi.string()
+  .min(8)
+  .max(100)
+  .required();
+
 const registerSchema = Joi.object({
-  name: Joi.string().trim().min(2).max(50).required(),
+  name: Joi.string()
+    .trim()
+    .min(2)
+    .max(50)
+    .required(),
 
-  email: Joi.string().trim().lowercase().email().required(),
+  email: Joi.string()
+    .trim()
+    .lowercase()
+    .email()
+    .required(),
 
-  password: Joi.string().min(6).max(100).required(),
+  password: passwordSchema,
 
   confirmPassword: Joi.string()
     .valid(Joi.ref("password"))
@@ -16,15 +29,24 @@ const registerSchema = Joi.object({
 });
 
 const loginSchema = Joi.object({
-  email: Joi.string().trim().lowercase().email().required(),
+  email: Joi.string()
+    .trim()
+    .lowercase()
+    .email()
+    .required(),
 
-  password: Joi.string().min(6).max(100).required(),
+  // Keep login compatible with existing accounts.
+  password: Joi.string()
+    .min(1)
+    .max(100)
+    .required(),
 });
 
 const changePasswordSchema = Joi.object({
-  currentPassword: Joi.string().required(),
+  currentPassword: Joi.string()
+    .required(),
 
-  newPassword: Joi.string().min(6).max(100).required(),
+  newPassword: passwordSchema,
 
   confirmPassword: Joi.string()
     .valid(Joi.ref("newPassword"))
@@ -35,9 +57,15 @@ const changePasswordSchema = Joi.object({
 });
 
 const updateProfileSchema = Joi.object({
-  name: Joi.string().trim().min(2).max(50),
+  name: Joi.string()
+    .trim()
+    .min(2)
+    .max(50),
 
-  email: Joi.string().trim().lowercase().email(),
+  email: Joi.string()
+    .trim()
+    .lowercase()
+    .email(),
 }).min(1);
 
 module.exports = {

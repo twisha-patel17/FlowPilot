@@ -1,9 +1,9 @@
 const { Queue } = require("bullmq");
 
-const redisConnection = require("../../config/redis");
+const queueRedisConnection = require("../../config/queueRedis");
 
 const workflowQueue = new Queue("workflow-execution", {
-  connection: redisConnection,
+  connection: queueRedisConnection,
 
   defaultJobOptions: {
     attempts: 3,

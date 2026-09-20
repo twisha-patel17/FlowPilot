@@ -1,4 +1,5 @@
 const cron = require("node-cron");
+const crypto = require("crypto");
 
 const Workflow = require("../../models/Workflow");
 const Execution = require("../../models/Execution");
@@ -7,6 +8,11 @@ const workflowQueue = require("../queue/workflowQueue");
 const redisConnection = require("../../config/redis");
 
 const DEFAULT_TIMEZONE = "Asia/Kolkata";
+
+const SCHEDULER_LOCK_KEY =
+  "flowpilot:scheduler:lock";
+
+const SCHEDULER_LOCK_TTL = 55 * 1000;
 
 const isValidTimezone = (timezone) => {
   try {
@@ -58,25 +64,6 @@ const getLocalDateParts = (
     hour: Number(values.hour),
     minute: Number(values.minute),
   };
-};
-
-const getOccurrenceKey = (
-  date,
-  timezone
-) => {
-  const local =
-    getLocalDateParts(
-      date,
-      timezone
-    );
-
-  return (
-    `${local.year}-` +
-    `${String(local.month).padStart(2, "0")}-` +
-    `${String(local.day).padStart(2, "0")}T` +
-    `${String(local.hour).padStart(2, "0")}:` +
-    `${String(local.minute).padStart(2, "0")}`
-  );
 };
 
 const getScheduledAt = (
@@ -242,9 +229,7 @@ const shouldRunSchedule = (
         ? config.days
         : [];
 
-    if (
-      days.length === 0
-    ) {
+    if (days.length === 0) {
       return false;
     }
 
@@ -356,7 +341,6 @@ const queueScheduledExecution =
 
       return job;
     } catch (error) {
-      
       await Execution.findOneAndUpdate(
         {
           _id:
@@ -454,55 +438,158 @@ const processWorkflow =
       );
     }
   };
-let schedulerTask = null;
 
-const startScheduler = () => {
-  if (schedulerTask) {
-    console.log("Scheduler already running");
-    return;
-  }
+const acquireSchedulerLock =
+  async () => {
+    const lockToken =
+      crypto.randomUUID();
 
-  console.log("Scheduler started");
+    try {
+      const result =
+        await redisConnection.set(
+          SCHEDULER_LOCK_KEY,
+          lockToken,
+          "PX",
+          SCHEDULER_LOCK_TTL,
+          "NX"
+        );
 
-  schedulerTask = cron.schedule(
-    "* * * * *",
-    async () => {
-      try {
-        const now = new Date();
+      if (result !== "OK") {
+        return null;
+      }
 
-        const workflows = await Workflow.find({
+      return lockToken;
+    } catch (error) {
+      console.error(
+        "Failed to acquire scheduler lock:",
+        error.message
+      );
+
+      return null;
+    }
+  };
+
+const releaseSchedulerLock =
+  async (lockToken) => {
+    if (!lockToken) {
+      return;
+    }
+
+    const releaseScript = `
+      if redis.call("GET", KEYS[1]) == ARGV[1]
+      then
+        return redis.call("DEL", KEYS[1])
+      else
+        return 0
+      end
+    `;
+
+    try {
+      await redisConnection.eval(
+        releaseScript,
+        1,
+        SCHEDULER_LOCK_KEY,
+        lockToken
+      );
+    } catch (error) {
+      console.error(
+        "Failed to release scheduler lock:",
+        error.message
+      );
+    }
+  };
+
+const runSchedulerTick =
+  async () => {
+    const lockToken =
+      await acquireSchedulerLock();
+
+    if (!lockToken) {
+      console.log(
+        "Scheduler tick skipped: another instance owns the lock"
+      );
+
+      return;
+    }
+
+    try {
+      const now = new Date();
+
+      const workflows =
+        await Workflow.find({
           status: "active",
           "trigger.type": "schedule",
         });
 
-        if (!workflows.length) {
-          return;
-        }
+      if (!workflows.length) {
+        return;
+      }
 
-        console.log(
-          `Checking ${workflows.length} scheduled workflows`
-        );
+      console.log(
+        `Checking ${workflows.length} scheduled workflows`
+      );
 
-        await Promise.all(
-          workflows.map((workflow) =>
+      await Promise.all(
+        workflows.map(
+          (workflow) =>
             processWorkflow(
               workflow,
               now
             )
-          )
-        );
-
-      } catch (error) {
-        console.error(
-          "Scheduler error:",
-          error
-        );
-      }
-    },
-    {
-      timezone: DEFAULT_TIMEZONE,
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Scheduler error:",
+        error
+      );
+    } finally {
+      await releaseSchedulerLock(
+        lockToken
+      );
     }
+  };
+
+let schedulerTask = null;
+
+const startScheduler = () => {
+  if (schedulerTask) {
+    console.log(
+      "Scheduler already running"
+    );
+
+    return;
+  }
+
+  console.log(
+    "Scheduler started"
+  );
+
+  schedulerTask =
+    cron.schedule(
+      "* * * * *",
+      runSchedulerTick,
+      {
+        timezone:
+          DEFAULT_TIMEZONE,
+      }
+    );
+};
+
+const stopScheduler = () => {
+  if (!schedulerTask) {
+    return;
+  }
+
+  schedulerTask.stop();
+  schedulerTask = null;
+
+  console.log(
+    "Scheduler stopped"
   );
 };
 
-module.exports =startScheduler;
+module.exports = {
+  startScheduler,
+  stopScheduler,
+};

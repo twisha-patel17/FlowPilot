@@ -176,9 +176,9 @@ const refreshAccessToken = async (req, res) => {
       process.env.REFRESH_TOKEN_SECRET
     );
 
-    const user = await User.findById(decoded.userId).select(
-      "+refreshToken"
-    );
+    const user = await User.findById(
+      decoded.userId
+    ).select("+refreshToken");
 
     if (!user || !user.refreshToken) {
       return res.status(401).json({
@@ -186,7 +186,9 @@ const refreshAccessToken = async (req, res) => {
       });
     }
 
-    const hashedToken = hashToken(refreshToken);
+    const hashedToken = hashToken(
+      refreshToken
+    );
 
     if (hashedToken !== user.refreshToken) {
       return res.status(401).json({
@@ -194,18 +196,47 @@ const refreshAccessToken = async (req, res) => {
       });
     }
 
-    const newAccessToken = generateAccessToken(
-      user._id.toString()
+    const newRefreshToken =
+      generateRefreshToken(
+        user._id.toString()
+      );
+
+    const newAccessToken =
+      generateAccessToken(
+        user._id.toString()
+      );
+
+    user.refreshToken = hashToken(
+      newRefreshToken
+    );
+
+    await user.save();
+
+    res.cookie(
+      "refreshToken",
+      newRefreshToken,
+      {
+        httpOnly: true,
+        secure:
+          process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge:
+          7 * 24 * 60 * 60 * 1000,
+      }
     );
 
     return res.status(200).json({
       accessToken: newAccessToken,
     });
   } catch (error) {
-    console.error("Refresh token error:", error);
+    console.error(
+      "Refresh token error:",
+      error
+    );
 
     return res.status(401).json({
-      message: "Invalid or expired refresh token",
+      message:
+        "Invalid or expired refresh token",
     });
   }
 };
