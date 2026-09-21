@@ -8,6 +8,18 @@ const Workspace = require("../models/Workspace");
 
 const workflowQueue = require("../services/queue/workflowQueue");
 
+const WEBHOOK_DELIVERY_LIMIT = 100;
+
+const sanitizeWebhook = (webhook) => {
+  const data = webhook?.toObject
+    ? webhook.toObject()
+    : { ...webhook };
+
+  delete data.secret;
+
+  return data;
+};
+
 const verifyWebhookSignature = (
   req,
   secret
@@ -17,12 +29,8 @@ const verifyWebhookSignature = (
   }
 
   const signature =
-    req.headers[
-      "x-flowpilot-signature"
-    ] ||
-    req.headers[
-      "x-hub-signature-256"
-    ];
+    req.headers["x-flowpilot-signature"] ||
+    req.headers["x-hub-signature-256"];
 
   if (!signature) {
     return false;
@@ -81,6 +89,23 @@ const verifyWebhookSignature = (
   );
 };
 
+const getWorkspace = async (
+  workspaceId,
+  userId
+) => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  return Workspace.findOne({
+    _id: workspaceId,
+    "members.user": userId,
+    status: "active",
+  })
+    .select("_id")
+    .lean();
+};
+
 const createWebhook = async (
   req,
   res,
@@ -94,14 +119,27 @@ const createWebhook = async (
     } = req.body;
 
     const workspaceId =
-      req.headers[
-        "x-workspace-id"
-      ];
+      req.headers["x-workspace-id"];
 
-    if (!name) {
+    const trimmedName =
+      typeof name === "string"
+        ? name.trim()
+        : "";
+
+    if (!trimmedName) {
       return res.status(400).json({
         message:
           "Webhook name is required",
+      });
+    }
+
+    if (
+      trimmedName.length < 2 ||
+      trimmedName.length > 100
+    ) {
+      return res.status(400).json({
+        message:
+          "Webhook name must be between 2 and 100 characters",
       });
     }
 
@@ -120,11 +158,10 @@ const createWebhook = async (
     }
 
     const workspace =
-      await Workspace.findOne({
-        _id: workspaceId,
-        "members.user":
-          req.user._id,
-      });
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -138,41 +175,85 @@ const createWebhook = async (
         _id: workflowId,
         owner: req.user._id,
         workspace: workspaceId,
-      });
+        status: "active",
+      }).select(
+        "_id name workspace status"
+      );
 
     if (!workflow) {
       return res.status(404).json({
         message:
-          "Workflow not found",
+          "Active workflow not found",
       });
     }
 
-    const publicId =
-      crypto
-        .randomBytes(6)
-        .toString("hex");
-
-    const secret =
-      crypto
-        .randomBytes(32)
-        .toString("hex");
-
-    const webhook =
-      await Webhook.create({
-        name: name.trim(),
-        publicId,
-        secret,
-        owner: req.user._id,
-        workspace: workspaceId,
-        workflow: workflow._id,
-        events: events || [],
-        active: true,
+    if (
+      events !== undefined &&
+      (
+        !Array.isArray(events) ||
+        events.some(
+          (event) =>
+            typeof event !== "string" ||
+            event.trim().length === 0 ||
+            event.length > 200
+        )
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Webhook events must be an array of valid event names",
       });
+    }
+
+    const normalizedEvents = [
+      ...new Set(
+        Array.isArray(events)
+          ? events.map((event) =>
+              event.trim()
+            )
+          : []
+      ),
+    ];
+
+    let webhook;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const publicId =
+        crypto
+          .randomBytes(16)
+          .toString("hex");
+
+      const secret =
+        crypto
+          .randomBytes(32)
+          .toString("hex");
+
+      try {
+        webhook =
+          await Webhook.create({
+            name: trimmedName,
+            publicId,
+            secret,
+            owner: req.user._id,
+            workspace: workspaceId,
+            workflow: workflow._id,
+            events: normalizedEvents,
+            active: true,
+          });
+
+        break;
+      } catch (error) {
+        if (
+          error.code !== 11000 ||
+          attempt === 2
+        ) {
+          throw error;
+        }
+      }
+    }
 
     const webhookResponse =
-      webhook.toObject();
-
-    delete webhookResponse.secret;
+      sanitizeWebhook(webhook);
 
     return res.status(201).json({
       message:
@@ -181,10 +262,11 @@ const createWebhook = async (
       webhook:
         webhookResponse,
 
-      secret,
+      secret:
+        webhook.secret,
 
       endpoint:
-        `/api/webhooks/${publicId}`,
+        `/api/webhooks/${webhook.publicId}`,
     });
   } catch (error) {
     next(error);
@@ -198,9 +280,7 @@ const getWebhooks = async (
 ) => {
   try {
     const workspaceId =
-      req.headers[
-        "x-workspace-id"
-      ];
+      req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -210,11 +290,10 @@ const getWebhooks = async (
     }
 
     const workspace =
-      await Workspace.findOne({
-        _id: workspaceId,
-        "members.user":
-          req.user._id,
-      });
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -228,14 +307,18 @@ const getWebhooks = async (
         owner: req.user._id,
         workspace: workspaceId,
       })
-        .select("-secret")
+        .select(
+          "-secret"
+        )
         .populate(
           "workflow",
-          "name"
+          "name status"
         )
         .sort({
           createdAt: -1,
-        });
+        })
+        .limit(100)
+        .lean();
 
     return res.status(200).json({
       webhooks,
@@ -255,9 +338,7 @@ const toggleWebhook = async (
       req.params;
 
     const workspaceId =
-      req.headers[
-        "x-workspace-id"
-      ];
+      req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -267,11 +348,10 @@ const toggleWebhook = async (
     }
 
     const workspace =
-      await Workspace.findOne({
-        _id: workspaceId,
-        "members.user":
-          req.user._id,
-      });
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -285,7 +365,7 @@ const toggleWebhook = async (
         _id: id,
         owner: req.user._id,
         workspace: workspaceId,
-      }).select("-secret");
+      });
 
     if (!webhook) {
       return res.status(404).json({
@@ -299,17 +379,14 @@ const toggleWebhook = async (
 
     await webhook.save();
 
-    const webhookResponse =
-      webhook.toObject();
-
-    delete webhookResponse.secret;
-
     return res.status(200).json({
       message:
         "Webhook status updated",
 
       webhook:
-        webhookResponse,
+        sanitizeWebhook(
+          webhook
+        ),
     });
   } catch (error) {
     next(error);
@@ -323,9 +400,7 @@ const getWebhookDeliveries =
         req.params;
 
       const workspaceId =
-        req.headers[
-          "x-workspace-id"
-        ];
+        req.headers["x-workspace-id"];
 
       if (!workspaceId) {
         return res.status(400).json({
@@ -335,11 +410,10 @@ const getWebhookDeliveries =
       }
 
       const workspace =
-        await Workspace.findOne({
-          _id: workspaceId,
-          "members.user":
-            req.user._id,
-        });
+        await getWorkspace(
+          workspaceId,
+          req.user._id
+        );
 
       if (!workspace) {
         return res.status(403).json({
@@ -353,7 +427,9 @@ const getWebhookDeliveries =
           _id: id,
           owner: req.user._id,
           workspace: workspaceId,
-        });
+        })
+          .select("_id")
+          .lean();
 
       if (!webhook) {
         return res.status(404).json({
@@ -366,9 +442,16 @@ const getWebhookDeliveries =
         await WebhookDelivery.find({
           webhook: webhook._id,
         })
+          .select(
+            "_id webhook deliveryId event status responseCode duration error execution receivedAt createdAt updatedAt"
+          )
           .sort({
             receivedAt: -1,
-          });
+          })
+          .limit(
+            WEBHOOK_DELIVERY_LIMIT
+          )
+          .lean();
 
       return res.status(200).json({
         deliveries,
@@ -394,7 +477,9 @@ const receiveWebhook = async (
       await Webhook.findOne({
         publicId,
       })
-        .select("+secret")
+        .select(
+          "+secret"
+        )
         .populate("workflow");
 
     if (!webhook) {
@@ -449,19 +534,30 @@ const receiveWebhook = async (
       });
     }
 
-    const workspace = await Workspace.findOne({
-  _id: webhook.workspace,
-  status: "active",
-})
-  .select("_id")
-  .lean();
+    if (
+      webhook.workflow.status !==
+      "active"
+    ) {
+      return res.status(410).json({
+        message:
+          "Webhook workflow is no longer active",
+      });
+    }
 
-if (!workspace) {
-  return res.status(410).json({
-    message:
-      "Webhook workspace is no longer active",
-  });
-}
+    const workspace =
+      await Workspace.findOne({
+        _id: webhook.workspace,
+        status: "active",
+      })
+        .select("_id")
+        .lean();
+
+    if (!workspace) {
+      return res.status(410).json({
+        message:
+          "Webhook workspace is no longer active",
+      });
+    }
 
     const event =
       req.headers[
@@ -541,8 +637,7 @@ if (!workspace) {
     }
 
     if (
-      webhook.events.length >
-        0 &&
+      webhook.events.length > 0 &&
       event !== "unknown" &&
       !webhook.events.includes(
         event
@@ -569,19 +664,28 @@ if (!workspace) {
       });
     }
 
+    if (
+      typeof deliveryId !==
+        "string" ||
+      deliveryId.length > 200
+    ) {
+      return res.status(400).json({
+        message:
+          "Invalid webhook delivery ID",
+      });
+    }
+
     const existingDelivery =
       await WebhookDelivery.findOne({
         webhook: webhook._id,
         deliveryId,
-      });
+      })
+        .select(
+          "execution status deliveryId"
+        )
+        .lean();
 
     if (existingDelivery) {
-      console.log(
-        `Duplicate webhook delivery ignored: ` +
-        `${webhook._id} | ` +
-        `Delivery: ${deliveryId}`
-      );
-
       return res.status(200).json({
         message:
           "Webhook delivery already processed",
@@ -599,11 +703,6 @@ if (!workspace) {
       });
     }
 
-    webhook.lastEventAt =
-      new Date();
-
-    await webhook.save();
-
     const executionInput =
       req.body || {};
 
@@ -615,7 +714,8 @@ if (!workspace) {
         webhook.workflow.name,
 
       description:
-        webhook.workflow.description,
+        webhook.workflow.description ||
+        "",
 
       workspace:
         webhook.workflow.workspace,
@@ -686,7 +786,6 @@ if (!workspace) {
             execution._id,
         });
     } catch (deliveryError) {
-     
       if (
         deliveryError.code ===
         11000
@@ -702,13 +801,11 @@ if (!workspace) {
               webhook._id,
 
             deliveryId,
-          });
-
-        console.log(
-          `Concurrent duplicate webhook ignored: ` +
-          `${webhook._id} | ` +
-          `Delivery: ${deliveryId}`
-        );
+          })
+            .select(
+              "execution status"
+            )
+            .lean();
 
         return res.status(200).json({
           message:
@@ -746,12 +843,27 @@ if (!workspace) {
           }
         );
 
+      await Webhook.findOneAndUpdate(
+        {
+          _id:
+            webhook._id,
+
+          active: true,
+        },
+        {
+          $set: {
+            lastEventAt:
+              new Date(),
+          },
+        }
+      );
+
       console.log(
         `Webhook workflow queued: ` +
-        `${webhook.workflow.name} | ` +
-        `Execution: ${execution._id} | ` +
-        `Delivery: ${deliveryId} | ` +
-        `Job: ${job.id}`
+          `${webhook.workflow.name} | ` +
+          `Execution: ${execution._id} | ` +
+          `Delivery: ${deliveryId} | ` +
+          `Job: ${job.id}`
       );
 
       return res.status(200).json({
@@ -768,74 +880,62 @@ if (!workspace) {
         Date.now() -
         startedAt;
 
-      const failedExecution =
-        await Execution.findOneAndUpdate(
-          {
-            _id:
-              execution._id,
+      await Execution.findOneAndUpdate(
+        {
+          _id:
+            execution._id,
 
+          status:
+            "pending",
+        },
+        {
+          $set: {
             status:
-              "pending",
+              "failed",
+
+            error:
+              "Failed to queue workflow execution",
+
+            finishedAt:
+              new Date(),
           },
-          {
-            $set: {
-              status:
-                "failed",
+        }
+      );
 
-              error:
-                queueError.message ||
-                "Failed to queue workflow execution",
+      await WebhookDelivery.findOneAndUpdate(
+        {
+          _id:
+            webhookDelivery._id,
+        },
+        {
+          $set: {
+            status:
+              "failed",
 
-              finishedAt:
-                new Date(),
-            },
+            responseCode:
+              500,
+
+            duration,
+
+            error:
+              "Failed to queue workflow execution",
           },
-          {
-            new: true,
-          }
-        );
+        }
+      );
 
-      webhookDelivery.status =
-        "failed";
-
-      webhookDelivery.responseCode =
-        500;
-
-      webhookDelivery.duration =
-        duration;
-
-      webhookDelivery.error =
-        queueError.message ||
-        "Failed to queue workflow execution";
-
-      await webhookDelivery.save();
-
-      if (failedExecution) {
-        return res.status(500).json({
-          message:
-            "Failed to queue workflow execution",
-
-          error:
-            queueError.message,
-
-          executionId:
-            failedExecution._id,
-
-          deliveryId,
-        });
-      }
+      console.error(
+        "Failed to queue webhook workflow:",
+        queueError.message
+      );
 
       return res.status(500).json({
         message:
           "Failed to queue workflow execution",
 
-        error:
-          queueError.message,
+        deliveryId,
 
         executionId:
           execution._id,
-
-        deliveryId,
       });
     }
   } catch (error) {

@@ -12,16 +12,13 @@ const protect = require("../middleware/authMiddleware");
 const validate = require("../middleware/validate");
 
 const {
-  createWebhookSchema,
-  updateWebhookSchema,
+  createWebhookSchema
 } = require("../validators/webhookValidator");
 
 const router = express.Router();
 
-// Public webhook endpoint
 router.post("/:publicId", receiveWebhook);
 
-// Protected webhook management routes
 router.use(protect);
 
 router.post(
