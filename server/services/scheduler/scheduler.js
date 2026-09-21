@@ -3,6 +3,7 @@ const crypto = require("crypto");
 
 const Workflow = require("../../models/Workflow");
 const Execution = require("../../models/Execution");
+const Workspace = require("../../models/Workspace");
 
 const workflowQueue = require("../queue/workflowQueue");
 const redisConnection = require("../../config/redis");
@@ -245,11 +246,46 @@ const shouldRunSchedule = (
   return true;
 };
 
+const isWorkspaceActive = async (
+  workspaceId
+) => {
+  const workspace =
+    await Workspace.findOne({
+      _id: workspaceId,
+      status: "active",
+    })
+      .select("_id")
+      .lean();
+
+  return Boolean(workspace);
+};
+
 const createScheduledExecution =
   async (
     workflow,
     scheduledAt
   ) => {
+    /*
+     * Workspace deletion is authoritative.
+     *
+     * Never create a scheduled execution for a
+     * workspace that has entered the deleting state.
+     */
+    const workspaceActive =
+      await isWorkspaceActive(
+        workflow.workspace
+      );
+
+    if (!workspaceActive) {
+      console.log(
+        `Scheduled execution skipped: ` +
+        `workspace is not active | ` +
+        `Workflow: ${workflow.name}`
+      );
+
+      return null;
+    }
+
     const workflowSnapshot = {
       _id:
         workflow._id,
@@ -300,7 +336,6 @@ const createScheduledExecution =
 
       return execution;
     } catch (error) {
-     
       if (
         error.code === 11000
       ) {
@@ -380,6 +415,25 @@ const processWorkflow =
     now
   ) => {
     try {
+      /*
+       * Re-check workspace state before doing any
+       * scheduling work.
+       */
+      const workspaceActive =
+        await isWorkspaceActive(
+          workflow.workspace
+        );
+
+      if (!workspaceActive) {
+        console.log(
+          `Scheduled workflow skipped: ` +
+          `workspace is not active | ` +
+          `Workflow: ${workflow.name}`
+        );
+
+        return;
+      }
+
       const config =
         workflow.trigger?.config ||
         {};
@@ -515,10 +569,37 @@ const runSchedulerTick =
     try {
       const now = new Date();
 
+      /*
+       * Only workflows belonging to active workspaces
+       * are eligible for scheduled execution.
+       */
+      const activeWorkspaces =
+        await Workspace.find({
+          status: "active",
+        })
+          .select("_id")
+          .lean();
+
+      if (!activeWorkspaces.length) {
+        return;
+      }
+
+      const workspaceIds =
+        activeWorkspaces.map(
+          (workspace) =>
+            workspace._id
+        );
+
       const workflows =
         await Workflow.find({
           status: "active",
-          "trigger.type": "schedule",
+
+          "trigger.type":
+            "schedule",
+
+          workspace: {
+            $in: workspaceIds,
+          },
         });
 
       if (!workflows.length) {

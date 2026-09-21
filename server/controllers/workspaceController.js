@@ -1,4 +1,13 @@
 const Workspace = require("../models/Workspace");
+const Workflow = require("../models/Workflow");
+const Execution = require("../models/Execution");
+const Webhook = require("../models/Webhook");
+const WebhookDelivery = require("../models/WebhookDelivery");
+const Integration = require("../models/Integration");
+
+const {
+  cancelExecution,
+} = require("../services/workflow/executionCancellation");
 
 const createWorkspace = async (req, res, next) => {
   try {
@@ -39,6 +48,7 @@ const getWorkspaces = async (req, res, next) => {
   try {
     const workspaces = await Workspace.find({
       "members.user": req.user._id,
+      status: "active",
     })
       .sort({ createdAt: 1 })
       .lean();
@@ -58,6 +68,7 @@ const getWorkspace = async (req, res, next) => {
     const workspace = await Workspace.findOne({
       _id: id,
       "members.user": req.user._id,
+      status: "active",
     }).lean();
 
     if (!workspace) {
@@ -82,6 +93,7 @@ const updateWorkspace = async (req, res, next) => {
     const workspace = await Workspace.findOne({
       _id: id,
       owner: req.user._id,
+      status: "active",
     });
 
     if (!workspace) {
@@ -120,16 +132,98 @@ const deleteWorkspace = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const workspace = await Workspace.findOneAndDelete({
-      _id: id,
-      owner: req.user._id,
-    });
+    const workspace = await Workspace.findOneAndUpdate(
+      {
+        _id: id,
+        owner: req.user._id,
+        status: "active",
+      },
+      {
+        $set: {
+          status: "deleting",
+        },
+      },
+      {
+        new: true,
+      }
+    );
 
     if (!workspace) {
       return res.status(404).json({
         message: "Workspace not found",
       });
     }
+
+    const activeExecutions =
+      await Execution.find({
+        workspace: workspace._id,
+        status: {
+          $in: ["pending", "running"],
+        },
+      })
+        .select("_id")
+        .lean();
+
+    const executionIds =
+      activeExecutions.map(
+        (execution) => execution._id
+      );
+
+    if (executionIds.length > 0) {
+      await Execution.updateMany(
+        {
+          _id: {
+            $in: executionIds,
+          },
+          workspace: workspace._id,
+          status: {
+            $in: ["pending", "running"],
+          },
+        },
+        {
+          $set: {
+            status: "cancelled",
+            error: "Workspace deleted",
+            cancelledAt: new Date(),
+            finishedAt: new Date(),
+          },
+        }
+      );
+
+      for (const executionId of executionIds) {
+        cancelExecution(executionId);
+      }
+    }
+
+    await WebhookDelivery.deleteMany({
+      webhook: {
+        $in: await Webhook.find({
+          workspace: workspace._id,
+        }).distinct("_id"),
+      },
+    });
+
+    await Webhook.deleteMany({
+      workspace: workspace._id,
+    });
+
+    await Integration.deleteMany({
+      workspace: workspace._id,
+    });
+
+    await Execution.deleteMany({
+      workspace: workspace._id,
+    });
+
+    await Workflow.deleteMany({
+      workspace: workspace._id,
+    });
+
+    await Workspace.deleteOne({
+      _id: workspace._id,
+      owner: req.user._id,
+      status: "deleting",
+    });
 
     return res.status(200).json({
       message: "Workspace deleted successfully",

@@ -449,6 +449,20 @@ const receiveWebhook = async (
       });
     }
 
+    const workspace = await Workspace.findOne({
+  _id: webhook.workspace,
+  status: "active",
+})
+  .select("_id")
+  .lean();
+
+if (!workspace) {
+  return res.status(410).json({
+    message:
+      "Webhook workspace is no longer active",
+  });
+}
+
     const event =
       req.headers[
         "x-webhook-event"

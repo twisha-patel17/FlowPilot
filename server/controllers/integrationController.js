@@ -1,7 +1,13 @@
 const Integration = require("../models/Integration");
 const Workspace = require("../models/Workspace");
 
-const getWorkspace = async (workspaceId, userId) => {
+const { encryptCredentials } = require("../utils/credentialEncryption");
+const { credentialsByProvider } = require("../validators/integrationValidator");
+
+const getWorkspace = async (
+  workspaceId,
+  userId
+) => {
   if (!workspaceId) {
     return null;
   }
@@ -9,20 +15,29 @@ const getWorkspace = async (workspaceId, userId) => {
   return Workspace.findOne({
     _id: workspaceId,
     "members.user": userId,
-  });
+    status: "active",
+  }).select("_id");
 };
 
-const sanitizeIntegration = (integration) => {
-  const data = integration.toObject
-    ? integration.toObject()
-    : { ...integration };
+const sanitizeIntegration = (
+  integration
+) => {
+  const data =
+    integration.toObject
+      ? integration.toObject()
+      : { ...integration };
 
   delete data.credentials;
+  delete data.credentialsEncrypted;
 
   return data;
 };
 
-const createIntegration = async (req, res, next) => {
+const createIntegration = async (
+  req,
+  res,
+  next
+) => {
   try {
     const {
       name,
@@ -36,26 +51,40 @@ const createIntegration = async (req, res, next) => {
 
     if (!name) {
       return res.status(400).json({
-        message: "Integration name is required",
+        message:
+          "Integration name is required",
       });
     }
 
     if (!provider) {
       return res.status(400).json({
-        message: "Integration provider is required",
+        message:
+          "Integration provider is required",
       });
     }
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await getWorkspace(
-      workspaceId,
-      req.user._id
-    );
+    if (
+      credentials === undefined ||
+      credentials === null
+    ) {
+      return res.status(400).json({
+        message:
+          "Integration credentials are required",
+      });
+    }
+
+    const workspace =
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -64,40 +93,80 @@ const createIntegration = async (req, res, next) => {
       });
     }
 
-    const integration = await Integration.create({
-      name,
-      provider,
-      owner: req.user._id,
-      workspace: workspaceId,
-      credentials: credentials || {},
-      metadata: metadata || {},
-      status: "connected",
-    });
+    const credentialsSchema =
+  credentialsByProvider[provider];
+
+if (!credentialsSchema) {
+  return res.status(400).json({
+    message: "Unsupported integration provider",
+  });
+}
+
+const {
+  error: credentialsError,
+  value: validatedCredentials,
+} =
+  credentialsSchema.validate(
+    credentials
+  );
+
+if (credentialsError) {
+  return res.status(400).json({
+    message:
+      credentialsError.details[0].message,
+  });
+}
+
+    const credentialsEncrypted =
+  encryptCredentials(
+    validatedCredentials
+  );
+
+    const integration =
+      await Integration.create({
+        name,
+        provider,
+        owner: req.user._id,
+        workspace: workspaceId,
+        credentialsEncrypted,
+        metadata: metadata || {},
+        status: "connected",
+      });
 
     return res.status(201).json({
-      message: "Integration created successfully",
-      integration: sanitizeIntegration(integration),
+      message:
+        "Integration created successfully",
+      integration:
+        sanitizeIntegration(
+          integration
+        ),
     });
   } catch (error) {
     next(error);
   }
 };
 
-const getIntegrations = async (req, res, next) => {
+const getIntegrations = async (
+  req,
+  res,
+  next
+) => {
   try {
     const workspaceId =
       req.headers["x-workspace-id"];
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await getWorkspace(
-      workspaceId,
-      req.user._id
-    );
+    const workspace =
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -106,22 +175,32 @@ const getIntegrations = async (req, res, next) => {
       });
     }
 
-    const integrations = await Integration.find({
-      owner: req.user._id,
-      workspace: workspaceId,
-    }).sort({ createdAt: -1 });
+    const integrations =
+      await Integration.find({
+        owner: req.user._id,
+        workspace: workspaceId,
+      })
+        .sort({
+          createdAt: -1,
+        })
+        .lean();
 
     return res.status(200).json({
-      integrations: integrations.map(
-        sanitizeIntegration
-      ),
+      integrations:
+        integrations.map(
+          sanitizeIntegration
+        ),
     });
   } catch (error) {
     next(error);
   }
 };
 
-const getIntegration = async (req, res, next) => {
+const getIntegration = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { id } = req.params;
 
@@ -130,14 +209,16 @@ const getIntegration = async (req, res, next) => {
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await getWorkspace(
-      workspaceId,
-      req.user._id
-    );
+    const workspace =
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -146,27 +227,36 @@ const getIntegration = async (req, res, next) => {
       });
     }
 
-    const integration = await Integration.findOne({
-      _id: id,
-      owner: req.user._id,
-      workspace: workspaceId,
-    });
+    const integration =
+      await Integration.findOne({
+        _id: id,
+        owner: req.user._id,
+        workspace: workspaceId,
+      }).lean();
 
     if (!integration) {
       return res.status(404).json({
-        message: "Integration not found",
+        message:
+          "Integration not found",
       });
     }
 
     return res.status(200).json({
-      integration: sanitizeIntegration(integration),
+      integration:
+        sanitizeIntegration(
+          integration
+        ),
     });
   } catch (error) {
     next(error);
   }
 };
 
-const updateIntegration = async (req, res, next) => {
+const updateIntegration = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { id } = req.params;
 
@@ -181,14 +271,16 @@ const updateIntegration = async (req, res, next) => {
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await getWorkspace(
-      workspaceId,
-      req.user._id
-    );
+    const workspace =
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -197,15 +289,17 @@ const updateIntegration = async (req, res, next) => {
       });
     }
 
-    const integration = await Integration.findOne({
-      _id: id,
-      owner: req.user._id,
-      workspace: workspaceId,
-    });
+    const integration =
+      await Integration.findOne({
+        _id: id,
+        owner: req.user._id,
+        workspace: workspaceId,
+      });
 
     if (!integration) {
       return res.status(404).json({
-        message: "Integration not found",
+        message:
+          "Integration not found",
       });
     }
 
@@ -214,11 +308,42 @@ const updateIntegration = async (req, res, next) => {
     }
 
     if (credentials !== undefined) {
-      integration.credentials = credentials;
-    }
+  const credentialsSchema =
+    credentialsByProvider[
+      integration.provider
+    ];
+
+  if (!credentialsSchema) {
+    return res.status(400).json({
+      message:
+        "Unsupported integration provider",
+    });
+  }
+
+  const {
+    error: credentialsError,
+    value: validatedCredentials,
+  } =
+    credentialsSchema.validate(
+      credentials
+    );
+
+  if (credentialsError) {
+    return res.status(400).json({
+      message:
+        credentialsError.details[0].message,
+    });
+  }
+
+  integration.credentialsEncrypted =
+    encryptCredentials(
+      validatedCredentials
+    );
+}
 
     if (metadata !== undefined) {
-      integration.metadata = metadata;
+      integration.metadata =
+        metadata;
     }
 
     await integration.save();
@@ -226,14 +351,21 @@ const updateIntegration = async (req, res, next) => {
     return res.status(200).json({
       message:
         "Integration updated successfully",
-      integration: sanitizeIntegration(integration),
+      integration:
+        sanitizeIntegration(
+          integration
+        ),
     });
   } catch (error) {
     next(error);
   }
 };
 
-const toggleIntegration = async (req, res, next) => {
+const toggleIntegration = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { id } = req.params;
 
@@ -242,14 +374,16 @@ const toggleIntegration = async (req, res, next) => {
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await getWorkspace(
-      workspaceId,
-      req.user._id
-    );
+    const workspace =
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -258,20 +392,23 @@ const toggleIntegration = async (req, res, next) => {
       });
     }
 
-    const integration = await Integration.findOne({
-      _id: id,
-      owner: req.user._id,
-      workspace: workspaceId,
-    });
+    const integration =
+      await Integration.findOne({
+        _id: id,
+        owner: req.user._id,
+        workspace: workspaceId,
+      });
 
     if (!integration) {
       return res.status(404).json({
-        message: "Integration not found",
+        message:
+          "Integration not found",
       });
     }
 
     integration.status =
-      integration.status === "connected"
+      integration.status ===
+      "connected"
         ? "disconnected"
         : "connected";
 
@@ -280,14 +417,21 @@ const toggleIntegration = async (req, res, next) => {
     return res.status(200).json({
       message:
         "Integration status updated",
-      integration: sanitizeIntegration(integration),
+      integration:
+        sanitizeIntegration(
+          integration
+        ),
     });
   } catch (error) {
     next(error);
   }
 };
 
-const deleteIntegration = async (req, res, next) => {
+const deleteIntegration = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { id } = req.params;
 
@@ -296,14 +440,16 @@ const deleteIntegration = async (req, res, next) => {
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
-    const workspace = await getWorkspace(
-      workspaceId,
-      req.user._id
-    );
+    const workspace =
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
 
     if (!workspace) {
       return res.status(403).json({
@@ -321,7 +467,8 @@ const deleteIntegration = async (req, res, next) => {
 
     if (!integration) {
       return res.status(404).json({
-        message: "Integration not found",
+        message:
+          "Integration not found",
       });
     }
 

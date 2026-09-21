@@ -17,6 +17,13 @@ const workspaceSchema = new mongoose.Schema(
       index: true,
     },
 
+    status: {
+      type: String,
+      enum: ["active", "deleting"],
+      default: "active",
+      index: true,
+    },
+
     members: [
       {
         user: {

@@ -125,6 +125,7 @@ app.use(
     allowedHeaders: [
       "Content-Type",
       "Authorization",
+      "X-Workspace-Id",
       "X-Webhook-Signature",
       "X-Hub-Signature-256",
       "X-Webhook-Delivery-Id",

@@ -30,6 +30,100 @@ const isValidTimezone = (timezone) => {
   }
 };
 
+const isValidTime = (time) => {
+  if (
+    typeof time !== "string" ||
+    !/^\d{2}:\d{2}$/.test(time)
+  ) {
+    return false;
+  }
+
+  const [hours, minutes] =
+    time.split(":").map(Number);
+
+  return (
+    hours >= 0 &&
+    hours <= 23 &&
+    minutes >= 0 &&
+    minutes <= 59
+  );
+};
+
+const validateScheduleConfig = ({
+  frequency,
+  time,
+  timezone,
+  days,
+}) => {
+  if (
+    !allowedFrequencies.includes(
+      frequency
+    )
+  ) {
+    return "Invalid schedule frequency";
+  }
+
+  if (!isValidTime(time)) {
+    return "Schedule time must be a valid HH:mm time";
+  }
+
+  if (
+    typeof timezone !== "string" ||
+    !timezone.trim()
+  ) {
+    return "Timezone must be a valid string";
+  }
+
+  const normalizedTimezone =
+    timezone.trim();
+
+  if (
+    !isValidTimezone(
+      normalizedTimezone
+    )
+  ) {
+    return "Invalid IANA timezone";
+  }
+
+  if (frequency === "custom") {
+    if (
+      !Array.isArray(days) ||
+      days.length === 0
+    ) {
+      return "Custom schedules require at least one day";
+    }
+
+    const uniqueDays = [
+      ...new Set(days),
+    ];
+
+    if (
+      uniqueDays.length !== days.length
+    ) {
+      return "Schedule days must be unique";
+    }
+
+    const invalidDay =
+      days.some(
+        (day) =>
+          !allowedDays.includes(day)
+      );
+
+    if (invalidDay) {
+      return "Invalid schedule day";
+    }
+  }
+
+  if (
+    frequency !== "custom" &&
+    days !== undefined
+  ) {
+    return "Schedule days can only be used with custom frequency";
+  }
+
+  return null;
+};
+
 const getWorkspace = async (
   workspaceId,
   userId
@@ -41,10 +135,15 @@ const getWorkspace = async (
   return Workspace.findOne({
     _id: workspaceId,
     "members.user": userId,
-  });
+    status: "active",
+  })
+    .select("_id")
+    .lean();
 };
 
-const formatSchedule = (workflow) => ({
+const formatSchedule = (
+  workflow
+) => ({
   _id: workflow._id,
   workflowId: workflow._id,
   workflowName: workflow.name,
@@ -87,14 +186,17 @@ const getSchedules = async (
         owner: req.user._id,
         workspace: workspaceId,
         "trigger.type": "schedule",
-      }).sort({
-        createdAt: -1,
-      });
+      })
+        .sort({
+          createdAt: -1,
+        })
+        .lean();
 
     return res.status(200).json({
-      schedules: workflows.map(
-        formatSchedule
-      ),
+      schedules:
+        workflows.map(
+          formatSchedule
+        ),
     });
   } catch (error) {
     next(error);
@@ -137,7 +239,7 @@ const getSchedule = async (
         owner: req.user._id,
         workspace: workspaceId,
         "trigger.type": "schedule",
-      });
+      }).lean();
 
     if (!workflow) {
       return res.status(404).json({
@@ -146,9 +248,8 @@ const getSchedule = async (
     }
 
     return res.status(200).json({
-      schedule: formatSchedule(
-        workflow
-      ),
+      schedule:
+        formatSchedule(workflow),
     });
   } catch (error) {
     next(error);
@@ -206,18 +307,6 @@ const updateSchedule = async (
       days,
     } = req.body;
 
-    if (
-      frequency === undefined &&
-      time === undefined &&
-      timezone === undefined &&
-      days === undefined
-    ) {
-      return res.status(400).json({
-        message:
-          "At least one schedule field is required",
-      });
-    }
-
     const currentConfig =
       workflow.trigger?.config || {};
 
@@ -226,172 +315,63 @@ const updateSchedule = async (
         ? frequency
         : currentConfig.frequency;
 
-    const nextDays =
-      days !== undefined
-        ? days
-        : currentConfig.days;
+    const nextTime =
+      time !== undefined
+        ? time
+        : currentConfig.time;
 
-    /*
-     * Frequency
-     */
-    if (frequency !== undefined) {
-      if (
-        !allowedFrequencies.includes(
-          frequency
-        )
-      ) {
-        return res.status(400).json({
-          message:
-            "Invalid schedule frequency",
-        });
-      }
+    const nextTimezone =
+      timezone !== undefined
+        ? timezone.trim()
+        : currentConfig.timezone;
 
-      workflow.trigger.config.frequency =
-        frequency;
-    }
+    let nextDays;
 
-    /*
-     * Days
-     */
     if (days !== undefined) {
-      if (
-        !Array.isArray(days) ||
-        days.length === 0
-      ) {
-        return res.status(400).json({
-          message:
-            "At least one schedule day is required",
-        });
-      }
-
-      const invalidDay =
-        days.some(
-          (day) =>
-            !allowedDays.includes(day)
-        );
-
-      if (invalidDay) {
-        return res.status(400).json({
-          message:
-            "Invalid schedule day",
-        });
-      }
-
-      const uniqueDays = [
-        ...new Set(days),
-      ];
-
-      if (
-        uniqueDays.length !==
-        days.length
-      ) {
-        return res.status(400).json({
-          message:
-            "Schedule days must be unique",
-        });
-      }
-
-      if (
-        nextFrequency !== "custom"
-      ) {
-        return res.status(400).json({
-          message:
-            "Schedule days can only be used with custom frequency",
-        });
-      }
-
-      workflow.trigger.config.days =
-        uniqueDays;
+      nextDays = days;
+    } else if (
+      nextFrequency === "custom"
+    ) {
+      nextDays = currentConfig.days;
+    } else {
+      nextDays = undefined;
     }
 
-    /*
-     * Custom frequency requires
-     * at least one selected day.
-     */
-    if (
-      nextFrequency === "custom" &&
-      (!Array.isArray(nextDays) ||
-        nextDays.length === 0)
-    ) {
+    const validationError =
+      validateScheduleConfig({
+        frequency:
+          nextFrequency,
+        time: nextTime,
+        timezone:
+          nextTimezone,
+        days: nextDays,
+      });
+
+    if (validationError) {
       return res.status(400).json({
-        message:
-          "Custom schedules require at least one day",
+        message: validationError,
       });
     }
 
-    /*
-     * Non-custom schedules should
-     * not retain custom days.
-     */
+    const nextConfig = {
+      frequency: nextFrequency,
+      time: nextTime,
+      timezone:
+        nextTimezone,
+    };
+
     if (
-      nextFrequency !== "custom"
+      nextFrequency === "custom"
     ) {
-      delete workflow.trigger.config
-        .days;
+      nextConfig.days = [
+        ...new Set(nextDays),
+      ];
     }
 
-    /*
-     * Time
-     */
-    if (time !== undefined) {
-      if (
-        typeof time !== "string" ||
-        !/^\d{2}:\d{2}$/.test(time)
-      ) {
-        return res.status(400).json({
-          message:
-            "Schedule time must use HH:mm format",
-        });
-      }
-
-      const [hours, minutes] =
-        time.split(":").map(Number);
-
-      if (
-        hours > 23 ||
-        minutes > 59
-      ) {
-        return res.status(400).json({
-          message:
-            "Schedule time must be a valid time",
-        });
-      }
-
-      workflow.trigger.config.time =
-        time;
-    }
-
-    /*
-     * Timezone
-     */
-    if (timezone !== undefined) {
-      if (
-        typeof timezone !== "string" ||
-        !timezone.trim()
-      ) {
-        return res.status(400).json({
-          message:
-            "Timezone must be a valid string",
-        });
-      }
-
-      const normalizedTimezone =
-        timezone.trim();
-
-      if (
-        !isValidTimezone(
-          normalizedTimezone
-        )
-      ) {
-        return res.status(400).json({
-          message:
-            "Invalid IANA timezone",
-        });
-      }
-
-      workflow.trigger.config.timezone =
-        normalizedTimezone;
-    }
+    workflow.trigger = {
+      type: "schedule",
+      config: nextConfig,
+    };
 
     workflow.markModified(
       "trigger"
