@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+
 import {
   FiArrowLeft,
   FiCheck,
@@ -11,140 +16,269 @@ import {
   FiChevronDown,
   FiChevronRight,
 } from "react-icons/fi";
+
 import { useNavigate, useParams } from "react-router-dom";
 
-import { getExecution } from "../api/executionApi";
+import {
+  getExecution,
+  cancelExecution,
+} from "../api/executionApi";
+
 import { useWorkspace } from "../context/WorkspaceContext";
+
 import socket from "../socket/socket";
 
 const ExecutionDetailsPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const queryClient = useQueryClient();
+
+  const queryClient =
+    useQueryClient();
 
   const {
     currentWorkspace,
     loading: workspaceLoading,
   } = useWorkspace();
 
-  const workspaceId = currentWorkspace?._id;
+  const workspaceId =
+    currentWorkspace?._id;
 
-  const [expandedStep, setExpandedStep] = useState(null);
-  const [activeTab, setActiveTab] = useState("output");
+  const [expandedStep, setExpandedStep] =
+    useState(null);
+
+  const [activeTab, setActiveTab] =
+    useState("output");
 
   const {
     data,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["execution", id, workspaceId],
+    queryKey: [
+      "execution",
+      id,
+      workspaceId,
+    ],
+
     queryFn: () =>
       getExecution({
         id,
         workspaceId,
       }),
-    enabled: !!id && !!workspaceId,
+
+    enabled:
+      Boolean(
+        id &&
+          workspaceId
+      ),
   });
 
-  const execution = data?.execution;
+  const execution =
+    data?.execution;
 
   /*
-   * Join the execution-specific Socket.IO room.
+   * Cancel execution mutation.
+   */
+  const cancelMutation =
+    useMutation({
+      mutationFn: () =>
+        cancelExecution({
+          id,
+          workspaceId,
+        }),
+
+      onSuccess: (response) => {
+        if (
+          response?.execution
+        ) {
+          queryClient.setQueryData(
+            [
+              "execution",
+              id,
+              workspaceId,
+            ],
+            {
+              execution:
+                response.execution,
+            }
+          );
+
+          queryClient.setQueryData(
+            [
+              "executions",
+              workspaceId,
+            ],
+            (currentData) => {
+              if (
+                !currentData?.executions
+              ) {
+                return currentData;
+              }
+
+              return {
+                ...currentData,
+
+                executions:
+                  currentData.executions.map(
+                    (item) =>
+                      item._id === id
+                        ? {
+                            ...item,
+                            ...response.execution,
+                          }
+                        : item
+                  ),
+              };
+            }
+          );
+        }
+
+        queryClient.invalidateQueries({
+          queryKey: [
+            "executions",
+            workspaceId,
+          ],
+        });
+      },
+    });
+
+  /*
+   * Join the execution-specific
+   * Socket.IO room.
    *
-   * The socket waits for connection before joining.
-   * This also handles automatic Socket.IO reconnects.
+   * The socket waits for connection
+   * before joining.
+   *
+   * This also handles automatic
+   * Socket.IO reconnects.
    */
   useEffect(() => {
-    if (!id || !workspaceId) return;
+    if (
+      !id ||
+      !workspaceId
+    ) {
+      return;
+    }
 
-    const joinExecutionRoom = () => {
-      socket.emit("join-execution", id);
-    };
+    const joinExecutionRoom =
+      () => {
+        socket.emit(
+          "join-execution",
+          id
+        );
+      };
 
-    const handleExecutionUpdate = (
-      updatedExecution
-    ) => {
-      if (!updatedExecution?._id) {
-        return;
-      }
-
-      /*
-       * Ignore updates belonging to another workspace.
-       */
-      if (
-        updatedExecution.workspace &&
-        updatedExecution.workspace.toString() !==
-          workspaceId.toString()
-      ) {
-        return;
-      }
-
-      /*
-       * Update execution detail cache.
-       */
-      queryClient.setQueryData(
-        ["execution", id, workspaceId],
-        {
-          execution: updatedExecution,
+    const handleExecutionUpdate =
+      (updatedExecution) => {
+        if (
+          !updatedExecution?._id
+        ) {
+          return;
         }
-      );
 
-      /*
-       * Update execution list cache if it exists.
-       */
-      queryClient.setQueryData(
-        ["executions", workspaceId],
-        (currentData) => {
-          if (!currentData?.executions) {
-            return currentData;
+        /*
+         * Ignore updates belonging
+         * to another workspace.
+         */
+        if (
+          updatedExecution.workspace &&
+          updatedExecution.workspace.toString() !==
+            workspaceId.toString()
+        ) {
+          return;
+        }
+
+        /*
+         * Update execution detail
+         * cache.
+         */
+        queryClient.setQueryData(
+          [
+            "execution",
+            id,
+            workspaceId,
+          ],
+          {
+            execution:
+              updatedExecution,
           }
+        );
 
-          const existingIndex =
-            currentData.executions.findIndex(
-              (item) =>
-                item._id ===
-                updatedExecution._id
-            );
+        /*
+         * Update execution list
+         * cache if it exists.
+         */
+        queryClient.setQueryData(
+          [
+            "executions",
+            workspaceId,
+          ],
+          (currentData) => {
+            if (
+              !currentData?.executions
+            ) {
+              return currentData;
+            }
 
-          /*
-           * Execution does not exist in the list yet.
-           */
-          if (existingIndex === -1) {
+            const existingIndex =
+              currentData.executions.findIndex(
+                (item) =>
+                  item._id ===
+                  updatedExecution._id
+              );
+
+            /*
+             * Execution does not
+             * exist in the list yet.
+             */
+            if (
+              existingIndex === -1
+            ) {
+              return {
+                ...currentData,
+
+                executions: [
+                  updatedExecution,
+                  ...currentData.executions,
+                ].slice(0, 100),
+              };
+            }
+
+            /*
+             * Update existing
+             * execution.
+             */
+            const updatedExecutions =
+              [
+                ...currentData.executions,
+              ];
+
+            updatedExecutions[
+              existingIndex
+            ] = {
+              ...updatedExecutions[
+                existingIndex
+              ],
+
+              ...updatedExecution,
+            };
+
             return {
               ...currentData,
-              executions: [
-                updatedExecution,
-                ...currentData.executions,
-              ],
+
+              executions:
+                updatedExecutions,
             };
           }
-
-          /*
-           * Update existing execution.
-           */
-          const updatedExecutions = [
-            ...currentData.executions,
-          ];
-
-          updatedExecutions[existingIndex] = {
-            ...updatedExecutions[
-              existingIndex
-            ],
-            ...updatedExecution,
-          };
-
-          return {
-            ...currentData,
-            executions: updatedExecutions,
-          };
-        }
-      );
-    };
+        );
+      };
 
     /*
-     * Join when the socket connects.
+     * Join when the socket
+     * connects.
      *
-     * This also fires again after an automatic reconnect.
+     * This also fires again after
+     * an automatic reconnect.
      */
     socket.on(
       "connect",
@@ -152,7 +286,8 @@ const ExecutionDetailsPage = () => {
     );
 
     /*
-     * Listen for live execution updates.
+     * Listen for live execution
+     * updates.
      */
     socket.on(
       "execution-update",
@@ -160,15 +295,16 @@ const ExecutionDetailsPage = () => {
     );
 
     /*
-     * If the socket is already connected,
-     * join immediately.
+     * If the socket is already
+     * connected, join immediately.
      */
     if (socket.connected) {
       joinExecutionRoom();
     }
 
     /*
-     * Cleanup when leaving the page.
+     * Cleanup when leaving
+     * the page.
      */
     return () => {
       socket.emit(
@@ -192,26 +328,59 @@ const ExecutionDetailsPage = () => {
     queryClient,
   ]);
 
-  const totalDuration = useMemo(() => {
-    if (
-      !execution?.startedAt ||
-      !execution?.finishedAt
-    ) {
-      return "—";
-    }
+  const totalDuration =
+    useMemo(() => {
+      if (
+        !execution?.startedAt ||
+        !execution?.finishedAt
+      ) {
+        return "—";
+      }
 
-    const duration =
-      new Date(
-        execution.finishedAt
-      ).getTime() -
-      new Date(
-        execution.startedAt
-      ).getTime();
+      const duration =
+        new Date(
+          execution.finishedAt
+        ).getTime() -
+        new Date(
+          execution.startedAt
+        ).getTime();
 
-    return formatDuration(duration);
-  }, [execution]);
+      return formatDuration(
+        duration
+      );
+    }, [execution]);
 
-  if (workspaceLoading || isLoading) {
+  const canCancel =
+    execution?.status ===
+      "pending" ||
+    execution?.status ===
+      "running";
+
+  const handleCancel =
+    async () => {
+      if (
+        !id ||
+        !workspaceId ||
+        !canCancel ||
+        cancelMutation.isPending
+      ) {
+        return;
+      }
+
+      try {
+        await cancelMutation.mutateAsync();
+      } catch (error) {
+        console.error(
+          "Failed to cancel execution:",
+          error
+        );
+      }
+    };
+
+  if (
+    workspaceLoading ||
+    isLoading
+  ) {
     return (
       <div className="flex min-h-[500px] items-center justify-center">
         <div className="flex items-center gap-2 text-sm text-zinc-500">
@@ -238,17 +407,21 @@ const ExecutionDetailsPage = () => {
           </h1>
 
           <p className="mt-1 text-xs text-zinc-500">
-            Select a workspace before viewing executions.
+            Select a workspace before
+            viewing executions.
           </p>
 
           <button
             type="button"
             onClick={() =>
-              navigate("/app/executions")
+              navigate(
+                "/app/executions"
+              )
             }
             className="mt-5 inline-flex h-8 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800"
           >
             <FiArrowLeft className="h-3.5 w-3.5" />
+
             Back to Executions
           </button>
         </div>
@@ -256,7 +429,10 @@ const ExecutionDetailsPage = () => {
     );
   }
 
-  if (isError || !execution) {
+  if (
+    isError ||
+    !execution
+  ) {
     return (
       <div className="flex min-h-[500px] flex-col items-center justify-center">
         <div className="text-center">
@@ -269,17 +445,21 @@ const ExecutionDetailsPage = () => {
           </h1>
 
           <p className="mt-1 text-xs text-zinc-500">
-            We couldn't load this execution.
+            We couldn't load this
+            execution.
           </p>
 
           <button
             type="button"
             onClick={() =>
-              navigate("/app/executions")
+              navigate(
+                "/app/executions"
+              )
             }
             className="mt-5 inline-flex h-8 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800"
           >
             <FiArrowLeft className="h-3.5 w-3.5" />
+
             Back to Executions
           </button>
         </div>
@@ -287,21 +467,26 @@ const ExecutionDetailsPage = () => {
     );
   }
 
-  const executionNumber = execution._id
-    ? execution._id.slice(-4)
-    : "----";
+  const executionNumber =
+    execution._id
+      ? execution._id.slice(-4)
+      : "----";
 
-  const status = formatStatus(
-    execution.status
-  );
+  const status =
+    formatStatus(
+      execution.status
+    );
 
   const workflowName =
     execution.workflow?.name ||
     "Unknown Workflow";
 
-  const startedAt = execution.startedAt
-    ? new Date(execution.startedAt)
-    : null;
+  const startedAt =
+    execution.startedAt
+      ? new Date(
+          execution.startedAt
+        )
+      : null;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 pb-10">
@@ -309,11 +494,14 @@ const ExecutionDetailsPage = () => {
       <button
         type="button"
         onClick={() =>
-          navigate("/app/executions")
+          navigate(
+            "/app/executions"
+          )
         }
         className="inline-flex items-center gap-2 text-xs text-zinc-500 transition hover:text-zinc-200"
       >
         <FiArrowLeft className="h-3.5 w-3.5" />
+
         Back to Executions
       </button>
 
@@ -321,15 +509,20 @@ const ExecutionDetailsPage = () => {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-xs text-zinc-600">
-            <span>Executions</span>
+            <span>
+              Executions
+            </span>
+
             <span>/</span>
+
             <span className="text-zinc-500">
               #{executionNumber}
             </span>
           </div>
 
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100">
-            Execution #{executionNumber}
+            Execution #
+            {executionNumber}
           </h1>
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -338,7 +531,8 @@ const ExecutionDetailsPage = () => {
             />
 
             <span className="text-xs text-zinc-500">
-              Duration: {totalDuration}
+              Duration:{" "}
+              {totalDuration}
             </span>
 
             <span className="text-zinc-700">
@@ -355,7 +549,51 @@ const ExecutionDetailsPage = () => {
             </span>
           </div>
         </div>
+
+        {/* CANCEL */}
+        {canCancel && (
+          <button
+            type="button"
+            onClick={
+              handleCancel
+            }
+            disabled={
+              cancelMutation.isPending
+            }
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-red-500/20 bg-red-500/[0.06] px-3 text-xs font-medium text-red-400 transition hover:border-red-500/30 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {cancelMutation.isPending ? (
+              <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FiX className="h-3.5 w-3.5" />
+            )}
+
+            {cancelMutation.isPending
+              ? "Cancelling..."
+              : "Cancel Execution"}
+          </button>
+        )}
       </div>
+
+      {/* CANCEL ERROR */}
+      {cancelMutation.isError && (
+        <div className="flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/[0.04] px-4 py-3">
+          <FiAlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+
+          <div>
+            <p className="text-xs font-medium text-red-400">
+              Failed to cancel
+              execution
+            </p>
+
+            <p className="mt-1 text-xs text-red-300/60">
+              {getErrorMessage(
+                cancelMutation.error
+              )}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* INFO */}
       <div className="grid gap-3 sm:grid-cols-3">
@@ -386,7 +624,9 @@ const ExecutionDetailsPage = () => {
           </h2>
 
           <p className="mt-1 text-xs text-zinc-600">
-            Each step represents one node executed in the workflow.
+            Each step represents one
+            node executed in the
+            workflow.
           </p>
         </div>
 
@@ -458,7 +698,9 @@ const ExecutionDetailsPage = () => {
           </h2>
 
           <p className="mt-1 text-xs text-zinc-600">
-            Data provided when this workflow execution started.
+            Data provided when this
+            workflow execution
+            started.
           </p>
         </div>
 
@@ -478,7 +720,8 @@ const ExecutionDetailsPage = () => {
 
           <pre className="max-h-80 overflow-auto p-4 font-mono text-xs leading-5 text-zinc-400">
             {formatJSON(
-              execution.input || {}
+              execution.input ||
+                {}
             )}
           </pre>
         </div>
@@ -501,6 +744,29 @@ const ExecutionDetailsPage = () => {
 
                 <p className="mt-1 text-xs leading-5 text-red-300/60">
                   {execution.error}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* EXECUTION CANCELLED */}
+      {execution.status ===
+        "cancelled" && (
+          <div className="overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/[0.04]">
+            <div className="flex items-start gap-3 p-4 sm:p-5">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+                <FiX className="h-3.5 w-3.5 text-amber-400" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-400">
+                  Execution cancelled
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-amber-300/60">
+                  {execution.error ||
+                    "This workflow execution was cancelled."}
                 </p>
               </div>
             </div>
@@ -627,7 +893,9 @@ const ExecutionStep = ({
             {/* CONTENT */}
             <StepContent
               step={step}
-              activeTab={activeTab}
+              activeTab={
+                activeTab
+              }
             />
 
             {/* STEP META */}
@@ -675,7 +943,8 @@ const StepContent = ({
           <FiCheck className="mx-auto h-5 w-5 text-emerald-400" />
 
           <p className="mt-2 text-xs text-zinc-500">
-            No error for this step.
+            No error for this
+            step.
           </p>
         </div>
       </div>
@@ -689,7 +958,9 @@ const StepContent = ({
           {activeTab}
         </p>
 
-        <CopyButton value={value} />
+        <CopyButton
+          value={value}
+        />
       </div>
 
       <pre
@@ -765,6 +1036,12 @@ const ExecutionStatus = ({
       wrapper:
         "bg-amber-500/10 text-amber-400",
       dot: "bg-amber-400",
+    },
+
+    Cancelled: {
+      wrapper:
+        "bg-zinc-500/10 text-zinc-400",
+      dot: "bg-zinc-400",
     },
   };
 
@@ -875,7 +1152,8 @@ const EmptySteps = () => {
       </p>
 
       <p className="mt-1 text-xs text-zinc-600">
-        This execution hasn't recorded any steps yet.
+        This execution hasn't
+        recorded any steps yet.
       </p>
     </div>
   );
@@ -897,6 +1175,9 @@ const formatStatus = (
     case "pending":
       return "Pending";
 
+    case "cancelled":
+      return "Cancelled";
+
     default:
       return "Pending";
   }
@@ -910,16 +1191,23 @@ const formatNodeName = (
   }
 
   return type
-    .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase()
+    .replace(
+      /[-_]/g,
+      " "
+    )
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase()
     );
 };
 
 const capitalize = (
   value
 ) => {
-  if (!value) return "";
+  if (!value) {
+    return "";
+  }
 
   return (
     value.charAt(0).toUpperCase() +
@@ -949,7 +1237,10 @@ const formatDuration = (
 const formatJSON = (
   value
 ) => {
-  if (typeof value === "string") {
+  if (
+    typeof value ===
+    "string"
+  ) {
     return value;
   }
 
@@ -974,11 +1265,12 @@ const formatJSON = (
 const formatRelativeTime = (
   date
 ) => {
-  const seconds = Math.floor(
-    (Date.now() -
-      date.getTime()) /
-      1000
-  );
+  const seconds =
+    Math.floor(
+      (Date.now() -
+        date.getTime()) /
+        1000
+    );
 
   if (seconds < 60) {
     return `${Math.max(
@@ -987,27 +1279,41 @@ const formatRelativeTime = (
     )}s ago`;
   }
 
-  const minutes = Math.floor(
-    seconds / 60
-  );
+  const minutes =
+    Math.floor(
+      seconds / 60
+    );
 
   if (minutes < 60) {
     return `${minutes}m ago`;
   }
 
-  const hours = Math.floor(
-    minutes / 60
-  );
+  const hours =
+    Math.floor(
+      minutes / 60
+    );
 
   if (hours < 24) {
     return `${hours}h ago`;
   }
 
-  const days = Math.floor(
-    hours / 24
-  );
+  const days =
+    Math.floor(
+      hours / 24
+    );
 
   return `${days}d ago`;
+};
+
+const getErrorMessage = (
+  error
+) => {
+  return (
+    error?.response?.data
+      ?.message ||
+    error?.message ||
+    "Something went wrong while cancelling the execution."
+  );
 };
 
 export default ExecutionDetailsPage;

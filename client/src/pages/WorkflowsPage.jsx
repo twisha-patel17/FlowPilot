@@ -1,20 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-
-import {
-  getWorkflows,
-  createWorkflow,
-  toggleWorkflow,
-  deleteWorkflow,
-} from "../api/workflowApi";
-
-import { getExecutions } from "../api/executionApi";
+import { useExecutions } from "../hooks/useExecutions";
 import { useWorkspace } from "../context/WorkspaceContext";
+import { useWorkflows } from "../hooks/useWorkflows";
 
 import WorkflowHeader from "../components/workflows/WorkflowHeader";
 import WorkflowFilters from "../components/workflows/WorkflowFilters";
@@ -22,288 +10,323 @@ import WorkflowTable from "../components/workflows/WorkflowTable";
 
 const WorkflowsPage = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
-  const [activeFilter, setActiveFilter] = useState("All");
-  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] =
+    useState("All");
+
+  const [search, setSearch] =
+    useState("");
 
   const {
     currentWorkspace,
     loading: workspaceLoading,
   } = useWorkspace();
 
-  const workspaceId = currentWorkspace?._id;
+  const workspaceId =
+    currentWorkspace?._id;
 
   const {
-    data: workflowData,
+    workflows,
     isLoading: workflowsLoading,
     isError: workflowsError,
-  } = useQuery({
-    queryKey: ["workflows", workspaceId],
-    queryFn: () => getWorkflows(workspaceId),
-    enabled: !!workspaceId,
-  });
+    toggleWorkflow,
+    isToggling,
+    deleteWorkflow,
+    isDeleting,
+    createWorkflow,
+    isCreating,
+  } = useWorkflows();
 
   const {
-    data: executionData,
-    isLoading: executionsLoading,
-  } = useQuery({
-    queryKey: ["executions", workspaceId],
-    queryFn: () => getExecutions(workspaceId),
-    enabled: !!workspaceId,
-  });
+  executions,
+  isLoading: executionsLoading,
+} = useExecutions(
+  workspaceId
+);
 
-  const workflows = workflowData?.workflows || [];
-  const executions = executionData?.executions || [];
+  const formattedWorkflows =
+    useMemo(() => {
+      return workflows.map(
+        (workflow) => {
+          const workflowExecutions =
+            executions.filter(
+              (execution) => {
+                const executionWorkflow =
+                  execution.workflow;
 
-  const toggleMutation = useMutation({
-    mutationFn: toggleWorkflow,
+                const executionWorkflowId =
+                  executionWorkflow?._id ||
+                  executionWorkflow;
 
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["workflows", workspaceId],
-      });
-    },
+                return (
+                  executionWorkflowId ===
+                  workflow._id
+                );
+              }
+            );
 
-    onError: (error) => {
-      console.error(
-        "Failed to toggle workflow:",
-        error
+          const completedExecutions =
+            workflowExecutions.filter(
+              (execution) =>
+                execution.status ===
+                  "success" ||
+                execution.status ===
+                  "failed"
+            );
+
+          const successfulExecutions =
+            completedExecutions.filter(
+              (execution) =>
+                execution.status ===
+                "success"
+            );
+
+          const successRate =
+            completedExecutions.length >
+            0
+              ? `${(
+                  (successfulExecutions.length /
+                    completedExecutions.length) *
+                  100
+                ).toFixed(1)}%`
+              : "-";
+
+          const latestExecution =
+            [...workflowExecutions].sort(
+              (a, b) =>
+                new Date(
+                  b.createdAt
+                ) -
+                new Date(
+                  a.createdAt
+                )
+            )[0];
+
+          const lastRun =
+            latestExecution
+              ? formatLastRun(
+                  latestExecution.createdAt
+                )
+              : "Never";
+
+          const isActive =
+            workflow.status ===
+            "active";
+
+          return {
+            ...workflow,
+
+            id: workflow._id,
+
+            trigger:
+              workflow.trigger?.type ===
+              "github"
+                ? "GitHub Issue"
+                : workflow.trigger?.type ===
+                  "schedule"
+                ? "Schedule"
+                : workflow.trigger?.type ===
+                  "webhook"
+                ? "Webhook"
+                : workflow.trigger?.type ===
+                  "http"
+                ? "HTTP"
+                : "Manual",
+
+            status: isActive
+              ? "Active"
+              : "Inactive",
+
+            lastRun,
+            successRate,
+          };
+        }
       );
-    },
-  });
+    }, [workflows, executions]);
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteWorkflow,
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["workflows", workspaceId],
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: ["executions", workspaceId],
-      });
-    },
-
-    onError: (error) => {
-      console.error(
-        "Failed to delete workflow:",
-        error
-      );
-    },
-  });
-
-  const duplicateMutation = useMutation({
-    mutationFn: createWorkflow,
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["workflows", workspaceId],
-      });
-    },
-
-    onError: (error) => {
-      console.error(
-        "Failed to duplicate workflow:",
-        error
-      );
-    },
-  });
-
-  const formattedWorkflows = useMemo(() => {
-    return workflows.map((workflow) => {
-      const workflowExecutions =
-        executions.filter(
-          (execution) =>
-            execution.workflow?._id ===
-              workflow._id ||
-            execution.workflow === workflow._id
-        );
-
-      const completedExecutions =
-        workflowExecutions.filter(
-          (execution) =>
-            execution.status === "success" ||
-            execution.status === "failed"
-        );
-
-      const successfulExecutions =
-        completedExecutions.filter(
-          (execution) =>
-            execution.status === "success"
-        );
-
-      const successRate =
-        completedExecutions.length > 0
-          ? `${(
-              (successfulExecutions.length /
-                completedExecutions.length) *
-              100
-            ).toFixed(1)}%`
-          : "-";
-
-      const latestExecution =
-        [...workflowExecutions].sort(
-          (a, b) =>
-            new Date(b.createdAt) -
-            new Date(a.createdAt)
-        )[0];
-
-      const lastRun = latestExecution
-        ? formatLastRun(
-            latestExecution.createdAt
-          )
-        : "Never";
-
-      const isActive =
-        workflow.active ??
-        workflow.status === "active";
-
-      return {
-        ...workflow,
-
-        id: workflow._id,
-
-        trigger:
-          workflow.trigger?.type === "github"
-            ? "GitHub Issue"
-            : workflow.trigger?.type ===
-              "schedule"
-            ? "Schedule"
-            : workflow.trigger?.type ===
-              "webhook"
-            ? "Webhook"
-            : workflow.trigger?.type === "http"
-            ? "HTTP"
-            : "Manual",
-
-        status: isActive
-          ? "Active"
-          : "Inactive",
-
-        lastRun,
-        successRate,
-      };
-    });
-  }, [workflows, executions]);
-
-  const filteredWorkflows = useMemo(() => {
-    return formattedWorkflows.filter(
-      (workflow) => {
-        const matchesFilter =
-          activeFilter === "All" ||
-          (activeFilter === "Active" &&
-            workflow.status === "Active") ||
-          (activeFilter === "Inactive" &&
-            workflow.status === "Inactive");
-
-        const searchValue = search
+  const filteredWorkflows =
+    useMemo(() => {
+      const searchValue =
+        search
           .toLowerCase()
           .trim();
 
-        const name =
-          workflow.name?.toLowerCase() || "";
+      return formattedWorkflows.filter(
+        (workflow) => {
+          const matchesFilter =
+            activeFilter ===
+              "All" ||
+            (activeFilter ===
+              "Active" &&
+              workflow.status ===
+                "Active") ||
+            (activeFilter ===
+              "Inactive" &&
+              workflow.status ===
+                "Inactive");
 
-        const description =
-          workflow.description?.toLowerCase() ||
-          "";
+          const name =
+            workflow.name?.toLowerCase() ||
+            "";
 
-        const trigger =
-          workflow.trigger?.toLowerCase() || "";
+          const description =
+            workflow.description?.toLowerCase() ||
+            "";
 
-        const matchesSearch =
-          !searchValue ||
-          name.includes(searchValue) ||
-          description.includes(searchValue) ||
-          trigger.includes(searchValue);
+          const trigger =
+            workflow.trigger?.toLowerCase() ||
+            "";
 
-        return (
-          matchesFilter &&
-          matchesSearch
+          const matchesSearch =
+            !searchValue ||
+            name.includes(
+              searchValue
+            ) ||
+            description.includes(
+              searchValue
+            ) ||
+            trigger.includes(
+              searchValue
+            );
+
+          return (
+            matchesFilter &&
+            matchesSearch
+          );
+        }
+      );
+    }, [
+      formattedWorkflows,
+      activeFilter,
+      search,
+    ]);
+
+  const handleCreateWorkflow =
+    () => {
+      navigate(
+        "/app/workflows/new"
+      );
+    };
+
+  const handleEditWorkflow =
+    (workflow) => {
+      navigate(
+        `/app/workflows/${workflow._id}`
+      );
+    };
+
+  const handleMenuClick =
+    (workflow) => {
+      console.log(
+        "Workflow actions:",
+        workflow.name
+      );
+    };
+
+  const handleToggleWorkflow =
+    async (workflow) => {
+      if (
+        !workspaceId ||
+        !workflow?._id ||
+        isToggling
+      ) {
+        return;
+      }
+
+      try {
+        await toggleWorkflow({
+          id: workflow._id,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to toggle workflow:",
+          error
         );
       }
-    );
-  }, [
-    formattedWorkflows,
-    activeFilter,
-    search,
-  ]);
+    };
 
-  const handleCreateWorkflow = () => {
-    navigate("/app/workflows/new");
-  };
-  const handleEditWorkflow = (workflow) => {
-    navigate(
-      `/app/workflows/${workflow._id}`
-    );
-  };
+  const handleDeleteWorkflow =
+    async (workflow) => {
+      if (
+        !workspaceId ||
+        !workflow?._id ||
+        isDeleting
+      ) {
+        return;
+      }
 
-  const handleMenuClick = (workflow) => {
-    console.log(
-      "Workflow actions:",
-      workflow.name
-    );
-  };
+      const confirmed =
+        window.confirm(
+          `Delete "${
+            workflow.name ||
+            "Untitled Workflow"
+          }"?`
+        );
 
-  const handleToggleWorkflow = (workflow) => {
-    if (!workspaceId || !workflow?._id) {
-      return;
-    }
+      if (!confirmed) {
+        return;
+      }
 
-    toggleMutation.mutate({
-      id: workflow._id,
-      workspaceId,
-    });
-  };
+      try {
+        await deleteWorkflow({
+          id: workflow._id,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to delete workflow:",
+          error
+        );
+      }
+    };
 
-  const handleDeleteWorkflow = (workflow) => {
-    if (!workspaceId || !workflow?._id) {
-      return;
-    }
+  const handleDuplicateWorkflow =
+    async (workflow) => {
+      if (
+        !workspaceId ||
+        !workflow?._id ||
+        isCreating
+      ) {
+        return;
+      }
 
-    const confirmed = window.confirm(
-      `Delete "${
-        workflow.name ||
-        "Untitled Workflow"
-      }"?`
-    );
+      const duplicateData = {
+        name: `${
+          workflow.name ||
+          "Untitled Workflow"
+        } (Copy)`,
 
-    if (!confirmed) {
-      return;
-    }
+        description:
+          workflow.description || "",
 
-    deleteMutation.mutate({
-      id: workflow._id,
-      workspaceId,
-    });
-  };
+        trigger: {
+          type:
+            workflow.trigger?.type ||
+            "manual",
 
-const handleDuplicateWorkflow = (workflow) => {
-  if (!workspaceId || !workflow?._id) {
-    return;
-  }
+          config:
+            workflow.trigger?.config ||
+            {},
+        },
 
-  const duplicateData = {
-    name: `${workflow.name || "Untitled Workflow"} (Copy)`,
+        nodes:
+          workflow.nodes || [],
 
-    description: workflow.description || "",
+        edges:
+          workflow.edges || [],
+      };
 
-    trigger: {
-      type: workflow.trigger?.type || "manual",
-      config: workflow.trigger?.config || {},
-    },
-
-    nodes: workflow.nodes || [],
-
-    edges: workflow.edges || [],
-  };
-
-  duplicateMutation.mutate({
-    workflowData: duplicateData,
-    workspaceId,
-  });
-};
+      try {
+        await createWorkflow({
+          workflowData:
+            duplicateData,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to duplicate workflow:",
+          error
+        );
+      }
+    };
 
   if (
     workspaceLoading ||
@@ -350,7 +373,9 @@ const handleDuplicateWorkflow = (workflow) => {
       />
 
       <WorkflowFilters
-        activeFilter={activeFilter}
+        activeFilter={
+          activeFilter
+        }
         setActiveFilter={
           setActiveFilter
         }
@@ -359,7 +384,9 @@ const handleDuplicateWorkflow = (workflow) => {
       />
 
       <WorkflowTable
-        workflows={filteredWorkflows}
+        workflows={
+          filteredWorkflows
+        }
         onMenuClick={
           handleMenuClick
         }
@@ -389,9 +416,10 @@ const formatLastRun = (date) => {
     return "Scheduled";
   }
 
-  const minutes = Math.floor(
-    diff / 60000
-  );
+  const minutes =
+    Math.floor(
+      diff / 60000
+    );
 
   if (minutes < 1) {
     return "Just now";
@@ -401,17 +429,15 @@ const formatLastRun = (date) => {
     return `${minutes}m ago`;
   }
 
-  const hours = Math.floor(
-    minutes / 60
-  );
+  const hours =
+    Math.floor(minutes / 60);
 
   if (hours < 24) {
     return `${hours}h ago`;
   }
 
-  const days = Math.floor(
-    hours / 24
-  );
+  const days =
+    Math.floor(hours / 24);
 
   if (days < 7) {
     return `${days}d ago`;
@@ -419,11 +445,14 @@ const formatLastRun = (date) => {
 
   return new Date(
     date
-  ).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  ).toLocaleDateString(
+    "en-IN",
+    {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }
+  );
 };
 
 export default WorkflowsPage;

@@ -1,75 +1,129 @@
 import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
-import { getExecutions } from "../api/executionApi";
+import {
+  getExecution,
+  cancelExecution,
+} from "../api/executionApi";
+
+import { useWorkspace } from "../context/WorkspaceContext";
+
 import socket from "../socket/socket";
 
-export const useExecutions = (workspaceId) => {
-  const queryClient = useQueryClient();
+export const useExecution = (
+  executionId
+) => {
+  const {
+    currentWorkspace,
+  } = useWorkspace();
+
+  const workspaceId =
+    currentWorkspace?._id;
+
+  const queryClient =
+    useQueryClient();
 
   const query = useQuery({
-    queryKey: ["executions", workspaceId],
-    queryFn: () => getExecutions(workspaceId),
-    enabled: !!workspaceId,
+    queryKey: [
+      "execution",
+      workspaceId,
+      executionId,
+    ],
+
+    queryFn: () =>
+      getExecution({
+        id: executionId,
+        workspaceId,
+      }),
+
+    enabled:
+      Boolean(
+        workspaceId &&
+          executionId
+      ),
   });
 
-  const executions = query.data?.executions || [];
+  const execution =
+    query.data?.execution || null;
 
   useEffect(() => {
-    if (!workspaceId) return;
+    if (
+      !workspaceId ||
+      !executionId
+    ) {
+      return;
+    }
 
-    const handleExecutionUpdate = (execution) => {
-      if (!execution?.workspace) return;
+    const handleExecutionUpdate =
+      (updatedExecution) => {
+        if (
+          !updatedExecution?._id
+        ) {
+          return;
+        }
 
-      if (
-        execution.workspace.toString() !==
-        workspaceId.toString()
-      ) {
-        return;
-      }
+        if (
+          updatedExecution._id !==
+          executionId
+        ) {
+          return;
+        }
 
-      queryClient.setQueryData(
-        ["executions", workspaceId],
-        (currentData) => {
-          if (!currentData?.executions) {
-            return currentData;
+        queryClient.setQueryData(
+          [
+            "execution",
+            workspaceId,
+            executionId,
+          ],
+          {
+            execution:
+              updatedExecution,
           }
+        );
 
-          const existingIndex =
-            currentData.executions.findIndex(
-              (item) => item._id === execution._id
-            );
+        queryClient.setQueryData(
+          [
+            "executions",
+            workspaceId,
+          ],
+          (currentData) => {
+            if (
+              !currentData?.executions
+            ) {
+              return currentData;
+            }
 
-          if (existingIndex === -1) {
             return {
               ...currentData,
-              executions: [
-                execution,
-                ...currentData.executions,
-              ],
+
+              executions:
+                currentData.executions.map(
+                  (item) =>
+                    item._id ===
+                    executionId
+                      ? {
+                          ...item,
+                          ...updatedExecution,
+                        }
+                      : item
+                ),
             };
           }
-
-          const updatedExecutions = [
-            ...currentData.executions,
-          ];
-
-          updatedExecutions[existingIndex] = {
-            ...updatedExecutions[existingIndex],
-            ...execution,
-          };
-
-          return {
-            ...currentData,
-            executions: updatedExecutions,
-          };
-        }
-      );
-    };
+        );
+      };
 
     socket.on(
       "execution-update",
       handleExecutionUpdate
+    );
+
+    socket.emit(
+      "join-execution",
+      executionId
     );
 
     return () => {
@@ -77,32 +131,75 @@ export const useExecutions = (workspaceId) => {
         "execution-update",
         handleExecutionUpdate
       );
+
+      socket.emit(
+        "leave-execution",
+        executionId
+      );
     };
-  }, [workspaceId, queryClient]);
+  }, [
+    workspaceId,
+    executionId,
+    queryClient,
+  ]);
 
-  useEffect(() => {
-    if (!workspaceId || executions.length === 0) return;
+  const cancelMutation =
+    useMutation({
+      mutationFn: () =>
+        cancelExecution({
+          id: executionId,
+          workspaceId,
+        }),
 
-    executions.forEach((execution) => {
-      if (execution?._id) {
-        socket.emit(
-          "join-execution",
-          execution._id
-        );
-      }
-    });
-
-    return () => {
-      executions.forEach((execution) => {
-        if (execution?._id) {
-          socket.emit(
-            "leave-execution",
-            execution._id
+      onSuccess: (data) => {
+        if (data?.execution) {
+          queryClient.setQueryData(
+            [
+              "execution",
+              workspaceId,
+              executionId,
+            ],
+            {
+              execution:
+                data.execution,
+            }
           );
         }
-      });
-    };
-  }, [workspaceId, executions]);
 
-  return query;
+        queryClient.invalidateQueries({
+          queryKey: [
+            "executions",
+            workspaceId,
+          ],
+        });
+      },
+    });
+
+  return {
+    execution,
+
+    isLoading:
+      query.isLoading,
+
+    isFetching:
+      query.isFetching,
+
+    isError:
+      query.isError,
+
+    error:
+      query.error,
+
+    refetch:
+      query.refetch,
+
+    cancelExecution:
+      cancelMutation.mutateAsync,
+
+    isCancelling:
+      cancelMutation.isPending,
+
+    cancelError:
+      cancelMutation.error,
+  };
 };
