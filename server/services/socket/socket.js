@@ -5,6 +5,10 @@ const User = require("../../models/User");
 const Execution = require("../../models/Execution");
 const Workspace = require("../../models/Workspace");
 
+const {
+  sanitizeExecution,
+} = require("../../utils/executionSanitizer");
+
 let io;
 
 const authenticateSocket = async (
@@ -310,10 +314,7 @@ const initializeSocket = (
 const emitExecutionUpdate = (
   execution
 ) => {
-  if (
-    !io ||
-    !execution
-  ) {
+  if (!io || !execution) {
     return;
   }
 
@@ -323,55 +324,18 @@ const emitExecutionUpdate = (
       ? execution.toObject()
       : execution;
 
-  if (
-    !executionData._id
-  ) {
+  if (!executionData._id) {
     return;
   }
 
-  const safeExecution = {
-    _id:
-      executionData._id,
+  const safeExecution =
+    sanitizeExecution(
+      executionData
+    );
 
-    workflow:
-      executionData.workflow,
-
-    workspace:
-      executionData.workspace,
-
-    status:
-      executionData.status,
-
-    trigger:
-      executionData.trigger,
-
-    input:
-      executionData.input,
-
-    scheduledAt:
-      executionData.scheduledAt,
-
-    startedAt:
-      executionData.startedAt,
-
-    finishedAt:
-      executionData.finishedAt,
-
-    cancelledAt:
-      executionData.cancelledAt,
-
-    error:
-      executionData.error,
-
-    steps:
-      executionData.steps,
-
-    createdAt:
-      executionData.createdAt,
-
-    updatedAt:
-      executionData.updatedAt,
-  };
+  if (!safeExecution) {
+    return;
+  }
 
   io.to(
     `execution:${executionData._id.toString()}`

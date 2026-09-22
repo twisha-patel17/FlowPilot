@@ -1,89 +1,59 @@
 import { useEffect } from "react";
+
 import {
-  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 
-import {
-  getExecution,
-  cancelExecution,
-} from "../api/executionApi";
-
-import { useWorkspace } from "../context/WorkspaceContext";
+import { getExecutions } from "../api/executionApi";
 
 import socket from "../socket/socket";
 
-export const useExecution = (
-  executionId
+export const useExecutions = (
+  workspaceId
 ) => {
-  const {
-    currentWorkspace,
-  } = useWorkspace();
-
-  const workspaceId =
-    currentWorkspace?._id;
-
   const queryClient =
     useQueryClient();
 
   const query = useQuery({
     queryKey: [
-      "execution",
+      "executions",
       workspaceId,
-      executionId,
     ],
 
     queryFn: () =>
-      getExecution({
-        id: executionId,
-        workspaceId,
-      }),
+      getExecutions(workspaceId),
 
     enabled:
-      Boolean(
-        workspaceId &&
-          executionId
-      ),
+      Boolean(workspaceId),
   });
 
-  const execution =
-    query.data?.execution || null;
+  const executions =
+    query.data?.executions || [];
 
   useEffect(() => {
-    if (
-      !workspaceId ||
-      !executionId
-    ) {
+    if (!workspaceId) {
       return;
     }
 
     const handleExecutionUpdate =
-      (updatedExecution) => {
+      (execution) => {
         if (
-          !updatedExecution?._id
+          !execution?._id ||
+          !execution?.workspace
         ) {
           return;
         }
 
+        const executionWorkspaceId =
+          execution.workspace.toString();
+
         if (
-          updatedExecution._id !==
-          executionId
+          executionWorkspaceId !==
+          workspaceId.toString()
         ) {
           return;
         }
-
-        queryClient.setQueryData(
-          [
-            "execution",
-            workspaceId,
-            executionId,
-          ],
-          {
-            execution:
-              updatedExecution,
-          }
-        );
 
         queryClient.setQueryData(
           [
@@ -97,20 +67,44 @@ export const useExecution = (
               return currentData;
             }
 
+            const existingIndex =
+              currentData.executions.findIndex(
+                (item) =>
+                  item._id ===
+                  execution._id
+              );
+
+            if (
+              existingIndex === -1
+            ) {
+              return {
+                ...currentData,
+
+                executions: [
+                  execution,
+                  ...currentData.executions,
+                ].slice(0, 100),
+              };
+            }
+
+            const updatedExecutions =
+              [
+                ...currentData.executions,
+              ];
+
+            updatedExecutions[
+              existingIndex
+            ] = {
+              ...updatedExecutions[
+                existingIndex
+              ],
+              ...execution,
+            };
+
             return {
               ...currentData,
-
               executions:
-                currentData.executions.map(
-                  (item) =>
-                    item._id ===
-                    executionId
-                      ? {
-                          ...item,
-                          ...updatedExecution,
-                        }
-                      : item
-                ),
+                updatedExecutions,
             };
           }
         );
@@ -121,62 +115,19 @@ export const useExecution = (
       handleExecutionUpdate
     );
 
-    socket.emit(
-      "join-execution",
-      executionId
-    );
-
     return () => {
       socket.off(
         "execution-update",
         handleExecutionUpdate
       );
-
-      socket.emit(
-        "leave-execution",
-        executionId
-      );
     };
   }, [
     workspaceId,
-    executionId,
     queryClient,
   ]);
 
-  const cancelMutation =
-    useMutation({
-      mutationFn: () =>
-        cancelExecution({
-          id: executionId,
-          workspaceId,
-        }),
-
-      onSuccess: (data) => {
-        if (data?.execution) {
-          queryClient.setQueryData(
-            [
-              "execution",
-              workspaceId,
-              executionId,
-            ],
-            {
-              execution:
-                data.execution,
-            }
-          );
-        }
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "executions",
-            workspaceId,
-          ],
-        });
-      },
-    });
-
   return {
-    execution,
+    executions,
 
     isLoading:
       query.isLoading,
@@ -192,14 +143,5 @@ export const useExecution = (
 
     refetch:
       query.refetch,
-
-    cancelExecution:
-      cancelMutation.mutateAsync,
-
-    isCancelling:
-      cancelMutation.isPending,
-
-    cancelError:
-      cancelMutation.error,
   };
 };

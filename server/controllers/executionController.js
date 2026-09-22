@@ -12,6 +12,10 @@ const {
   emitExecutionUpdate,
 } = require("../services/socket/socket");
 
+const {
+  sanitizeExecution,
+} = require("../utils/executionSanitizer");
+
 const EXECUTION_LIST_LIMIT = 100;
 
 const getWorkspace = async (
@@ -29,17 +33,6 @@ const getWorkspace = async (
   })
     .select("_id")
     .lean();
-};
-
-const sanitizeExecution = (
-  execution
-) => {
-  const data =
-    execution?.toObject
-      ? execution.toObject()
-      : { ...execution };
-
-  return data;
 };
 
 const createExecution = async (

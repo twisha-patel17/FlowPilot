@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import { useExecutions } from "../hooks/useExecutions";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useWorkflows } from "../hooks/useWorkflows";
@@ -38,110 +39,105 @@ const WorkflowsPage = () => {
   } = useWorkflows();
 
   const {
-  executions,
-  isLoading: executionsLoading,
-} = useExecutions(
-  workspaceId
-);
+    executions,
+    isLoading: executionsLoading,
+  } = useExecutions(workspaceId);
 
   const formattedWorkflows =
     useMemo(() => {
-      return workflows.map(
-        (workflow) => {
-          const workflowExecutions =
-            executions.filter(
-              (execution) => {
-                const executionWorkflow =
-                  execution.workflow;
+      return workflows.map((workflow) => {
+        const workflowExecutions =
+          executions.filter(
+            (execution) => {
+              const executionWorkflow =
+                execution.workflow;
 
-                const executionWorkflowId =
-                  executionWorkflow?._id ||
-                  executionWorkflow;
+              const executionWorkflowId =
+                executionWorkflow?._id ||
+                executionWorkflow;
 
-                return (
-                  executionWorkflowId ===
-                  workflow._id
-                );
-              }
-            );
+              return (
+                executionWorkflowId ===
+                workflow._id
+              );
+            }
+          );
 
-          const completedExecutions =
-            workflowExecutions.filter(
-              (execution) =>
-                execution.status ===
-                  "success" ||
-                execution.status ===
-                  "failed"
-            );
+        const completedExecutions =
+          workflowExecutions.filter(
+            (execution) =>
+              execution.status ===
+                "success" ||
+              execution.status ===
+                "failed"
+          );
 
-          const successfulExecutions =
-            completedExecutions.filter(
-              (execution) =>
-                execution.status ===
-                "success"
-            );
+        const successfulExecutions =
+          completedExecutions.filter(
+            (execution) =>
+              execution.status ===
+              "success"
+          );
 
-          const successRate =
-            completedExecutions.length >
-            0
-              ? `${(
-                  (successfulExecutions.length /
-                    completedExecutions.length) *
-                  100
-                ).toFixed(1)}%`
-              : "-";
+        const successRate =
+          completedExecutions.length > 0
+            ? `${(
+                (successfulExecutions.length /
+                  completedExecutions.length) *
+                100
+              ).toFixed(1)}%`
+            : "-";
 
-          const latestExecution =
-            [...workflowExecutions].sort(
-              (a, b) =>
-                new Date(
-                  b.createdAt
-                ) -
-                new Date(
-                  a.createdAt
-                )
-            )[0];
+        const latestExecution =
+          [...workflowExecutions].sort(
+            (a, b) =>
+              new Date(
+                b.createdAt
+              ) -
+              new Date(
+                a.createdAt
+              )
+          )[0];
 
-          const lastRun =
-            latestExecution
-              ? formatLastRun(
-                  latestExecution.createdAt
-                )
-              : "Never";
+        const lastRun =
+          latestExecution
+            ? formatLastRun(
+                latestExecution.createdAt
+              )
+            : "Never";
 
-          const isActive =
-            workflow.status ===
-            "active";
+        const isActive =
+          workflow.status ===
+          "active";
 
-          return {
-            ...workflow,
+        return {
+          ...workflow,
 
-            id: workflow._id,
+          id: workflow._id,
 
-            trigger:
-              workflow.trigger?.type ===
-              "github"
-                ? "GitHub Issue"
-                : workflow.trigger?.type ===
-                  "schedule"
-                ? "Schedule"
-                : workflow.trigger?.type ===
-                  "webhook"
-                ? "Webhook"
-                : workflow.trigger?.type ===
-                  "http"
-                ? "HTTP"
-                : "Manual",
+          trigger:
+            workflow.trigger?.type ===
+            "github"
+              ? "GitHub Issue"
+              : workflow.trigger?.type ===
+                "schedule"
+              ? "Schedule"
+              : workflow.trigger?.type ===
+                "webhook"
+              ? "Webhook"
+              : workflow.trigger?.type ===
+                "http"
+              ? "HTTP"
+              : "Manual",
 
-            status: isActive
-              ? "Active"
-              : "Inactive",
+          status: isActive
+            ? "Active"
+            : "Inactive",
 
-            lastRun,
-            successRate,
-          };
-        }
-      );
+          lastRun,
+          successRate,
+        };
+      });
     }, [workflows, executions]);
 
   const filteredWorkflows =
@@ -154,8 +150,7 @@ const WorkflowsPage = () => {
       return formattedWorkflows.filter(
         (workflow) => {
           const matchesFilter =
-            activeFilter ===
-              "All" ||
+            activeFilter === "All" ||
             (activeFilter ===
               "Active" &&
               workflow.status ===
@@ -179,15 +174,11 @@ const WorkflowsPage = () => {
 
           const matchesSearch =
             !searchValue ||
-            name.includes(
-              searchValue
-            ) ||
+            name.includes(searchValue) ||
             description.includes(
               searchValue
             ) ||
-            trigger.includes(
-              searchValue
-            );
+            trigger.includes(searchValue);
 
           return (
             matchesFilter &&
@@ -408,9 +399,17 @@ const WorkflowsPage = () => {
 };
 
 const formatLastRun = (date) => {
-  const diff =
-    Date.now() -
+  const timestamp =
     new Date(date).getTime();
+
+  if (
+    Number.isNaN(timestamp)
+  ) {
+    return "Unknown";
+  }
+
+  const diff =
+    Date.now() - timestamp;
 
   if (diff < 0) {
     return "Scheduled";
@@ -430,14 +429,18 @@ const formatLastRun = (date) => {
   }
 
   const hours =
-    Math.floor(minutes / 60);
+    Math.floor(
+      minutes / 60
+    );
 
   if (hours < 24) {
     return `${hours}h ago`;
   }
 
   const days =
-    Math.floor(hours / 24);
+    Math.floor(
+      hours / 24
+    );
 
   if (days < 7) {
     return `${days}d ago`;
