@@ -9,6 +9,13 @@ const executionSchema = new mongoose.Schema(
       index: true,
     },
 
+    workflowVersion: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "WorkflowVersion",
+      required: true,
+      index: true,
+    },
+
     workflowSnapshot: {
       type: mongoose.Schema.Types.Mixed,
       default: null,

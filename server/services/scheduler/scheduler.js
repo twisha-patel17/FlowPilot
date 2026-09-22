@@ -2,6 +2,7 @@ const cron = require("node-cron");
 const crypto = require("crypto");
 
 const Workflow = require("../../models/Workflow");
+const WorkflowVersion = require("../../models/WorkflowVersion");
 const Execution = require("../../models/Execution");
 const Workspace = require("../../models/Workspace");
 
@@ -265,12 +266,7 @@ const createScheduledExecution =
     workflow,
     scheduledAt
   ) => {
-    /*
-     * Workspace deletion is authoritative.
-     *
-     * Never create a scheduled execution for a
-     * workspace that has entered the deleting state.
-     */
+  
     const workspaceActive =
       await isWorkspaceActive(
         workflow.workspace
@@ -286,27 +282,57 @@ const createScheduledExecution =
       return null;
     }
 
+    const workflowVersion =
+      await WorkflowVersion.findOne({
+        workflow:
+          workflow._id,
+
+        workspace:
+          workflow.workspace,
+
+        version:
+          workflow.currentVersion,
+      }).lean();
+
+    if (!workflowVersion) {
+      console.error(
+        `Scheduled execution skipped: ` +
+        `workflow version ${workflow.currentVersion} ` +
+        `not found | ` +
+        `Workflow: ${workflow.name}`
+      );
+
+      return null;
+    }
+
+    /*
+     * Freeze the exact workflow configuration used
+     * by this execution.
+     */
     const workflowSnapshot = {
       _id:
-        workflow._id,
+        workflowVersion.workflow,
+
+      version:
+        workflowVersion.version,
 
       name:
-        workflow.name,
+        workflowVersion.name,
 
       description:
-        workflow.description,
+        workflowVersion.description,
 
       workspace:
-        workflow.workspace,
+        workflowVersion.workspace,
 
       trigger:
-        workflow.trigger,
+        workflowVersion.trigger,
 
       nodes:
-        workflow.nodes || [],
+        workflowVersion.nodes || [],
 
       edges:
-        workflow.edges || [],
+        workflowVersion.edges || [],
     };
 
     try {
@@ -314,6 +340,9 @@ const createScheduledExecution =
         await Execution.create({
           workflow:
             workflow._id,
+
+          workflowVersion:
+            workflowVersion._id,
 
           workflowSnapshot,
 
@@ -332,6 +361,8 @@ const createScheduledExecution =
           scheduledAt,
 
           input: {},
+
+          attempt: 1,
         });
 
       return execution;
@@ -415,10 +446,6 @@ const processWorkflow =
     now
   ) => {
     try {
-      /*
-       * Re-check workspace state before doing any
-       * scheduling work.
-       */
       const workspaceActive =
         await isWorkspaceActive(
           workflow.workspace
@@ -569,10 +596,6 @@ const runSchedulerTick =
     try {
       const now = new Date();
 
-      /*
-       * Only workflows belonging to active workspaces
-       * are eligible for scheduled execution.
-       */
       const activeWorkspaces =
         await Workspace.find({
           status: "active",

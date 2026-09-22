@@ -1,8 +1,35 @@
 const mongoose = require("mongoose");
 
-const workflowSchema =
+const workflowVersionSchema =
   new mongoose.Schema(
     {
+      workflow: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Workflow",
+        required: true,
+        index: true,
+      },
+
+      workspace: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Workspace",
+        required: true,
+        index: true,
+      },
+
+      owner: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+        index: true,
+      },
+
+      version: {
+        type: Number,
+        required: true,
+        min: 1,
+      },
+
       name: {
         type: String,
         required: true,
@@ -16,33 +43,6 @@ const workflowSchema =
         trim: true,
         maxlength: 500,
         default: "",
-      },
-
-      owner: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-        index: true,
-      },
-
-      workspace: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Workspace",
-        required: true,
-        index: true,
-      },
-
-      status: {
-        type: String,
-        enum: ["active", "inactive"],
-        default: "inactive",
-        index: true,
-      },
-
-      currentVersion: {
-        type: Number,
-        default: 1,
-        min: 1,
       },
 
       trigger: {
@@ -77,31 +77,43 @@ const workflowSchema =
         ],
         default: [],
       },
+
+      createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
     },
     {
       timestamps: true,
     }
   );
 
-workflowSchema.index({
+workflowVersionSchema.index(
+  {
+    workflow: 1,
+    version: 1,
+  },
+  {
+    unique: true,
+  }
+);
+
+workflowVersionSchema.index({
   workspace: 1,
-  status: 1,
+  createdAt: -1,
 });
 
-workflowSchema.index({
-  status: 1,
-  "trigger.type": 1,
+workflowVersionSchema.index({
+  workflow: 1,
+  createdAt: -1,
 });
 
-workflowSchema.index({
-  workspace: 1,
-  currentVersion: 1,
-});
-
-const Workflow =
+const WorkflowVersion =
   mongoose.model(
-    "Workflow",
-    workflowSchema
+    "WorkflowVersion",
+    workflowVersionSchema
   );
 
-module.exports = Workflow;
+module.exports =
+  WorkflowVersion;

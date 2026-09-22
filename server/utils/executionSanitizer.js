@@ -115,7 +115,10 @@ const sanitizeExecution = (
 
     workflow: data.workflow,
 
-    workspace: data.workspace,
+    workflowVersion:
+      data.workflowVersion,
+
+    workspace: data.workspace,  
 
     status: data.status,
 

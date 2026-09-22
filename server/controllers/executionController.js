@@ -1,6 +1,7 @@
 const Workflow = require("../models/Workflow");
 const Execution = require("../models/Execution");
 const Workspace = require("../models/Workspace");
+const WorkflowVersion = require("../models/WorkflowVersion");
 
 const workflowQueue = require("../services/queue/workflowQueue");
 
@@ -52,7 +53,7 @@ const createExecution = async (
     if (!workflowId) {
       return res.status(400).json({
         message:
-          "Workflow ID is required",
+          "Workflow is required",
       });
     }
 
@@ -64,10 +65,11 @@ const createExecution = async (
     }
 
     const workspace =
-      await getWorkspace(
-        workspaceId,
-        req.user._id
-      );
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user": req.user._id,
+        status: "active",
+      });
 
     if (!workspace) {
       return res.status(403).json({
@@ -87,94 +89,131 @@ const createExecution = async (
     if (!workflow) {
       return res.status(404).json({
         message:
-          "Active workflow not found",
+          "Workflow not found or inactive",
+      });
+    }
+
+    const workflowVersion =
+      await WorkflowVersion.findOne({
+        workflow: workflow._id,
+        workspace: workspaceId,
+        version:
+          workflow.currentVersion,
+      });
+
+    if (!workflowVersion) {
+      return res.status(500).json({
+        message:
+          "Workflow version not found",
       });
     }
 
     const workflowSnapshot = {
-      _id: workflow._id,
-      name: workflow.name,
+      _id:
+        workflowVersion.workflow,
+
+      version:
+        workflowVersion.version,
+
+      name:
+        workflowVersion.name,
+
       description:
-        workflow.description || "",
-      workspace: workflow.workspace,
-      trigger: workflow.trigger,
-      nodes: workflow.nodes || [],
-      edges: workflow.edges || [],
+        workflowVersion.description,
+
+      workspace:
+        workflowVersion.workspace,
+
+      trigger:
+        workflowVersion.trigger,
+
+      nodes:
+        workflowVersion.nodes,
+
+      edges:
+        workflowVersion.edges,
     };
 
-    const execution =
-      await Execution.create({
-        workflow: workflow._id,
-        workflowSnapshot,
-        owner: req.user._id,
-        workspace: workspaceId,
-        status: "pending",
-        trigger: "manual",
-        input,
-      });
+    let execution;
 
     try {
-      const job =
-        await workflowQueue.add(
-          "execute-workflow",
-          {
-            executionId:
-              execution._id.toString(),
-          }
-        );
+      execution =
+        await Execution.create({
+          workflow:
+            workflow._id,
 
-      console.log(
-        `Workflow execution queued: ` +
-          `${execution._id} | Job: ${job.id}`
+          workflowVersion:
+            workflowVersion._id,
+
+          workflowSnapshot,
+
+          owner:
+            req.user._id,
+
+          workspace:
+            workspaceId,
+
+          status: "pending",
+
+          trigger: "manual",
+
+          input,
+
+          attempt: 1,
+        });
+    } catch (error) {
+      console.error(
+        "Execution creation error:",
+        error
       );
 
-      return res.status(201).json({
-        message:
-          "Workflow execution queued successfully",
-        execution:
-          sanitizeExecution(
-            execution
-          ),
-      });
-    } catch (queueError) {
-      const failedExecution =
-        await Execution.findOneAndUpdate(
-          {
-            _id: execution._id,
-            status: "pending",
-          },
-          {
-            $set: {
-              status: "failed",
-              error:
-                "Failed to queue workflow execution",
-              finishedAt:
-                new Date(),
-            },
-          },
-          {
-            new: true,
-          }
-        );
+      throw error;
+    }
 
+    try {
+      await workflowQueue.add(
+        "execute-workflow",
+        {
+          executionId:
+            execution._id.toString(),
+        },
+        {
+          jobId:
+            execution._id.toString(),
+        }
+      );
+    } catch (queueError) {
       console.error(
-        "Failed to queue workflow execution:",
+        "Execution queue error:",
         queueError
+      );
+
+      await Execution.findOneAndUpdate(
+        {
+          _id: execution._id,
+          status: "pending",
+        },
+        {
+          $set: {
+            status: "failed",
+            finishedAt: new Date(),
+            error:
+              "Failed to queue workflow execution",
+          },
+        }
       );
 
       return res.status(500).json({
         message:
           "Failed to queue workflow execution",
-        execution:
-          failedExecution
-            ? sanitizeExecution(
-                failedExecution
-              )
-            : sanitizeExecution(
-                execution
-              ),
       });
     }
+
+    return res.status(201).json({
+      message:
+        "Workflow execution started",
+      execution,
+    });
   } catch (error) {
     next(error);
   }
@@ -216,7 +255,10 @@ const getExecutions = async (
       })
         .populate(
           "workflow",
-          "name"
+          "name workspace"
+        ).populate(
+          "workflowVersion",
+          "version"
         )
         .sort({
           createdAt: -1,

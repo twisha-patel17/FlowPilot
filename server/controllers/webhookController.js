@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const Webhook = require("../models/Webhook");
 const WebhookDelivery = require("../models/WebhookDelivery");
 const Workflow = require("../models/Workflow");
+const WorkflowVersion = require("../models/WorkflowVersion");
 const Execution = require("../models/Execution");
 const Workspace = require("../models/Workspace");
 
@@ -217,7 +218,11 @@ const createWebhook = async (
 
     let webhook;
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (
+      let attempt = 0;
+      attempt < 3;
+      attempt++
+    ) {
       const publicId =
         crypto
           .randomBytes(16)
@@ -307,9 +312,7 @@ const getWebhooks = async (
         owner: req.user._id,
         workspace: workspaceId,
       })
-        .select(
-          "-secret"
-        )
+        .select("-secret")
         .populate(
           "workflow",
           "name status"
@@ -477,9 +480,7 @@ const receiveWebhook = async (
       await Webhook.findOne({
         publicId,
       })
-        .select(
-          "+secret"
-        )
+        .select("+secret")
         .populate("workflow");
 
     if (!webhook) {
@@ -559,6 +560,29 @@ const receiveWebhook = async (
       });
     }
 
+    /*
+     * Resolve the exact workflow version that
+     * is current when this webhook is received.
+     */
+    const workflowVersion =
+      await WorkflowVersion.findOne({
+        workflow:
+          webhook.workflow._id,
+
+        workspace:
+          webhook.workflow.workspace,
+
+        version:
+          webhook.workflow.currentVersion,
+      }).lean();
+
+    if (!workflowVersion) {
+      return res.status(500).json({
+        message:
+          "Workflow version not found",
+      });
+    }
+
     const event =
       req.headers[
         "x-webhook-event"
@@ -569,8 +593,12 @@ const receiveWebhook = async (
       req.body?.event ||
       "unknown";
 
+    /*
+     * Use the immutable workflow version
+     * for trigger validation.
+     */
     const workflowTrigger =
-      webhook.workflow.trigger;
+      workflowVersion.trigger;
 
     const isGithubTrigger =
       workflowTrigger?.type ===
@@ -706,29 +734,35 @@ const receiveWebhook = async (
     const executionInput =
       req.body || {};
 
+    /*
+     * Freeze the exact workflow version
+     * used by this webhook execution.
+     */
     const workflowSnapshot = {
       _id:
-        webhook.workflow._id,
+        workflowVersion.workflow,
+
+      version:
+        workflowVersion.version,
 
       name:
-        webhook.workflow.name,
+        workflowVersion.name,
 
       description:
-        webhook.workflow.description ||
-        "",
+        workflowVersion.description,
 
       workspace:
-        webhook.workflow.workspace,
+        workflowVersion.workspace,
 
       trigger:
-        webhook.workflow.trigger,
+        workflowVersion.trigger,
 
       nodes:
-        webhook.workflow.nodes ||
+        workflowVersion.nodes ||
         [],
 
       edges:
-        webhook.workflow.edges ||
+        workflowVersion.edges ||
         [],
     };
 
@@ -736,6 +770,9 @@ const receiveWebhook = async (
       await Execution.create({
         workflow:
           webhook.workflow._id,
+
+        workflowVersion:
+          workflowVersion._id,
 
         workflowSnapshot,
 
@@ -755,6 +792,8 @@ const receiveWebhook = async (
 
         input:
           executionInput,
+
+        attempt: 1,
       });
 
     let webhookDelivery;

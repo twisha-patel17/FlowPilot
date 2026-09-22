@@ -7,9 +7,13 @@ const {
   updateWorkflow,
   deleteWorkflow,
   toggleWorkflow,
+  getWorkflowVersions,
+  getWorkflowVersion,
+  restoreWorkflowVersion,
 } = require("../controllers/workflowController");
 
 const protect = require("../middleware/authMiddleware");
+
 const validate = require("../middleware/validate");
 
 const {
@@ -27,9 +31,30 @@ router.post(
   createWorkflow
 );
 
-router.get("/", getWorkflows);
+router.get(
+  "/",
+  getWorkflows
+);
 
-router.get("/:id", getWorkflow);
+router.get(
+  "/:id/versions",
+  getWorkflowVersions
+);
+
+router.get(
+  "/:id/versions/:version",
+  getWorkflowVersion
+);
+
+router.post(
+  "/:id/versions/:version/restore",
+  restoreWorkflowVersion
+);
+
+router.get(
+  "/:id",
+  getWorkflow
+);
 
 router.patch(
   "/:id",
@@ -37,8 +62,14 @@ router.patch(
   updateWorkflow
 );
 
-router.delete("/:id", deleteWorkflow);
+router.delete(
+  "/:id",
+  deleteWorkflow
+);
 
-router.patch("/:id/toggle", toggleWorkflow);
+router.patch(
+  "/:id/toggle",
+  toggleWorkflow
+);
 
 module.exports = router;
