@@ -10,6 +10,8 @@ const {
   getWorkflowVersions,
   getWorkflowVersion,
   restoreWorkflowVersion,
+  publishWorkflow,
+  unpublishWorkflow,
 } = require("../controllers/workflowController");
 
 const protect = require("../middleware/authMiddleware");
@@ -70,6 +72,16 @@ router.delete(
 router.patch(
   "/:id/toggle",
   toggleWorkflow
+);
+
+router.post(
+  "/:id/publish",
+  publishWorkflow
+);
+
+router.post(
+  "/:id/unpublish",
+  unpublishWorkflow
 );
 
 module.exports = router;

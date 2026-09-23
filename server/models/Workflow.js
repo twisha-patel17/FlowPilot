@@ -45,6 +45,12 @@ const workflowSchema =
         min: 1,
       },
 
+      publishedVersion: {
+        type: Number,
+        default: null,
+        min: 1,
+      },
+
       trigger: {
         type: {
           type: String,
