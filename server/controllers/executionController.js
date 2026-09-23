@@ -93,10 +93,19 @@ const createExecution = async (
       });
     }
 
+    /*
+     * Manual executions intentionally use
+     * the latest saved workflow version.
+     *
+     * Unlike webhooks and schedules, manual
+     * runs are allowed to execute the current
+     * draft version.
+     */
     const workflowVersion =
       await WorkflowVersion.findOne({
         workflow: workflow._id,
         workspace: workspaceId,
+        owner: req.user._id,
         version:
           workflow.currentVersion,
       });
@@ -153,9 +162,11 @@ const createExecution = async (
           workspace:
             workspaceId,
 
-          status: "pending",
+          status:
+            "pending",
 
-          trigger: "manual",
+          trigger:
+            "manual",
 
           input,
 
@@ -190,13 +201,20 @@ const createExecution = async (
 
       await Execution.findOneAndUpdate(
         {
-          _id: execution._id,
-          status: "pending",
+          _id:
+            execution._id,
+
+          status:
+            "pending",
         },
         {
           $set: {
-            status: "failed",
-            finishedAt: new Date(),
+            status:
+              "failed",
+
+            finishedAt:
+              new Date(),
+
             error:
               "Failed to queue workflow execution",
           },
@@ -212,7 +230,11 @@ const createExecution = async (
     return res.status(201).json({
       message:
         "Workflow execution started",
-      execution,
+
+      execution:
+        sanitizeExecution(
+          execution
+        ),
     });
   } catch (error) {
     next(error);
@@ -256,7 +278,8 @@ const getExecutions = async (
         .populate(
           "workflow",
           "name workspace"
-        ).populate(
+        )
+        .populate(
           "workflowVersion",
           "version"
         )
@@ -320,6 +343,10 @@ const getExecution = async (
         .populate(
           "workflow",
           "name workspace"
+        )
+        .populate(
+          "workflowVersion",
+          "version"
         )
         .lean();
 
@@ -388,11 +415,15 @@ const cancelExecutionController =
           },
           {
             $set: {
-              status: "cancelled",
+              status:
+                "cancelled",
+
               error:
                 "Workflow execution was cancelled",
+
               finishedAt:
                 cancelledAt,
+
               cancelledAt,
             },
           },

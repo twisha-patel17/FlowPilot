@@ -178,13 +178,20 @@ const createWebhook = async (
         workspace: workspaceId,
         status: "active",
       }).select(
-        "_id name workspace status"
+        "_id name workspace status publishedVersion"
       );
 
     if (!workflow) {
       return res.status(404).json({
         message:
           "Active workflow not found",
+      });
+    }
+
+    if (!workflow.publishedVersion) {
+      return res.status(409).json({
+        message:
+          "Workflow must have a published version before creating a webhook",
       });
     }
 
@@ -315,7 +322,7 @@ const getWebhooks = async (
         .select("-secret")
         .populate(
           "workflow",
-          "name status"
+          "name status publishedVersion"
         )
         .sort({
           createdAt: -1,
@@ -561,9 +568,22 @@ const receiveWebhook = async (
     }
 
     /*
-     * Resolve the exact workflow version that
-     * is current when this webhook is received.
+     * Resolve the exact immutable
+     * published workflow version.
+     *
+     * External webhook executions must
+     * NEVER execute the current draft.
      */
+    const publishedVersion =
+      webhook.workflow.publishedVersion;
+
+    if (!publishedVersion) {
+      return res.status(410).json({
+        message:
+          "Webhook workflow has no published version",
+      });
+    }
+
     const workflowVersion =
       await WorkflowVersion.findOne({
         workflow:
@@ -572,14 +592,35 @@ const receiveWebhook = async (
         workspace:
           webhook.workflow.workspace,
 
+        owner:
+          webhook.workflow.owner,
+
         version:
-          webhook.workflow.currentVersion,
+          publishedVersion,
       }).lean();
 
     if (!workflowVersion) {
       return res.status(500).json({
         message:
-          "Workflow version not found",
+          "Published workflow version not found",
+      });
+    }
+
+    /*
+     * The published version must still
+     * represent a webhook-compatible trigger.
+     */
+    const publishedTriggerType =
+      workflowVersion.trigger?.type;
+
+    if (
+      !["webhook", "github"].includes(
+        publishedTriggerType
+      )
+    ) {
+      return res.status(409).json({
+        message:
+          "Published workflow version is not configured for webhook execution",
       });
     }
 
@@ -594,8 +635,8 @@ const receiveWebhook = async (
       "unknown";
 
     /*
-     * Use the immutable workflow version
-     * for trigger validation.
+     * Use the immutable published workflow
+     * version for trigger validation.
      */
     const workflowTrigger =
       workflowVersion.trigger;
@@ -603,6 +644,34 @@ const receiveWebhook = async (
     const isGithubTrigger =
       workflowTrigger?.type ===
       "github";
+
+    /*
+     * Make sure the webhook type itself
+     * matches the published workflow trigger.
+     */
+    if (
+      webhook.triggerType ===
+      "github" &&
+      publishedTriggerType !==
+        "github"
+    ) {
+      return res.status(409).json({
+        message:
+          "Webhook is configured for GitHub but the published workflow trigger is different",
+      });
+    }
+
+    if (
+      webhook.triggerType ===
+      "webhook" &&
+      publishedTriggerType !==
+        "webhook"
+    ) {
+      return res.status(409).json({
+        message:
+          "Webhook is configured for generic webhook events but the published workflow trigger is different",
+      });
+    }
 
     if (isGithubTrigger) {
       const githubConfig =
@@ -735,8 +804,8 @@ const receiveWebhook = async (
       req.body || {};
 
     /*
-     * Freeze the exact workflow version
-     * used by this webhook execution.
+     * Freeze the exact published workflow
+     * version used by this execution.
      */
     const workflowSnapshot = {
       _id:

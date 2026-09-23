@@ -264,9 +264,9 @@ const isWorkspaceActive = async (
 const createScheduledExecution =
   async (
     workflow,
-    scheduledAt
+    scheduledAt,
+    workflowVersion
   ) => {
-  
     const workspaceActive =
       await isWorkspaceActive(
         workflow.workspace
@@ -282,22 +282,20 @@ const createScheduledExecution =
       return null;
     }
 
-    const workflowVersion =
-      await WorkflowVersion.findOne({
-        workflow:
-          workflow._id,
+    if (!workflow.publishedVersion) {
+      console.log(
+        `Scheduled execution skipped: ` +
+        `workflow has no published version | ` +
+        `Workflow: ${workflow.name}`
+      );
 
-        workspace:
-          workflow.workspace,
-
-        version:
-          workflow.currentVersion,
-      }).lean();
+      return null;
+    }
 
     if (!workflowVersion) {
       console.error(
         `Scheduled execution skipped: ` +
-        `workflow version ${workflow.currentVersion} ` +
+        `published workflow version ${workflow.publishedVersion} ` +
         `not found | ` +
         `Workflow: ${workflow.name}`
       );
@@ -305,10 +303,6 @@ const createScheduledExecution =
       return null;
     }
 
-    /*
-     * Freeze the exact workflow configuration used
-     * by this execution.
-     */
     const workflowSnapshot = {
       _id:
         workflowVersion.workflow,
@@ -461,9 +455,52 @@ const processWorkflow =
         return;
       }
 
+      if (!workflow.publishedVersion) {
+        console.log(
+          `Scheduled workflow skipped: ` +
+          `no published version | ` +
+          `Workflow: ${workflow.name}`
+        );
+
+        return;
+      }
+
+      const workflowVersion =
+        await WorkflowVersion.findOne({
+          workflow:
+            workflow._id,
+
+          workspace:
+            workflow.workspace,
+
+          owner:
+            workflow.owner,
+
+          version:
+            workflow.publishedVersion,
+        }).lean();
+
+      if (!workflowVersion) {
+        console.error(
+          `Scheduled workflow skipped: ` +
+          `published version ${workflow.publishedVersion} ` +
+          `not found | ` +
+          `Workflow: ${workflow.name}`
+        );
+
+        return;
+      }
+
+      const publishedWorkflow =
+        {
+          ...workflow.toObject(),
+          trigger:
+            workflowVersion.trigger,
+        };
+
       const config =
-        workflow.trigger?.config ||
-        {};
+        workflowVersion.trigger
+          ?.config || {};
 
       const timezone =
         config.timezone ||
@@ -478,7 +515,7 @@ const processWorkflow =
 
       if (
         !shouldRunSchedule(
-          workflow,
+          publishedWorkflow,
           now
         )
       ) {
@@ -500,7 +537,8 @@ const processWorkflow =
       const execution =
         await createScheduledExecution(
           workflow,
-          scheduledAt
+          scheduledAt,
+          workflowVersion
         );
 
       if (!execution) {
@@ -617,8 +655,9 @@ const runSchedulerTick =
         await Workflow.find({
           status: "active",
 
-          "trigger.type":
-            "schedule",
+          publishedVersion: {
+            $ne: null,
+          },
 
           workspace: {
             $in: workspaceIds,
