@@ -521,16 +521,61 @@ const toggleWorkflow = async (
       });
     }
 
-    workflow.status =
-      workflow.status === "active"
-        ? "inactive"
-        : "active";
+    if (
+      workflow.status ===
+      "active"
+    ) {
+      workflow.status = "inactive";
+
+      await workflow.save();
+
+      return res.status(200).json({
+        message:
+          "Workflow deactivated successfully",
+
+        workflow,
+      });
+    }
+
+    if (
+      !workflow.publishedVersion
+    ) {
+      return res.status(409).json({
+        message:
+          "Workflow must be published before it can be activated",
+      });
+    }
+
+    const publishedVersion =
+      await WorkflowVersion.findOne({
+        workflow:
+          workflow._id,
+
+        workspace:
+          workspaceId,
+
+        owner:
+          req.user._id,
+
+        version:
+          workflow.publishedVersion,
+      });
+
+    if (!publishedVersion) {
+      return res.status(409).json({
+        message:
+          "Published workflow version does not exist",
+      });
+    }
+
+    workflow.status = "active";
 
     await workflow.save();
 
     return res.status(200).json({
       message:
-        "Workflow status updated successfully",
+        "Workflow activated successfully",
+
       workflow,
     });
   } catch (error) {
@@ -713,7 +758,6 @@ const getWorkflowVersion = async (
     next(error);
   }
 };
-
 const restoreWorkflowVersion = async (
   req,
   res,
@@ -731,7 +775,8 @@ const restoreWorkflowVersion = async (
     const workspaceId =
       req.headers["x-workspace-id"];
 
-    const userId = req.user._id;
+    const userId =
+      req.user._id;
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -769,136 +814,151 @@ const restoreWorkflowVersion = async (
       });
     }
 
-    let restoredWorkflow =
-      null;
+    let restoredWorkflow = null;
 
-    await session.withTransaction(
+    await withTransactionRetry(
       async () => {
-        const workflow =
-          await Workflow.findOne({
-            _id: id,
-            workspace: workspaceId,
-            owner: userId,
-          }).session(session);
+        await session.withTransaction(
+          async () => {
+            const workflow =
+              await Workflow.findOne({
+                _id: id,
+                workspace: workspaceId,
+                owner: userId,
+              }).session(session);
 
-        if (!workflow) {
-          const error =
-            new Error(
-              "WORKFLOW_NOT_FOUND"
-            );
+            if (!workflow) {
+              const error =
+                new Error(
+                  "WORKFLOW_NOT_FOUND"
+                );
 
-          throw error;
-        }
+              throw error;
+            }
 
-        const sourceVersion =
-          await WorkflowVersion.findOne({
-            workflow: workflow._id,
-            workspace: workspaceId,
-            owner: userId,
-            version: versionNumber,
-          }).session(session);
-
-        if (!sourceVersion) {
-          const error =
-            new Error(
-              "VERSION_NOT_FOUND"
-            );
-
-          throw error;
-        }
-
-        if (
-          sourceVersion.version ===
-          workflow.currentVersion
-        ) {
-          restoredWorkflow = {
-            workflow:
-              workflow.toObject(),
-            version:
-              sourceVersion.toObject(),
-            alreadyCurrent: true,
-          };
-
-          return;
-        }
-
-        const nextVersion =
-          workflow.currentVersion + 1;
-
-        const createdVersions =
-          await WorkflowVersion.create(
-            [
-              {
+            const sourceVersion =
+              await WorkflowVersion.findOne({
                 workflow:
                   workflow._id,
 
                 workspace:
-                  workflow.workspace,
+                  workspaceId,
 
                 owner:
-                  workflow.owner,
+                  userId,
 
                 version:
-                  nextVersion,
+                  versionNumber,
+              }).session(session);
 
-                name:
-                  sourceVersion.name,
+            if (!sourceVersion) {
+              const error =
+                new Error(
+                  "VERSION_NOT_FOUND"
+                );
 
-                description:
-                  sourceVersion.description,
-
-                trigger:
-                  sourceVersion.trigger,
-
-                nodes:
-                  sourceVersion.nodes,
-
-                edges:
-                  sourceVersion.edges,
-
-                createdBy:
-                  userId,
-              },
-            ],
-            {
-              session,
+              throw error;
             }
-          );
 
-        const newVersion =
-          createdVersions[0];
+            if (
+              sourceVersion.version ===
+              workflow.currentVersion
+            ) {
+              restoredWorkflow = {
+                workflow:
+                  workflow.toObject(),
 
-        workflow.name =
-          sourceVersion.name;
+                version:
+                  sourceVersion.toObject(),
 
-        workflow.description =
-          sourceVersion.description;
+                alreadyCurrent:
+                  true,
+              };
 
-        workflow.trigger =
-          sourceVersion.trigger;
+              return;
+            }
 
-        workflow.nodes =
-          sourceVersion.nodes;
+            const nextVersion =
+              workflow.currentVersion +
+              1;
 
-        workflow.edges =
-          sourceVersion.edges;
+            const createdVersions =
+              await WorkflowVersion.create(
+                [
+                  {
+                    workflow:
+                      workflow._id,
 
-        workflow.currentVersion =
-          nextVersion;
+                    workspace:
+                      workflow.workspace,
 
-        await workflow.save({
-          session,
-        });
+                    owner:
+                      workflow.owner,
 
-        restoredWorkflow = {
-          workflow:
-            workflow.toObject(),
+                    version:
+                      nextVersion,
 
-          version:
-            newVersion.toObject(),
+                    name:
+                      sourceVersion.name,
 
-          alreadyCurrent: false,
-        };
+                    description:
+                      sourceVersion.description,
+
+                    trigger:
+                      sourceVersion.trigger,
+
+                    nodes:
+                      sourceVersion.nodes,
+
+                    edges:
+                      sourceVersion.edges,
+
+                    createdBy:
+                      userId,
+                  },
+                ],
+                {
+                  session,
+                }
+              );
+
+            const newVersion =
+              createdVersions[0];
+
+            workflow.name =
+              sourceVersion.name;
+
+            workflow.description =
+              sourceVersion.description;
+
+            workflow.trigger =
+              sourceVersion.trigger;
+
+            workflow.nodes =
+              sourceVersion.nodes;
+
+            workflow.edges =
+              sourceVersion.edges;
+
+            workflow.currentVersion =
+              nextVersion;
+
+            await workflow.save({
+              session,
+            });
+
+            restoredWorkflow = {
+              workflow:
+                workflow.toObject(),
+
+              version:
+                newVersion.toObject(),
+
+              alreadyCurrent:
+                false,
+            };
+          }
+        );
       }
     );
 
@@ -928,6 +988,26 @@ const restoreWorkflowVersion = async (
         restoredWorkflow.version,
     });
   } catch (error) {
+    if (
+      error.message ===
+      "WORKFLOW_NOT_FOUND"
+    ) {
+      return res.status(404).json({
+        message:
+          "Workflow not found",
+      });
+    }
+
+    if (
+      error.message ===
+      "VERSION_NOT_FOUND"
+    ) {
+      return res.status(404).json({
+        message:
+          "Workflow version not found",
+      });
+    }
+
     next(error);
   } finally {
     await session.endSession();

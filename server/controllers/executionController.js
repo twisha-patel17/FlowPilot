@@ -428,7 +428,7 @@ const cancelExecutionController =
             },
           },
           {
-            new: true,
+            returnDocument: "after",
           }
         );
 
