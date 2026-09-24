@@ -102,13 +102,24 @@ const executeEmailNode = async (
     JSON.stringify(input);
 
   try {
+    const mailOptions = {
+      from,
+      to: config.to,
+      subject,
+      text,
+    };
+
+    if (context.idempotencyKey) {
+      mailOptions.headers = {
+        "X-FlowPilot-Idempotency-Key":
+          context.idempotencyKey,
+      };
+    }
+
     const info =
-      await transporter.sendMail({
-        from,
-        to: config.to,
-        subject,
-        text,
-      });
+      await transporter.sendMail(
+        mailOptions
+      );
 
     if (context.signal?.aborted) {
       throw new Error(
@@ -141,4 +152,5 @@ const executeEmailNode = async (
   }
 };
 
-module.exports = executeEmailNode;
+module.exports =
+  executeEmailNode;

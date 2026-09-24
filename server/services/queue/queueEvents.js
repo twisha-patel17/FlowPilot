@@ -1,8 +1,12 @@
 const { QueueEvents } = require("bullmq");
-const redisConnection = require("../../config/redis");
 
-const workflowQueueEvents = new QueueEvents("workflow-execution", {
-  connection: redisConnection,
-});
+const queueRedisConnection = require("../../config/queueRedis");
+
+const workflowQueueEvents = new QueueEvents(
+  "workflow-execution",
+  {
+    connection: queueRedisConnection,
+  }
+);
 
 module.exports = workflowQueueEvents;

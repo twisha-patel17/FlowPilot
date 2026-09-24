@@ -66,6 +66,20 @@ const executionSchema = new mongoose.Schema(
       default: {},
     },
 
+    retryOf: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Execution",
+      default: null,
+      index: true,
+    },
+
+    replyOf: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Execution",
+      default: null,
+      index: true,
+    },
+
     scheduledAt: {
       type: Date,
       default: null,
@@ -175,6 +189,16 @@ executionSchema.index({
 executionSchema.index({
   workspace: 1,
   status: 1,
+  createdAt: -1,
+});
+
+executionSchema.index({
+  retryOf: 1,
+  createdAt: -1,
+});
+
+executionSchema.index({
+  replayOf: 1,
   createdAt: -1,
 });
 

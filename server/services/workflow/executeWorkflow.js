@@ -10,6 +10,10 @@ const {
 } = require("../../utils/branchResolver");
 
 const {
+  createIdempotencyKey,
+} = require("../../utils/idempotency");
+
+const {
   acquireExecutionLock,
   releaseExecutionLock,
 } = require("../lock/executionLock");
@@ -703,6 +707,11 @@ const executeWorkflow = async (
                   executionContext.trigger,
                 steps:
                   executionContext.steps,
+                idempotencyKey:
+                  createIdempotencyKey(
+                    execution._id.toString(),
+                    currentNode.id
+                  ),
               }
             ),
             remainingTime,
@@ -972,7 +981,7 @@ const executeWorkflow = async (
 
     execution = completedExecution;
 
-        emitExecutionUpdate(
+    emitExecutionUpdate(
       execution
     );
 

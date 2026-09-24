@@ -86,6 +86,23 @@ const executeHttpNode = async (
     }
   }
 
+  /*
+   * Idempotency
+   *
+   * The same execution + node receives
+   * the same key across retry attempts.
+   *
+   * Replay creates a new execution ID,
+   * therefore it receives a new key.
+   */
+  if (context.idempotencyKey) {
+    headers = {
+      ...headers,
+      "Idempotency-Key":
+        context.idempotencyKey,
+    };
+  }
+
   console.log(
     `HTTP ${method} ${url}`
   );

@@ -6,6 +6,9 @@ const WebhookDelivery = require("../../models/WebhookDelivery");
 
 const executeWorkflow = require("../workflow/executeWorkflow");
 const { emitExecutionUpdate } = require("../socket/socket");
+const {
+  isRetryableError,
+} = require("../../utils/retryPolicy");
 
 const updateWebhookDelivery = async (
   executionId,
@@ -42,7 +45,8 @@ const updateWebhookDelivery = async (
   if (status === "cancelled") {
     webhookDelivery.responseCode = 499;
     webhookDelivery.error =
-      error || "Workflow execution was cancelled";
+      error ||
+      "Workflow execution was cancelled";
   }
 
   webhookDelivery.duration =
@@ -146,8 +150,8 @@ const workflowWorker = new Worker(
 
         console.log(
           `Workflow execution cancelled: ` +
-          `${execution._id} | ` +
-          `Attempt: ${currentAttempt}`
+            `${execution._id} | ` +
+            `Attempt: ${currentAttempt}`
         );
 
         return {
@@ -172,9 +176,9 @@ const workflowWorker = new Worker(
 
       console.log(
         `Workflow execution finished: ` +
-        `${execution._id} | ` +
-        `Attempt: ${currentAttempt} | ` +
-        `Status: ${execution.status}`
+          `${execution._id} | ` +
+          `Attempt: ${currentAttempt} | ` +
+          `Status: ${execution.status}`
       );
 
       return {
@@ -186,7 +190,7 @@ const workflowWorker = new Worker(
         attempt: currentAttempt,
       };
     } catch (error) {
- 
+    
       if (
         error.code ===
         "EXECUTION_CANCELLED"
@@ -197,8 +201,8 @@ const workflowWorker = new Worker(
           );
 
         if (
-          cancelledExecution
-            ?.status === "cancelled"
+          cancelledExecution?.status ===
+          "cancelled"
         ) {
           await updateWebhookDelivery(
             executionId,
@@ -208,8 +212,8 @@ const workflowWorker = new Worker(
 
           console.log(
             `Workflow cancellation handled: ` +
-            `${executionId} | ` +
-            `Attempt: ${currentAttempt}`
+              `${executionId} | ` +
+              `Attempt: ${currentAttempt}`
           );
 
           return {
@@ -218,7 +222,6 @@ const workflowWorker = new Worker(
             attempt: currentAttempt,
           };
         }
-
       }
 
       if (
@@ -227,8 +230,8 @@ const workflowWorker = new Worker(
       ) {
         console.log(
           `Duplicate execution ignored: ` +
-          `${executionId} | ` +
-          `Attempt: ${currentAttempt}`
+            `${executionId} | ` +
+            `Attempt: ${currentAttempt}`
         );
 
         return {
@@ -256,7 +259,7 @@ const workflowWorker = new Worker(
 
         console.log(
           `Execution was cancelled before retry: ` +
-          `${executionId}`
+            `${executionId}`
         );
 
         return {
@@ -272,7 +275,7 @@ const workflowWorker = new Worker(
       ) {
         console.log(
           `Execution completed by another worker: ` +
-          `${executionId}`
+            `${executionId}`
         );
 
         return {
@@ -281,6 +284,19 @@ const workflowWorker = new Worker(
           attempt:
             latestExecution.attempt,
         };
+      }
+
+      const retryable =
+        isRetryableError(error);
+
+      if (!retryable) {
+        console.log(
+          `Non-retryable workflow error: ` +
+            `${executionId} | ` +
+            `${error.message}`
+        );
+
+        throw error;
       }
 
       const nextAttempt =
@@ -312,7 +328,7 @@ const workflowWorker = new Worker(
               },
             },
             {
-              new: true,
+              returnDocument: "after",
             }
           );
 
@@ -323,21 +339,22 @@ const workflowWorker = new Worker(
 
           console.log(
             `Workflow execution will retry: ` +
-            `${executionId} | ` +
-            `Next attempt: ${nextAttempt}` +
-            `/${attemptsAllowed}`
+              `${executionId} | ` +
+              `Next attempt: ${nextAttempt}/` +
+              `${attemptsAllowed}`
           );
         } else {
           console.log(
             `Retry state update skipped because ` +
-            `execution state changed: ${executionId}`
+              `execution state changed: ${executionId}`
           );
         }
       } else {
         console.log(
           `No retries remaining for workflow execution: ` +
-          `${executionId} | ` +
-          `Attempt: ${currentAttempt}/${attemptsAllowed}`
+            `${executionId} | ` +
+            `Attempt: ${currentAttempt}/` +
+            `${attemptsAllowed}`
         );
       }
 
@@ -379,10 +396,6 @@ workflowWorker.on(
       return;
     }
 
-    /*
-     * A cancelled execution must never enter
-     * the final failure handler.
-     */
     const currentExecution =
       await Execution.findById(
         executionId
@@ -394,7 +407,7 @@ workflowWorker.on(
     ) {
       console.log(
         `Cancelled execution will not be marked failed: ` +
-        `${executionId}`
+          `${executionId}`
       );
 
       await updateWebhookDelivery(
@@ -446,7 +459,7 @@ workflowWorker.on(
             },
           },
           {
-            new: true,
+            returnDocument: "after",
           }
         );
 
@@ -468,7 +481,7 @@ workflowWorker.on(
 
           console.log(
             `Execution was cancelled before ` +
-            `final failure handling: ${executionId}`
+              `final failure handling: ${executionId}`
           );
 
           return;
@@ -480,12 +493,12 @@ workflowWorker.on(
         ) {
           console.log(
             `Execution completed successfully before ` +
-            `final failure handler: ${latestExecution._id}`
+              `final failure handler: ${latestExecution._id}`
           );
         } else {
           console.log(
             `Final failure update skipped because ` +
-            `execution state changed: ${executionId}`
+              `execution state changed: ${executionId}`
           );
         }
 
@@ -504,8 +517,8 @@ workflowWorker.on(
 
       console.log(
         `Workflow execution permanently failed: ` +
-        `${execution._id} | ` +
-        `Attempts: ${attemptsAllowed}`
+          `${execution._id} | ` +
+          `Attempts: ${attemptsAllowed}`
       );
     } catch (updateError) {
       console.error(

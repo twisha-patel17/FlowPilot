@@ -93,14 +93,6 @@ const createExecution = async (
       });
     }
 
-    /*
-     * Manual executions intentionally use
-     * the latest saved workflow version.
-     *
-     * Unlike webhooks and schedules, manual
-     * runs are allowed to execute the current
-     * draft version.
-     */
     const workflowVersion =
       await WorkflowVersion.findOne({
         workflow: workflow._id,
@@ -515,9 +507,482 @@ const cancelExecutionController =
     }
   };
 
+  const retryExecution = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const { id } = req.params;
+
+    const workspaceId =
+      req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace =
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+
+    const originalExecution =
+      await Execution.findOne({
+        _id: id,
+        owner: req.user._id,
+        workspace: workspaceId,
+        status: "failed",
+      }).lean();
+
+    if (!originalExecution) {
+      return res.status(404).json({
+        message:
+          "Failed execution not found",
+      });
+    }
+
+    const workflow =
+      await Workflow.findOne({
+        _id: originalExecution.workflow,
+        owner: req.user._id,
+        workspace: workspaceId,
+        status: "active",
+      }).select(
+        "_id workspace owner status"
+      );
+
+    if (!workflow) {
+      return res.status(409).json({
+        message:
+          "The workflow is no longer active",
+      });
+    }
+
+    const workflowVersion =
+      await WorkflowVersion.findOne({
+        _id:
+          originalExecution.workflowVersion,
+
+        workflow:
+          originalExecution.workflow,
+
+        workspace: workspaceId,
+
+        owner: req.user._id,
+      });
+
+    if (!workflowVersion) {
+      return res.status(409).json({
+        message:
+          "The workflow version used by this execution is no longer available",
+      });
+    }
+
+    const workflowSnapshot =
+      originalExecution.workflowSnapshot
+        ? originalExecution.workflowSnapshot
+        : {
+            _id:
+              workflowVersion.workflow,
+
+            version:
+              workflowVersion.version,
+
+            name:
+              workflowVersion.name,
+
+            description:
+              workflowVersion.description,
+
+            workspace:
+              workflowVersion.workspace,
+
+            trigger:
+              workflowVersion.trigger,
+
+            nodes:
+              workflowVersion.nodes,
+
+            edges:
+              workflowVersion.edges,
+          };
+
+    let retryExecution;
+
+    try {
+      retryExecution =
+        await Execution.create({
+          workflow:
+            originalExecution.workflow,
+
+          workflowVersion:
+            workflowVersion._id,
+
+          workflowSnapshot,
+
+          owner:
+            req.user._id,
+
+          workspace:
+            workspaceId,
+
+          status: "pending",
+
+          trigger:
+            originalExecution.trigger,
+
+          input:
+            originalExecution.input || {},
+
+          retryOf:
+            originalExecution._id,
+
+          attempt: 1,
+
+          steps: [],
+
+          startedAt: null,
+
+          finishedAt: null,
+
+          cancelledAt: null,
+
+          error: null,
+
+          scheduledAt: null,
+        });
+    } catch (error) {
+      console.error(
+        "Retry execution creation error:",
+        error
+      );
+
+      throw error;
+    }
+
+    try {
+      await workflowQueue.add(
+        "execute-workflow",
+        {
+          executionId:
+            retryExecution._id.toString(),
+        },
+        {
+          jobId:
+            retryExecution._id.toString(),
+        }
+      );
+    } catch (queueError) {
+      console.error(
+        "Retry execution queue error:",
+        queueError
+      );
+
+      const failedRetry =
+        await Execution.findOneAndUpdate(
+          {
+            _id:
+              retryExecution._id,
+
+            status:
+              "pending",
+          },
+          {
+            $set: {
+              status: "failed",
+
+              finishedAt:
+                new Date(),
+
+              error:
+                "Failed to queue workflow retry",
+            },
+          },
+          {
+            returnDocument: "after",
+          }
+        );
+
+      return res.status(500).json({
+        message:
+          "Failed to queue workflow retry",
+
+        execution:
+          failedRetry
+            ? sanitizeExecution(
+                failedRetry
+              )
+            : null,
+      });
+    }
+
+    emitExecutionUpdate(
+      retryExecution
+    );
+
+    return res.status(201).json({
+      message:
+        "Workflow execution retry started",
+
+      execution:
+        sanitizeExecution(
+          retryExecution
+        ),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const replayExecution = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const { id } = req.params;
+
+    const workspaceId =
+      req.headers["x-workspace-id"];
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    const workspace =
+      await getWorkspace(
+        workspaceId,
+        req.user._id
+      );
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+    const originalExecution =
+      await Execution.findOne({
+        _id: id,
+        owner: req.user._id,
+        workspace: workspaceId,
+        status: {
+          $in: [
+            "success",
+            "failed",
+            "cancelled",
+          ],
+        },
+      }).lean();
+
+    if (!originalExecution) {
+      return res.status(404).json({
+        message:
+          "Completed execution not found",
+      });
+    }
+
+    const workflowVersion =
+      await WorkflowVersion.findOne({
+        _id:
+          originalExecution.workflowVersion,
+
+        workflow:
+          originalExecution.workflow,
+
+        workspace: workspaceId,
+
+        owner: req.user._id,
+      });
+
+    if (!workflowVersion) {
+      return res.status(409).json({
+        message:
+          "The workflow version used by this execution is no longer available",
+      });
+    }
+
+    const workflow =
+      await Workflow.findOne({
+        _id:
+          originalExecution.workflow,
+
+        owner: req.user._id,
+
+        workspace: workspaceId,
+      }).select("_id");
+
+    if (!workflow) {
+      return res.status(409).json({
+        message:
+          "The original workflow no longer exists",
+      });
+    }
+
+    const workflowSnapshot =
+      originalExecution.workflowSnapshot
+        ? originalExecution.workflowSnapshot
+        : {
+            _id:
+              workflowVersion.workflow,
+
+            version:
+              workflowVersion.version,
+
+            name:
+              workflowVersion.name,
+
+            description:
+              workflowVersion.description,
+
+            workspace:
+              workflowVersion.workspace,
+
+            trigger:
+              workflowVersion.trigger,
+
+            nodes:
+              workflowVersion.nodes,
+
+            edges:
+              workflowVersion.edges,
+          };
+
+    const replayedExecution =
+      await Execution.create({
+        workflow:
+          originalExecution.workflow,
+
+        workflowVersion:
+          workflowVersion._id,
+
+        workflowSnapshot,
+
+        owner:
+          req.user._id,
+
+        workspace:
+          workspaceId,
+
+        status: "pending",
+
+        trigger:
+          originalExecution.trigger,
+
+        input:
+          originalExecution.input || {},
+
+        retryOf: null,
+
+        replayOf:
+          originalExecution._id,
+
+        attempt: 1,
+
+        steps: [],
+
+        scheduledAt: null,
+
+        startedAt: null,
+
+        finishedAt: null,
+
+        cancelledAt: null,
+
+        error: null,
+      });
+
+    try {
+      await workflowQueue.add(
+        "execute-workflow",
+        {
+          executionId:
+            replayedExecution._id.toString(),
+        },
+        {
+          jobId:
+            replayedExecution._id.toString(),
+        }
+      );
+    } catch (queueError) {
+      console.error(
+        "Replay execution queue error:",
+        queueError
+      );
+
+      const failedReplay =
+        await Execution.findOneAndUpdate(
+          {
+            _id:
+              replayedExecution._id,
+
+            status: "pending",
+          },
+          {
+            $set: {
+              status: "failed",
+
+              finishedAt:
+                new Date(),
+
+              error:
+                "Failed to queue workflow replay",
+            },
+          },
+          {
+            returnDocument: "after",
+          }
+        );
+
+      return res.status(500).json({
+        message:
+          "Failed to queue workflow replay",
+
+        execution:
+          failedReplay
+            ? sanitizeExecution(
+                failedReplay
+              )
+            : null,
+      });
+    }
+
+    emitExecutionUpdate(
+      replayedExecution
+    );
+
+    return res.status(201).json({
+      message:
+        "Workflow replay started",
+
+      execution:
+        sanitizeExecution(
+          replayedExecution
+        ),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createExecution,
   getExecutions,
   getExecution,
   cancelExecutionController,
+  retryExecution,
+  replayExecution,
 };

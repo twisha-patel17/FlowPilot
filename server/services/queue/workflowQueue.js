@@ -1,17 +1,13 @@
 const { Queue } = require("bullmq");
 
 const queueRedisConnection = require("../../config/queueRedis");
+const { getRetryPolicy } = require("../../config/retry");
 
 const workflowQueue = new Queue("workflow-execution", {
   connection: queueRedisConnection,
 
   defaultJobOptions: {
-    attempts: 3,
-
-    backoff: {
-      type: "exponential",
-      delay: 5000,
-    },
+    ...getRetryPolicy(),
 
     removeOnComplete: 100,
     removeOnFail: 100,

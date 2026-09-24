@@ -35,17 +35,26 @@ const executeDiscordNode = async (
     );
   }
 
+  const headers = {
+    "Content-Type":
+      "application/json",
+  };
+
+  if (context.idempotencyKey) {
+    headers["Idempotency-Key"] =
+      context.idempotencyKey;
+  }
+
   const response = await axios.post(
     webhookUrl,
     {
       content: message,
     },
     {
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
 
-      signal: context.signal || undefined,
+      signal:
+        context.signal || undefined,
     }
   );
 
@@ -59,4 +68,5 @@ const executeDiscordNode = async (
   };
 };
 
-module.exports = executeDiscordNode;
+module.exports =
+  executeDiscordNode;

@@ -4,6 +4,8 @@ const {
   createExecution,
   getExecutions,
   getExecution,
+  retryExecution,
+  replayExecution,
   cancelExecutionController,
 } = require("../controllers/executionController");
 
@@ -31,6 +33,16 @@ router.post(
 router.get(
   "/",
   getExecutions
+);
+
+router.post(
+  "/:id/retry",
+  retryExecution
+);
+
+router.post(
+  "/:id/replay",
+  replayExecution
 );
 
 router.post(
