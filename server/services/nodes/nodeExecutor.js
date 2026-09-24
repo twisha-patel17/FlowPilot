@@ -94,7 +94,8 @@ const executeNode = async (
     case "condition":
       return executeConditionNode(
         node,
-        input
+        input,
+        nodeContext
       );
 
     case "delay":

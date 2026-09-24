@@ -4,6 +4,10 @@ const executeNode = require("../nodes/nodeExecutor");
 const { emitExecutionUpdate } = require("../socket/socket");
 
 const { resolveTemplates } = require("../../utils/templateEngine");
+const {
+  resolveBranch,
+  getOutgoingEdges,
+} = require("../../utils/branchResolver");
 
 const {
   acquireExecutionLock,
@@ -403,7 +407,7 @@ const executeWorkflow = async (
           },
         },
         {
-          new: true,
+          returnDocument: "after",
         }
       );
 
@@ -669,17 +673,19 @@ const executeWorkflow = async (
         buildExecutionContext(
           execution,
           input
-      );
+        );
 
-      const resolvedNode = resolveTemplates(
-        currentNode,
-        executionContext
-      );  
+      const resolvedNode =
+        resolveTemplates(
+          currentNode,
+          executionContext
+        );
 
-      const resolvedInput = resolveTemplates(
-        input,
-        executionContext
-      );
+      const resolvedInput =
+        resolveTemplates(
+          input,
+          executionContext
+        );
 
       let result;
 
@@ -693,6 +699,10 @@ const executeWorkflow = async (
                 userId: execution.owner,
                 workspaceId: execution.workspace,
                 signal,
+                trigger:
+                  executionContext.trigger,
+                steps:
+                  executionContext.steps,
               }
             ),
             remainingTime,
@@ -702,7 +712,8 @@ const executeWorkflow = async (
         throwIfCancelled(signal);
 
         if (
-          !result || result.success === false
+          !result ||
+          result.success === false
         ) {
           throw new Error(
             result?.error ||
@@ -716,6 +727,7 @@ const executeWorkflow = async (
             currentAttempt,
             stepId,
             {
+              input: resolvedInput,
               status: "success",
               output:
                 result.output || {},
@@ -823,26 +835,27 @@ const executeWorkflow = async (
         throw createTimeoutError();
       }
 
+      const branch =
+        nodeType === "condition"
+          ? resolveBranch(result)
+          : nodeType === "switch"
+            ? result.switchResult
+                ?.selectedHandle || null
+            : null;
+
       const outgoingEdges =
-        edges.filter(
-          (edge) =>
-            edge.source ===
-            currentNode.id
+        getOutgoingEdges(
+          edges,
+          currentNode.id,
+          branch
         );
 
-      let nextEdge = null;
+      let nextEdge =
+        outgoingEdges[0] || null;
 
       if (
         nodeType === "condition"
       ) {
-        if (
-          outgoingEdges.length ===
-          0
-        ) {
-          currentNode = null;
-          continue;
-        }
-
         if (
           typeof result.conditionResult !==
           "boolean"
@@ -852,21 +865,15 @@ const executeWorkflow = async (
           );
         }
 
-        const handle =
-          result.conditionResult
-            ? "true"
-            : "false";
-
-        nextEdge =
-          outgoingEdges.find(
-            (edge) =>
-              edge.sourceHandle ===
-              handle
+        if (!branch) {
+          throw new Error(
+            "Condition node did not return a valid branch"
           );
+        }
 
         if (!nextEdge) {
           console.log(
-            `No "${handle}" branch found for condition node`
+            `No "${branch}" branch found for condition node`
           );
 
           currentNode = null;
@@ -874,52 +881,23 @@ const executeWorkflow = async (
         }
       }
 
-      else if (
+      if (
         nodeType === "switch"
       ) {
-        if (
-          outgoingEdges.length ===
-          0
-        ) {
-          currentNode = null;
-          continue;
-        }
-
-        const selectedHandle =
-          result.switchResult
-            ?.selectedHandle;
-
-        if (
-          typeof selectedHandle !==
-          "string" ||
-          !selectedHandle
-        ) {
+        if (!branch) {
           throw new Error(
             "Switch node did not return a valid selected handle"
           );
         }
 
-        nextEdge =
-          outgoingEdges.find(
-            (edge) =>
-              edge.sourceHandle ===
-              selectedHandle
-          );
-
         if (!nextEdge) {
           console.log(
-            `No "${selectedHandle}" branch found for switch node`
+            `No "${branch}" branch found for switch node`
           );
 
           currentNode = null;
           continue;
         }
-      }
-
-      else {
-        nextEdge =
-          outgoingEdges[0] ||
-          null;
       }
 
       if (!nextEdge) {
@@ -970,7 +948,7 @@ const executeWorkflow = async (
           },
         },
         {
-          new: true,
+          returnDocument: "after",
         }
       );
 
@@ -992,10 +970,9 @@ const executeWorkflow = async (
       );
     }
 
-    execution =
-      completedExecution;
+    execution = completedExecution;
 
-    emitExecutionUpdate(
+        emitExecutionUpdate(
       execution
     );
 
@@ -1050,7 +1027,7 @@ const executeWorkflow = async (
             },
           },
           {
-            new: true,
+            returnDocument: "after",
           }
         );
 
@@ -1134,7 +1111,7 @@ const executeWorkflow = async (
           },
         },
         {
-          new: true,
+          returnDocument: "after",
         }
       );
 
