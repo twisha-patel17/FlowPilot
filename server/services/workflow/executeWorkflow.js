@@ -3,6 +3,8 @@ const Execution = require("../../models/Execution");
 const executeNode = require("../nodes/nodeExecutor");
 const { emitExecutionUpdate } = require("../socket/socket");
 
+const { resolveTemplates } = require("../../utils/templateEngine");
+
 const {
   acquireExecutionLock,
   releaseExecutionLock,
@@ -209,6 +211,29 @@ const getLatestExecution = async (
   return Execution.findById(
     executionId
   );
+};
+
+const buildExecutionContext = (
+  execution,
+  currentInput
+) => {
+  const steps = {};
+
+  for (const step of execution.steps || []) {
+    if (!step.nodeId) continue;
+
+    steps[step.nodeId] = {
+      output: step.output || {},
+      status: step.status,
+      error: step.error || null,
+    };
+  }
+
+  return {
+    trigger: execution.input || {},
+    input: currentInput || {},
+    steps,
+  };
 };
 
 const executeWorkflow = async (
@@ -640,21 +665,33 @@ const executeWorkflow = async (
         throw timeoutError;
       }
 
+      const executionContext =
+        buildExecutionContext(
+          execution,
+          input
+      );
+
+      const resolvedNode = resolveTemplates(
+        currentNode,
+        executionContext
+      );  
+
+      const resolvedInput = resolveTemplates(
+        input,
+        executionContext
+      );
+
       let result;
 
       try {
         result =
           await withTimeout(
             executeNode(
-              currentNode,
-              input,
+              resolvedNode,
+              resolvedInput,
               {
-                userId:
-                  execution.owner,
-
-                workspaceId:
-                  execution.workspace,
-
+                userId: execution.owner,
+                workspaceId: execution.workspace,
                 signal,
               }
             ),
@@ -665,8 +702,7 @@ const executeWorkflow = async (
         throwIfCancelled(signal);
 
         if (
-          !result ||
-          result.success === false
+          !result || result.success === false
         ) {
           throw new Error(
             result?.error ||
@@ -796,18 +832,6 @@ const executeWorkflow = async (
 
       let nextEdge = null;
 
-      /*
-       * CONDITION BRANCHING
-       *
-       * ConditionConfig returns:
-       *
-       * conditionResult: true / false
-       *
-       * WorkflowCanvas handles:
-       *
-       * true  → sourceHandle="true"
-       * false → sourceHandle="false"
-       */
       if (
         nodeType === "condition"
       ) {
@@ -850,20 +874,6 @@ const executeWorkflow = async (
         }
       }
 
-      /*
-       * SWITCH BRANCHING
-       *
-       * switchNode.js returns:
-       *
-       * case-0
-       * case-1
-       * case-2
-       * ...
-       * default
-       *
-       * WorkflowCanvas uses the same IDs
-       * for its source handles.
-       */
       else if (
         nodeType === "switch"
       ) {
@@ -906,12 +916,6 @@ const executeWorkflow = async (
         }
       }
 
-      /*
-       * NORMAL NODE
-       *
-       * Nodes without branching simply
-       * follow their first outgoing edge.
-       */
       else {
         nextEdge =
           outgoingEdges[0] ||

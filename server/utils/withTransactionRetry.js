@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const MAX_TRANSACTION_RETRIES = 3;
 
 const isRetryableTransactionError = (
@@ -6,7 +8,6 @@ const isRetryableTransactionError = (
   if (!error) {
     return false;
   }
-
   if (
     typeof error.hasErrorLabel ===
     "function"
@@ -50,8 +51,23 @@ const withTransactionRetry = async (
     attempt <= maxRetries;
     attempt++
   ) {
+    const session =
+      await mongoose.startSession();
+
     try {
-      return await operation();
+      let result;
+
+      await session.withTransaction(
+        async () => {
+          result =
+            await operation(
+              session,
+              attempt
+            );
+        }
+      );
+
+      return result;
     } catch (error) {
       lastError = error;
 
@@ -70,6 +86,8 @@ const withTransactionRetry = async (
       await new Promise((resolve) =>
         setTimeout(resolve, delay)
       );
+    } finally {
+      await session.endSession();
     }
   }
 
