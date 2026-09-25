@@ -9,7 +9,11 @@ const {
   cancelExecution,
 } = require("../services/workflow/executionCancellation");
 
-const createWorkspace = async (req, res, next) => {
+const createWorkspace = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { name } = req.body;
 
@@ -20,23 +24,26 @@ const createWorkspace = async (req, res, next) => {
 
     if (!trimmedName) {
       return res.status(400).json({
-        message: "Workspace name is required",
+        message:
+          "Workspace name is required",
       });
     }
 
-    const workspace = await Workspace.create({
-      name: trimmedName,
-      owner: req.user._id,
-      members: [
-        {
-          user: req.user._id,
-          role: "owner",
-        },
-      ],
-    });
+    const workspace =
+      await Workspace.create({
+        name: trimmedName,
+        owner: req.user._id,
+        members: [
+          {
+            user: req.user._id,
+            role: "owner",
+          },
+        ],
+      });
 
     return res.status(201).json({
-      message: "Workspace created successfully",
+      message:
+        "Workspace created successfully",
       workspace,
     });
   } catch (error) {
@@ -44,14 +51,20 @@ const createWorkspace = async (req, res, next) => {
   }
 };
 
-const getWorkspaces = async (req, res, next) => {
+const getWorkspaces = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const workspaces = await Workspace.find({
-      "members.user": req.user._id,
-      status: "active",
-    })
-      .sort({ createdAt: 1 })
-      .lean();
+    const workspaces =
+      await Workspace.find({
+        "members.user":
+          req.user._id,
+        status: "active",
+      })
+        .sort({ createdAt: 1 })
+        .lean();
 
     return res.status(200).json({
       workspaces,
@@ -61,19 +74,26 @@ const getWorkspaces = async (req, res, next) => {
   }
 };
 
-const getWorkspace = async (req, res, next) => {
+const getWorkspace = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { id } = req.params;
 
-    const workspace = await Workspace.findOne({
-      _id: id,
-      "members.user": req.user._id,
-      status: "active",
-    }).lean();
+    const workspace =
+      await Workspace.findOne({
+        _id: id,
+        "members.user":
+          req.user._id,
+        status: "active",
+      }).lean();
 
     if (!workspace) {
       return res.status(404).json({
-        message: "Workspace not found",
+        message:
+          "Workspace not found",
       });
     }
 
@@ -85,20 +105,26 @@ const getWorkspace = async (req, res, next) => {
   }
 };
 
-const updateWorkspace = async (req, res, next) => {
+const updateWorkspace = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
 
-    const workspace = await Workspace.findOne({
-      _id: id,
-      owner: req.user._id,
-      status: "active",
-    });
+    const workspace =
+      await Workspace.findOne({
+        _id: id,
+        owner: req.user._id,
+        status: "active",
+      });
 
     if (!workspace) {
       return res.status(404).json({
-        message: "Workspace not found",
+        message:
+          "Workspace not found",
       });
     }
 
@@ -110,17 +136,20 @@ const updateWorkspace = async (req, res, next) => {
 
       if (!trimmedName) {
         return res.status(400).json({
-          message: "Workspace name is required",
+          message:
+            "Workspace name is required",
         });
       }
 
-      workspace.name = trimmedName;
+      workspace.name =
+        trimmedName;
     }
 
     await workspace.save();
 
     return res.status(200).json({
-      message: "Workspace updated successfully",
+      message:
+        "Workspace updated successfully",
       workspace,
     });
   } catch (error) {
@@ -128,37 +157,47 @@ const updateWorkspace = async (req, res, next) => {
   }
 };
 
-const deleteWorkspace = async (req, res, next) => {
+const deleteWorkspace = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { id } = req.params;
 
-    const workspace = await Workspace.findOneAndUpdate(
-      {
-        _id: id,
-        owner: req.user._id,
-        status: "active",
-      },
-      {
-        $set: {
-          status: "deleting",
+    const workspace =
+      await Workspace.findOneAndUpdate(
+        {
+          _id: id,
+          owner: req.user._id,
+          status: "active",
         },
-      },
-      {
-        new: true,
-      }
-    );
+        {
+          $set: {
+            status: "deleting",
+          },
+        },
+        {
+          returnDocument: "after",
+        }
+      );
 
     if (!workspace) {
       return res.status(404).json({
-        message: "Workspace not found",
+        message:
+          "Workspace not found",
       });
     }
 
     const activeExecutions =
       await Execution.find({
-        workspace: workspace._id,
+        workspace:
+          workspace._id,
         status: {
-          $in: ["pending", "running"],
+          $in: [
+            "pending",
+            "running",
+          ],
         },
       })
         .select("_id")
@@ -166,7 +205,8 @@ const deleteWorkspace = async (req, res, next) => {
 
     const executionIds =
       activeExecutions.map(
-        (execution) => execution._id
+        (execution) =>
+          execution._id
       );
 
     if (executionIds.length > 0) {
@@ -175,48 +215,65 @@ const deleteWorkspace = async (req, res, next) => {
           _id: {
             $in: executionIds,
           },
-          workspace: workspace._id,
+          workspace:
+            workspace._id,
           status: {
-            $in: ["pending", "running"],
+            $in: [
+              "pending",
+              "running",
+            ],
           },
         },
         {
           $set: {
             status: "cancelled",
-            error: "Workspace deleted",
-            cancelledAt: new Date(),
-            finishedAt: new Date(),
+            error:
+              "Workspace deleted",
+            cancelledAt:
+              new Date(),
+            finishedAt:
+              new Date(),
           },
         }
       );
 
       for (const executionId of executionIds) {
-        cancelExecution(executionId);
+        cancelExecution(
+          executionId
+        );
       }
     }
 
-    await WebhookDelivery.deleteMany({
-      webhook: {
-        $in: await Webhook.find({
-          workspace: workspace._id,
-        }).distinct("_id"),
-      },
-    });
+    await WebhookDelivery.deleteMany(
+      {
+        webhook: {
+          $in:
+            await Webhook.find({
+              workspace:
+                workspace._id,
+            }).distinct("_id"),
+        },
+      }
+    );
 
     await Webhook.deleteMany({
-      workspace: workspace._id,
+      workspace:
+        workspace._id,
     });
 
     await Integration.deleteMany({
-      workspace: workspace._id,
+      workspace:
+        workspace._id,
     });
 
     await Execution.deleteMany({
-      workspace: workspace._id,
+      workspace:
+        workspace._id,
     });
 
     await Workflow.deleteMany({
-      workspace: workspace._id,
+      workspace:
+        workspace._id,
     });
 
     await Workspace.deleteOne({
@@ -226,7 +283,8 @@ const deleteWorkspace = async (req, res, next) => {
     });
 
     return res.status(200).json({
-      message: "Workspace deleted successfully",
+      message:
+        "Workspace deleted successfully",
     });
   } catch (error) {
     next(error);

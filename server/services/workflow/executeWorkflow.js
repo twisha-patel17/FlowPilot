@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Execution = require("../../models/Execution");
+const ExecutionEffect = require("../../models/ExecutionEffect");
 const executeNode = require("../nodes/nodeExecutor");
 const { emitExecutionUpdate } = require("../socket/socket");
 
@@ -17,6 +18,11 @@ const {
   acquireExecutionLock,
   releaseExecutionLock,
 } = require("../lock/executionLock");
+
+const {
+  acquireWorkspaceConcurrencySlot,
+  releaseWorkspaceConcurrencySlot,
+} = require("./concurrencyLock");
 
 const {
   registerExecution,
@@ -122,6 +128,17 @@ const createCancellationError = () => {
   return error;
 };
 
+const createConcurrencyLimitError = () => {
+  const error = new Error(
+    "Workspace execution concurrency limit reached"
+  );
+
+  error.code =
+    "WORKSPACE_CONCURRENCY_LIMIT";
+
+  return error;
+};
+
 const throwIfCancelled = (
   signal
 ) => {
@@ -221,6 +238,52 @@ const getLatestExecution = async (
   );
 };
 
+const getExecutionEffect = async (
+  execution,
+  node,
+  idempotencyKey
+) => {
+  return ExecutionEffect.findOne({
+    execution: execution._id,
+    nodeId: node.id,
+    idempotencyKey,
+  });
+};
+
+const createExecutionEffect = async (
+  execution,
+  node,
+  idempotencyKey
+) => {
+  try {
+    return await ExecutionEffect.create({
+      execution: execution._id,
+      workflow: execution.workflow,
+      workflowVersion:
+        execution.workflowVersion,
+      workspace: execution.workspace,
+      nodeId: node.id,
+      nodeType:
+        node.data?.type ||
+        node.data?.nodeType ||
+        node.type ||
+        "unknown",
+      idempotencyKey,
+      status: "pending",
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return ExecutionEffect.findOne({
+        execution: execution._id,
+        nodeId: node.id,
+        idempotencyKey,
+      });
+    }
+
+    throw error;
+  }
+};
+
 const buildExecutionContext = (
   execution,
   currentInput
@@ -249,6 +312,7 @@ const executeWorkflow = async (
   attemptNumber = 1
 ) => {
   let lock = null;
+  let concurrencySlot = null;
 
   const currentAttempt =
     Number(attemptNumber) >= 1
@@ -317,6 +381,35 @@ const executeWorkflow = async (
 
       return execution;
     }
+
+    /*
+     * Acquire workspace concurrency slot
+     * before acquiring the execution lock.
+     *
+     * This ensures the workspace-wide limit
+     * is enforced across all workers.
+     */
+    concurrencySlot =
+      await acquireWorkspaceConcurrencySlot(
+        execution.workspace,
+        executionId
+      );
+
+    if (!concurrencySlot.acquired) {
+      console.log(
+        `Workspace concurrency limit reached: ` +
+        `${execution.workspace} | ` +
+        `Execution: ${executionId}`
+      );
+
+      throw createConcurrencyLimitError();
+    }
+
+    console.log(
+      `Workspace concurrency slot acquired: ` +
+      `${execution.workspace} | ` +
+      `Execution: ${executionId}`
+    );
 
     lock =
       await acquireExecutionLock(
@@ -701,7 +794,8 @@ const executeWorkflow = async (
               resolvedInput,
               {
                 userId: execution.owner,
-                workspaceId: execution.workspace,
+                workspaceId:
+                  execution.workspace,
                 signal,
                 trigger:
                   executionContext.trigger,
@@ -979,7 +1073,8 @@ const executeWorkflow = async (
       );
     }
 
-    execution = completedExecution;
+    execution =
+      completedExecution;
 
     emitExecutionUpdate(
       execution
@@ -997,6 +1092,24 @@ const executeWorkflow = async (
 
     return execution;
   } catch (error) {
+    if (
+      error.code ===
+      "WORKSPACE_CONCURRENCY_LIMIT"
+    ) {
+      /*
+       * Important:
+       * Do not modify Execution to failed.
+       *
+       * BullMQ can retry this job later.
+       */
+      console.log(
+        `Workspace concurrency limit reached; ` +
+          `execution will retry: ${executionId}`
+      );
+
+      throw error;
+    }
+
     if (
       error.code ===
       "EXECUTION_CANCELLED"
@@ -1152,6 +1265,26 @@ const executeWorkflow = async (
       } catch (releaseError) {
         console.error(
           `Failed to release execution lock: ${executionId}`,
+          releaseError
+        );
+      }
+    }
+
+    if (concurrencySlot) {
+      try {
+        await releaseWorkspaceConcurrencySlot(
+          concurrencySlot.key,
+          concurrencySlot.token
+        );
+
+        console.log(
+          `Workspace concurrency slot released: ` +
+            `${executionId}`
+        );
+      } catch (releaseError) {
+        console.error(
+          `Failed to release workspace concurrency slot: ` +
+            `${executionId}`,
           releaseError
         );
       }

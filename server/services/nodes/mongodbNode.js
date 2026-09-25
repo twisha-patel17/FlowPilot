@@ -1,6 +1,38 @@
 const { MongoClient } = require("mongodb");
 const getIntegration = require("../integrations/getIntegration");
 
+const IDEMPOTENCY_FIELD =
+  "_flowPilotIdempotencyKey";
+
+const ensureIdempotencyIndex = async (
+  collection
+) => {
+  try {
+    await collection.createIndex(
+      {
+        [IDEMPOTENCY_FIELD]: 1,
+      },
+      {
+        unique: true,
+        sparse: true,
+        name: "flowpilot_idempotency_unique",
+      }
+    );
+  } catch (error) {
+    if (error.code === 85) {
+      return;
+    }
+
+    if (error.code === 86) {
+      return;
+    }
+
+    throw new Error(
+      "MongoDB idempotency index could not be created. Existing duplicate FlowPilot idempotency keys may need cleanup."
+    );
+  }
+};
+
 const executeMongoDBNode = async (
   node,
   input = {},
@@ -101,8 +133,73 @@ const executeMongoDBNode = async (
 
     switch (operation) {
       case "insert": {
-        const document =
-          config.document || input;
+        const document = {
+          ...(config.document || input),
+        };
+
+        if (context.idempotencyKey) {
+          await ensureIdempotencyIndex(
+            collection
+          );
+
+          checkAborted();
+
+          document[IDEMPOTENCY_FIELD] =
+            context.idempotencyKey;
+
+          try {
+            const result =
+              await collection.insertOne(
+                document
+              );
+
+            checkAborted();
+
+            output = {
+              operation: "insert",
+              insertedId:
+                result.insertedId.toString(),
+              document,
+              idempotent: true,
+            };
+          } catch (error) {
+            
+            if (
+              error.code === 11000
+            ) {
+              const existingDocument =
+                await collection.findOne({
+                  [IDEMPOTENCY_FIELD]:
+                    context.idempotencyKey,
+                });
+
+              checkAborted();
+
+              if (!existingDocument) {
+                throw error;
+              }
+
+              console.log(
+                "MongoDB insert skipped: idempotent document already exists"
+              );
+
+              output = {
+                operation: "insert",
+                insertedId:
+                  existingDocument._id.toString(),
+                document:
+                  existingDocument,
+                idempotent: true,
+              };
+
+              break;
+            }
+
+            throw error;
+          }
+
+          break;
+        }
 
         checkAborted();
 
@@ -118,6 +215,7 @@ const executeMongoDBNode = async (
           insertedId:
             result.insertedId.toString(),
           document,
+          idempotent: false,
         };
 
         break;

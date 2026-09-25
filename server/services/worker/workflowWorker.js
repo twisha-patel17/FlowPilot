@@ -1,11 +1,24 @@
-const { Worker } = require("bullmq");
+const {
+  Worker,
+  UnrecoverableError,
+} = require("bullmq");
 
-const redisConnection = require("../../config/redis");
-const Execution = require("../../models/Execution");
-const WebhookDelivery = require("../../models/WebhookDelivery");
+const redisConnection =
+  require("../../config/redis");
 
-const executeWorkflow = require("../workflow/executeWorkflow");
-const { emitExecutionUpdate } = require("../socket/socket");
+const Execution =
+  require("../../models/Execution");
+
+const WebhookDelivery =
+  require("../../models/WebhookDelivery");
+
+const executeWorkflow =
+  require("../workflow/executeWorkflow");
+
+const {
+  emitExecutionUpdate,
+} = require("../socket/socket");
+
 const {
   isRetryableError,
 } = require("../../utils/retryPolicy");
@@ -58,6 +71,50 @@ const updateWebhookDelivery = async (
   await webhookDelivery.save();
 };
 
+const markExecutionFailed = async (
+  executionId,
+  attempt,
+  error
+) => {
+  const execution =
+    await Execution.findOneAndUpdate(
+      {
+        _id: executionId,
+        status: {
+          $in: [
+            "pending",
+            "running",
+          ],
+        },
+        attempt,
+      },
+      {
+        $set: {
+          status: "failed",
+          error:
+            error?.message ||
+            "Workflow execution failed",
+          finishedAt: new Date(),
+        },
+      },
+      {
+        returnDocument: "after",
+      }
+    );
+
+  if (execution) {
+    emitExecutionUpdate(execution);
+
+    await updateWebhookDelivery(
+      execution._id,
+      "failed",
+      execution.error
+    );
+  }
+
+  return execution;
+};
+
 const workflowWorker = new Worker(
   "workflow-execution",
 
@@ -66,19 +123,22 @@ const workflowWorker = new Worker(
       `Processing workflow job: ${job.id}`
     );
 
-    const { executionId } = job.data;
+    const { executionId } =
+      job.data;
 
     if (!executionId) {
-      throw new Error(
+      throw new UnrecoverableError(
         "Execution ID is missing"
       );
     }
 
     const existingExecution =
-      await Execution.findById(executionId);
+      await Execution.findById(
+        executionId
+      );
 
     if (!existingExecution) {
-      throw new Error(
+      throw new UnrecoverableError(
         `Execution not found: ${executionId}`
       );
     }
@@ -116,6 +176,22 @@ const workflowWorker = new Worker(
       return {
         executionId,
         status: "success",
+        attempt:
+          existingExecution.attempt,
+      };
+    }
+
+    if (
+      existingExecution.status ===
+      "failed"
+    ) {
+      console.log(
+        `Execution already failed: ${executionId}`
+      );
+
+      return {
+        executionId,
+        status: "failed",
         attempt:
           existingExecution.attempt,
       };
@@ -190,7 +266,6 @@ const workflowWorker = new Worker(
         attempt: currentAttempt,
       };
     } catch (error) {
-    
       if (
         error.code ===
         "EXECUTION_CANCELLED"
@@ -289,6 +364,10 @@ const workflowWorker = new Worker(
       const retryable =
         isRetryableError(error);
 
+      /*
+       * Permanent errors must NEVER enter
+       * BullMQ's retry cycle.
+       */
       if (!retryable) {
         console.log(
           `Non-retryable workflow error: ` +
@@ -296,14 +375,33 @@ const workflowWorker = new Worker(
             `${error.message}`
         );
 
-        throw error;
+        const failedExecution =
+          await markExecutionFailed(
+            executionId,
+            currentAttempt,
+            error
+          );
+
+        if (failedExecution) {
+          console.log(
+            `Workflow execution permanently failed: ` +
+              `${executionId} | ` +
+              `Non-retryable error`
+          );
+        }
+
+        throw new UnrecoverableError(
+          error.message ||
+            "Workflow execution failed"
+        );
       }
 
       const nextAttempt =
         currentAttempt + 1;
 
       const canRetry =
-        nextAttempt <= attemptsAllowed;
+        nextAttempt <=
+        attemptsAllowed;
 
       if (canRetry) {
         const retryingExecution =
@@ -363,7 +461,8 @@ const workflowWorker = new Worker(
   },
 
   {
-    connection: redisConnection,
+    connection:
+      redisConnection,
   }
 );
 
@@ -419,6 +518,23 @@ workflowWorker.on(
       return;
     }
 
+    /*
+     * Non-retryable errors are already
+     * marked failed inside the processor.
+     */
+    if (
+      error instanceof UnrecoverableError ||
+      error.name ===
+        "UnrecoverableError"
+    ) {
+      console.log(
+        `Non-retryable execution already finalized: ` +
+          `${executionId}`
+      );
+
+      return;
+    }
+
     const attemptsAllowed =
       job.opts.attempts || 1;
 
@@ -426,7 +542,8 @@ workflowWorker.on(
       job.attemptsMade;
 
     const isFinalAttempt =
-      attemptsMade >= attemptsAllowed;
+      attemptsMade >=
+      attemptsAllowed;
 
     if (!isFinalAttempt) {
       return;
@@ -455,7 +572,8 @@ workflowWorker.on(
                 error.message ||
                 "Workflow execution failed",
 
-              finishedAt: new Date(),
+              finishedAt:
+                new Date(),
             },
           },
           {

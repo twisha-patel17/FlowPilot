@@ -117,8 +117,6 @@ const register = async (
         ],
       });
     } catch (workspaceError) {
-      // Do not leave an account without
-      // its required Personal Space.
       await User.deleteOne({
         _id: user._id,
       });
@@ -315,15 +313,6 @@ const refreshAccessToken = async (
         newRefreshToken
       );
 
-    /*
-     * Atomic token rotation.
-     *
-     * The old refresh-token hash must
-     * still be present when the update
-     * occurs. This prevents two concurrent
-     * refresh requests from both rotating
-     * the same token successfully.
-     */
     const user =
       await User.findOneAndUpdate(
         {
@@ -340,7 +329,7 @@ const refreshAccessToken = async (
           },
         },
         {
-          new: true,
+          returnDocument: "after",
         }
       );
 
@@ -646,8 +635,6 @@ const changePassword = async (
         12
       );
 
-    // Revoke all existing refresh
-    // sessions after password change.
     user.refreshToken = null;
 
     await user.save();
