@@ -123,8 +123,7 @@ const workflowWorker = new Worker(
       `Processing workflow job: ${job.id}`
     );
 
-    const { executionId } =
-      job.data;
+    const { executionId } = job.data;
 
     if (!executionId) {
       throw new UnrecoverableError(
@@ -196,7 +195,6 @@ const workflowWorker = new Worker(
           existingExecution.attempt,
       };
     }
-
     const currentAttempt =
       job.attemptsMade + 1;
 
@@ -266,6 +264,7 @@ const workflowWorker = new Worker(
         attempt: currentAttempt,
       };
     } catch (error) {
+      
       if (
         error.code ===
         "EXECUTION_CANCELLED"
@@ -343,7 +342,6 @@ const workflowWorker = new Worker(
           attempt: currentAttempt,
         };
       }
-
       if (
         latestExecution?.status ===
         "success"
@@ -364,10 +362,6 @@ const workflowWorker = new Worker(
       const retryable =
         isRetryableError(error);
 
-      /*
-       * Permanent errors must NEVER enter
-       * BullMQ's retry cycle.
-       */
       if (!retryable) {
         console.log(
           `Non-retryable workflow error: ` +
@@ -390,12 +384,21 @@ const workflowWorker = new Worker(
           );
         }
 
-        throw new UnrecoverableError(
-          error.message ||
-            "Workflow execution failed"
-        );
-      }
+        const unrecoverableError =
+          new UnrecoverableError(
+            error.message ||
+              "Workflow execution failed"
+          );
 
+        try {
+          unrecoverableError.cause =
+            error;
+        } catch (_) {
+          
+        }
+
+        throw unrecoverableError;
+      }
       const nextAttempt =
         currentAttempt + 1;
 
@@ -518,10 +521,6 @@ workflowWorker.on(
       return;
     }
 
-    /*
-     * Non-retryable errors are already
-     * marked failed inside the processor.
-     */
     if (
       error instanceof UnrecoverableError ||
       error.name ===

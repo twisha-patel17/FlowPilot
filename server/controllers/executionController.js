@@ -52,15 +52,13 @@ const createExecution = async (
 
     if (!workflowId) {
       return res.status(400).json({
-        message:
-          "Workflow is required",
+        message: "Workflow is required",
       });
     }
 
     if (!workspaceId) {
       return res.status(400).json({
-        message:
-          "Workspace is required",
+        message: "Workspace is required",
       });
     }
 
@@ -98,8 +96,7 @@ const createExecution = async (
         workflow: workflow._id,
         workspace: workspaceId,
         owner: req.user._id,
-        version:
-          workflow.currentVersion,
+        version: workflow.currentVersion,
       });
 
     if (!workflowVersion) {
@@ -110,29 +107,14 @@ const createExecution = async (
     }
 
     const workflowSnapshot = {
-      _id:
-        workflowVersion.workflow,
-
-      version:
-        workflowVersion.version,
-
-      name:
-        workflowVersion.name,
-
-      description:
-        workflowVersion.description,
-
-      workspace:
-        workflowVersion.workspace,
-
-      trigger:
-        workflowVersion.trigger,
-
-      nodes:
-        workflowVersion.nodes,
-
-      edges:
-        workflowVersion.edges,
+      _id: workflowVersion.workflow,
+      version: workflowVersion.version,
+      name: workflowVersion.name,
+      description: workflowVersion.description,
+      workspace: workflowVersion.workspace,
+      trigger: workflowVersion.trigger,
+      nodes: workflowVersion.nodes,
+      edges: workflowVersion.edges,
     };
 
     let execution;
@@ -507,7 +489,7 @@ const cancelExecutionController =
     }
   };
 
-  const retryExecution = async (
+const retryExecution = async (
   req,
   res,
   next
@@ -645,6 +627,11 @@ const cancelExecutionController =
           input:
             originalExecution.input || {},
 
+          // Retry reuses the original
+          // side-effect scope.
+          effectScopeId:
+            originalExecution.effectScopeId,
+
           retryOf:
             originalExecution._id,
 
@@ -774,6 +761,7 @@ const replayExecution = async (
           "You do not have access to this workspace",
       });
     }
+
     const originalExecution =
       await Execution.findOne({
         _id: id,
@@ -820,9 +808,11 @@ const replayExecution = async (
         _id:
           originalExecution.workflow,
 
-        owner: req.user._id,
+        owner:
+          req.user._id,
 
-        workspace: workspaceId,
+        workspace:
+          workspaceId,
       }).select("_id");
 
     if (!workflow) {

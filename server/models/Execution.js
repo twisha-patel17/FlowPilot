@@ -66,6 +66,13 @@ const executionSchema = new mongoose.Schema(
       default: {},
     },
 
+    effectScopeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      default: () => new mongoose.Types.ObjectId(),
+      index: true,
+    },
+
     retryOf: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Execution",
@@ -73,7 +80,7 @@ const executionSchema = new mongoose.Schema(
       index: true,
     },
 
-    replyOf: {
+    replayOf: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Execution",
       default: null,
@@ -189,6 +196,11 @@ executionSchema.index({
 executionSchema.index({
   workspace: 1,
   status: 1,
+  createdAt: -1,
+});
+
+executionSchema.index({
+  effectScopeId: 1,
   createdAt: -1,
 });
 

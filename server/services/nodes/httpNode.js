@@ -1,12 +1,27 @@
 const axios = require("axios");
-const getIntegration = require("../integrations/getIntegration");
+
+const getIntegration =
+  require("../integrations/getIntegration");
+
+const {
+  validateAndPrepareHttpUrl,
+} = require("../../utils/ssrfProtection");
+
+const IDEMPOTENT_METHODS =
+  new Set([
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+  ]);
 
 const executeHttpNode = async (
   node,
   input = {},
   context = {}
 ) => {
-  const config = node.data?.config || {};
+  const config =
+    node.data?.config || {};
 
   const method = (
     config.method || "GET"
@@ -38,7 +53,6 @@ const executeHttpNode = async (
       );
     }
   }
-
   if (config.integrationId) {
     const integration =
       await getIntegration({
@@ -58,11 +72,14 @@ const executeHttpNode = async (
       integration.credentials || {};
 
     if (credentials.baseUrl) {
-      url =
-        `${credentials.baseUrl.replace(
+      const baseUrl =
+        credentials.baseUrl.replace(
           /\/$/,
           ""
-        )}` +
+        );
+
+      url =
+        `${baseUrl}` +
         `${
           url.startsWith("/")
             ? url
@@ -85,52 +102,100 @@ const executeHttpNode = async (
       };
     }
   }
+  const safeTarget =
+    await validateAndPrepareHttpUrl(
+      url
+    );
 
-  /*
-   * Idempotency
-   *
-   * The same execution + node receives
-   * the same key across retry attempts.
-   *
-   * Replay creates a new execution ID,
-   * therefore it receives a new key.
-   */
-  if (context.idempotencyKey) {
+  if (
+    context.idempotencyKey &&
+    IDEMPOTENT_METHODS.has(method)
+  ) {
     headers = {
       ...headers,
+
       "Idempotency-Key":
         context.idempotencyKey,
     };
   }
 
   console.log(
-    `HTTP ${method} ${url}`
+    `HTTP ${method} ${safeTarget.url}`
   );
 
-  const response = await axios({
-    method,
-    url,
-    headers,
+  const lookup = (
+    hostname,
+    options,
+    callback
+  ) => {
+    if (
+      hostname !==
+      safeTarget.hostname
+    ) {
+      return callback(
+        new Error(
+          "HTTP node DNS hostname mismatch"
+        )
+      );
+    }
 
-    data:
-      method === "GET"
-        ? undefined
-        : body,
-
-    signal:
-      context.signal || undefined,
-  });
-
-  return {
-    success: true,
-
-    output: {
-      status: response.status,
-      data: response.data,
-      headers: response.headers,
-      input,
-    },
+    callback(
+      null,
+      safeTarget.address,
+      safeTarget.family
+    );
   };
+
+  try {
+    const response =
+      await axios({
+        method,
+
+        url:
+          safeTarget.url,
+
+        headers,
+
+        data:
+          method === "GET"
+            ? undefined
+            : body,
+
+        signal:
+          context.signal ||
+          undefined,
+
+        maxRedirects: 0,
+
+        lookup,
+      });
+
+    return {
+      success: true,
+
+      output: {
+        status:
+          response.status,
+
+        data:
+          response.data,
+
+        headers:
+          response.headers,
+
+        input,
+      },
+    };
+  } catch (error) {
+    if (
+      error.response?.status
+    ) {
+      error.statusCode =
+        error.response.status;
+    }
+
+    throw error;
+  }
 };
 
 module.exports =

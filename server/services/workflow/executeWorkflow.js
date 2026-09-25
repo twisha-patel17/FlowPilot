@@ -33,17 +33,9 @@ const WORKFLOW_TIMEOUT =
   Number(process.env.WORKFLOW_TIMEOUT_MS) ||
   5 * 60 * 1000;
 
-const validateWorkflowGraph = (
-  nodes,
-  edges
-) => {
-  if (
-    !Array.isArray(nodes) ||
-    nodes.length === 0
-  ) {
-    throw new Error(
-      "Workflow has no nodes"
-    );
+const validateWorkflowGraph = (nodes, edges) => {
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    throw new Error("Workflow has no nodes");
   }
 
   const nodeIds = new Set();
@@ -89,8 +81,7 @@ const validateWorkflowGraph = (
   );
 
   const startNodes = nodes.filter(
-    (node) =>
-      !targetNodeIds.has(node.id)
+    (node) => !targetNodeIds.has(node.id)
   );
 
   if (startNodes.length === 0) {
@@ -139,9 +130,7 @@ const createConcurrencyLimitError = () => {
   return error;
 };
 
-const throwIfCancelled = (
-  signal
-) => {
+const throwIfCancelled = (signal) => {
   if (signal?.aborted) {
     throw createCancellationError();
   }
@@ -165,9 +154,7 @@ const withTimeout = (
           controller.abort();
         }
 
-        reject(
-          createTimeoutError()
-        );
+        reject(createTimeoutError());
       }, timeoutMs);
     });
 
@@ -233,9 +220,16 @@ const updateStep = async (
 const getLatestExecution = async (
   executionId
 ) => {
-  return Execution.findById(
-    executionId
-  );
+  return Execution.findById(executionId);
+};
+
+const isSideEffectNode = (nodeType) => {
+  return [
+    "http",
+    "discord",
+    "email",
+    "mongodb",
+  ].includes(nodeType);
 };
 
 const getExecutionEffect = async (
@@ -244,7 +238,7 @@ const getExecutionEffect = async (
   idempotencyKey
 ) => {
   return ExecutionEffect.findOne({
-    execution: execution._id,
+    effectScopeId: execution.effectScopeId,
     nodeId: node.id,
     idempotencyKey,
   });
@@ -258,6 +252,7 @@ const createExecutionEffect = async (
   try {
     return await ExecutionEffect.create({
       execution: execution._id,
+      effectScopeId: execution.effectScopeId,
       workflow: execution.workflow,
       workflowVersion:
         execution.workflowVersion,
@@ -274,7 +269,7 @@ const createExecutionEffect = async (
   } catch (error) {
     if (error.code === 11000) {
       return ExecutionEffect.findOne({
-        execution: execution._id,
+        effectScopeId: execution.effectScopeId,
         nodeId: node.id,
         idempotencyKey,
       });
@@ -282,6 +277,32 @@ const createExecutionEffect = async (
 
     throw error;
   }
+};
+
+const completeExecutionEffect = async (
+  execution,
+  node,
+  idempotencyKey,
+  output
+) => {
+  return ExecutionEffect.findOneAndUpdate(
+    {
+      effectScopeId: execution.effectScopeId,
+      nodeId: node.id,
+      idempotencyKey,
+    },
+    {
+      $set: {
+        status: "completed",
+        output: output || {},
+        error: null,
+        completedAt: new Date(),
+      },
+    },
+    {
+      returnDocument: "after",
+    }
+  );
 };
 
 const buildExecutionContext = (
@@ -342,6 +363,17 @@ const executeWorkflow = async (
       );
     }
 
+    /*
+     * Backward compatibility for executions
+     * created before effectScopeId was added.
+     */
+    if (!execution.effectScopeId) {
+      execution.effectScopeId =
+        new mongoose.Types.ObjectId();
+
+      await execution.save();
+    }
+
     if (
       execution.status === "success"
     ) {
@@ -374,21 +406,14 @@ const executeWorkflow = async (
     ) {
       console.log(
         `Ignoring stale workflow attempt: ` +
-        `${execution._id} | ` +
-        `Job attempt: ${currentAttempt} | ` +
-        `Current execution attempt: ${execution.attempt}`
+          `${execution._id} | ` +
+          `Job attempt: ${currentAttempt} | ` +
+          `Current execution attempt: ${execution.attempt}`
       );
 
       return execution;
     }
 
-    /*
-     * Acquire workspace concurrency slot
-     * before acquiring the execution lock.
-     *
-     * This ensures the workspace-wide limit
-     * is enforced across all workers.
-     */
     concurrencySlot =
       await acquireWorkspaceConcurrencySlot(
         execution.workspace,
@@ -398,8 +423,8 @@ const executeWorkflow = async (
     if (!concurrencySlot.acquired) {
       console.log(
         `Workspace concurrency limit reached: ` +
-        `${execution.workspace} | ` +
-        `Execution: ${executionId}`
+          `${execution.workspace} | ` +
+          `Execution: ${executionId}`
       );
 
       throw createConcurrencyLimitError();
@@ -407,8 +432,8 @@ const executeWorkflow = async (
 
     console.log(
       `Workspace concurrency slot acquired: ` +
-      `${execution.workspace} | ` +
-      `Execution: ${executionId}`
+        `${execution.workspace} | ` +
+        `Execution: ${executionId}`
     );
 
     lock =
@@ -457,7 +482,7 @@ const executeWorkflow = async (
     ) {
       console.log(
         `Execution completed before locked worker started: ` +
-        `${execution._id}`
+          `${execution._id}`
       );
 
       return execution;
@@ -469,9 +494,9 @@ const executeWorkflow = async (
     ) {
       console.log(
         `Ignoring stale locked attempt: ` +
-        `${execution._id} | ` +
-        `Job attempt: ${currentAttempt} | ` +
-        `Current execution attempt: ${execution.attempt}`
+          `${execution._id} | ` +
+          `Job attempt: ${currentAttempt} | ` +
+          `Current execution attempt: ${execution.attempt}`
       );
 
       return execution;
@@ -481,14 +506,12 @@ const executeWorkflow = async (
       await Execution.findOneAndUpdate(
         {
           _id: executionId,
-
           status: {
             $in: [
               "pending",
               "running",
             ],
           },
-
           attempt: {
             $lte: currentAttempt,
           },
@@ -596,8 +619,8 @@ const executeWorkflow = async (
 
     console.log(
       `Starting workflow: ${workflow.name} | ` +
-      `Attempt: ${currentAttempt} | ` +
-      `Timeout: ${WORKFLOW_TIMEOUT}ms`
+        `Attempt: ${currentAttempt} | ` +
+        `Timeout: ${WORKFLOW_TIMEOUT}ms`
     );
 
     const nodes =
@@ -660,8 +683,8 @@ const executeWorkflow = async (
 
       console.log(
         `Executing node: ${currentNode.id} ` +
-        `(${nodeType}) | ` +
-        `Attempt: ${currentAttempt}`
+          `(${nodeType}) | ` +
+          `Attempt: ${currentAttempt}`
       );
 
       const stepStartedAt =
@@ -784,6 +807,114 @@ const executeWorkflow = async (
           executionContext
         );
 
+      /*
+       * IMPORTANT:
+       * Idempotency is scoped to the logical
+       * side-effect lifecycle, not the execution ID.
+       *
+       * Manual retries inherit effectScopeId.
+       * Replays receive a new effectScopeId.
+       */
+      const idempotencyKey =
+        createIdempotencyKey(
+          execution.effectScopeId.toString(),
+          currentNode.id
+        );
+
+      if (isSideEffectNode(nodeType)) {
+        const existingEffect =
+          await getExecutionEffect(
+            execution,
+            currentNode,
+            idempotencyKey
+          );
+
+        if (
+          existingEffect?.status ===
+          "completed"
+        ) {
+          console.log(
+            `Reusing completed side effect: ${currentNode.id}`
+          );
+
+          const stepUpdated =
+            await updateStep(
+              executionId,
+              currentAttempt,
+              stepId,
+              {
+                input: resolvedInput,
+                status: "success",
+                output:
+                  existingEffect.output ||
+                  {},
+                duration:
+                  Date.now() -
+                  stepStartedAt,
+              }
+            );
+
+          if (!stepUpdated) {
+            throw new Error(
+              "Workflow step could not be completed from existing side effect"
+            );
+          }
+
+          execution =
+            await getLatestExecution(
+              executionId
+            );
+
+          if (!execution) {
+            throw new Error(
+              "Execution not found"
+            );
+          }
+
+          emitExecutionUpdate(
+            execution
+          );
+
+          input =
+            existingEffect.output ||
+            {};
+
+          const outgoingEdges =
+            getOutgoingEdges(
+              edges,
+              currentNode.id
+            );
+
+          const nextEdge =
+            outgoingEdges[0] || null;
+
+          if (!nextEdge) {
+            currentNode = null;
+          } else {
+            currentNode =
+              nodes.find(
+                (node) =>
+                  node.id ===
+                  nextEdge.target
+              );
+
+            if (!currentNode) {
+              throw new Error(
+                `Next node not found: ${nextEdge.target}`
+              );
+            }
+          }
+
+          continue;
+        }
+
+        await createExecutionEffect(
+          execution,
+          currentNode,
+          idempotencyKey
+        );
+      }
+
       let result;
 
       try {
@@ -801,11 +932,7 @@ const executeWorkflow = async (
                   executionContext.trigger,
                 steps:
                   executionContext.steps,
-                idempotencyKey:
-                  createIdempotencyKey(
-                    execution._id.toString(),
-                    currentNode.id
-                  ),
+                idempotencyKey,
               }
             ),
             remainingTime,
@@ -822,6 +949,22 @@ const executeWorkflow = async (
             result?.error ||
               `Node execution failed: ${currentNode.id}`
           );
+        }
+
+        if (isSideEffectNode(nodeType)) {
+          const completedEffect =
+            await completeExecutionEffect(
+              execution,
+              currentNode,
+              idempotencyKey,
+              result.output || {}
+            );
+
+          if (!completedEffect) {
+            throw new Error(
+              "Execution effect could not be marked as completed"
+            );
+          }
         }
 
         const stepUpdated =
@@ -895,9 +1038,9 @@ const executeWorkflow = async (
               ? "Workflow execution was cancelled"
               : error.code ===
                 "ERR_CANCELED"
-              ? "Workflow execution timed out"
-              : error.message ||
-                "Node execution failed";
+                ? "Workflow execution timed out"
+                : error.message ||
+                  "Node execution failed";
 
         await updateStep(
           executionId,
@@ -1038,9 +1181,7 @@ const executeWorkflow = async (
       await Execution.findOneAndUpdate(
         {
           _id: executionId,
-
           status: "running",
-
           attempt: currentAttempt,
         },
         {
@@ -1082,12 +1223,12 @@ const executeWorkflow = async (
 
     console.log(
       `Workflow completed successfully: ` +
-      `${workflow.name} | ` +
-      `Attempt: ${currentAttempt} | ` +
-      `Duration: ${
-        Date.now() -
-        workflowStartedAt
-      }ms`
+        `${workflow.name} | ` +
+        `Attempt: ${currentAttempt} | ` +
+        `Duration: ${
+          Date.now() -
+          workflowStartedAt
+        }ms`
     );
 
     return execution;
@@ -1096,12 +1237,6 @@ const executeWorkflow = async (
       error.code ===
       "WORKSPACE_CONCURRENCY_LIMIT"
     ) {
-      /*
-       * Important:
-       * Do not modify Execution to failed.
-       *
-       * BullMQ can retry this job later.
-       */
       console.log(
         `Workspace concurrency limit reached; ` +
           `execution will retry: ${executionId}`
@@ -1116,34 +1251,29 @@ const executeWorkflow = async (
     ) {
       console.log(
         `Workflow execution cancelled: ` +
-        `${executionId} | ` +
-        `Attempt: ${currentAttempt}`
+          `${executionId} | ` +
+          `Attempt: ${currentAttempt}`
       );
 
       const cancelledExecution =
         await Execution.findOneAndUpdate(
           {
             _id: executionId,
-
             status: {
               $in: [
                 "pending",
                 "running",
               ],
             },
-
             attempt: currentAttempt,
           },
           {
             $set: {
               status: "cancelled",
-
               error:
                 "Workflow execution was cancelled",
-
               finishedAt:
                 new Date(),
-
               cancelledAt:
                 new Date(),
             },
@@ -1182,8 +1312,8 @@ const executeWorkflow = async (
     ) {
       console.log(
         `Execution already locked: ` +
-        `${executionId} | ` +
-        `Attempt: ${currentAttempt}`
+          `${executionId} | ` +
+          `Attempt: ${currentAttempt}`
       );
 
       throw error;
@@ -1207,7 +1337,7 @@ const executeWorkflow = async (
 
     console.error(
       `Workflow execution error | ` +
-      `Attempt: ${currentAttempt}:`,
+        `Attempt: ${currentAttempt}:`,
       error
     );
 
@@ -1215,14 +1345,12 @@ const executeWorkflow = async (
       await Execution.findOneAndUpdate(
         {
           _id: executionId,
-
           status: {
             $in: [
               "running",
               "pending",
             ],
           },
-
           attempt: currentAttempt,
         },
         {

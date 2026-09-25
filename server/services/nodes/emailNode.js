@@ -6,14 +6,22 @@ const executeEmailNode = async (
   input = {},
   context = {}
 ) => {
-  const config = node.data?.config || {};
+  const config =
+    node.data?.config || {};
 
-  const integration = await getIntegration({
-    integrationId: config.integrationId,
-    userId: context.userId,
-    workspaceId: context.workspaceId,
-    provider: "email",
-  });
+  const integration =
+    await getIntegration({
+      integrationId:
+        config.integrationId,
+
+      userId:
+        context.userId,
+
+      workspaceId:
+        context.workspaceId,
+
+      provider: "email",
+    });
 
   const credentials =
     integration.credentials || {};
@@ -62,6 +70,7 @@ const executeEmailNode = async (
       host,
       port: Number(port) || 587,
       secure: Boolean(secure),
+
       auth: {
         user: username,
         pass: password,
@@ -80,9 +89,14 @@ const executeEmailNode = async (
     if (context.signal.aborted) {
       transporter.close();
 
-      throw new Error(
+      const error = new Error(
         "Email node execution was cancelled"
       );
+
+      error.code =
+        "NODE_CANCELLED";
+
+      throw error;
     }
 
     context.signal.addEventListener(
@@ -113,6 +127,13 @@ const executeEmailNode = async (
       mailOptions.headers = {
         "X-FlowPilot-Idempotency-Key":
           context.idempotencyKey,
+
+        "X-FlowPilot-Execution":
+          context.executionId
+            ? String(
+                context.executionId
+              )
+            : undefined,
       };
     }
 
@@ -122,9 +143,14 @@ const executeEmailNode = async (
       );
 
     if (context.signal?.aborted) {
-      throw new Error(
+      const error = new Error(
         "Email node execution was cancelled"
       );
+
+      error.code =
+        "NODE_CANCELLED";
+
+      throw error;
     }
 
     console.log(
@@ -133,13 +159,21 @@ const executeEmailNode = async (
 
     return {
       success: true,
+
       output: {
-        messageId: info.messageId,
-        to: config.to,
+        messageId:
+          info.messageId,
+
+        to:
+          config.to,
+
         subject,
+
         input,
       },
     };
+  } catch (error) {
+    throw error;
   } finally {
     if (context.signal) {
       context.signal.removeEventListener(
@@ -152,5 +186,4 @@ const executeEmailNode = async (
   }
 };
 
-module.exports =
-  executeEmailNode;
+module.exports = executeEmailNode;

@@ -11,21 +11,15 @@ const getIntegration = async ({
   provider,
 }) => {
   if (!integrationId) {
-    throw new Error(
-      "Integration is required"
-    );
+    throw new Error("Integration is required");
   }
 
   if (!userId) {
-    throw new Error(
-      "User is required"
-    );
+    throw new Error("User is required");
   }
 
   if (!workspaceId) {
-    throw new Error(
-      "Workspace is required"
-    );
+    throw new Error("Workspace is required");
   }
 
   const query = {
@@ -39,11 +33,8 @@ const getIntegration = async ({
     query.provider = provider;
   }
 
-  const integration =
-    await Integration.findOne(query)
-      .select(
-        "+credentialsEncrypted"
-      );
+  const integration = await Integration.findOne(query)
+    .select("+credentials");
 
   if (!integration) {
     throw new Error(
@@ -51,9 +42,7 @@ const getIntegration = async ({
     );
   }
 
-  if (
-    !integration.credentialsEncrypted
-  ) {
+  if (!integration.credentials) {
     throw new Error(
       "Integration credentials are not configured"
     );
@@ -62,10 +51,9 @@ const getIntegration = async ({
   let credentials;
 
   try {
-    credentials =
-      decryptCredentials(
-        integration.credentialsEncrypted
-      );
+    credentials = decryptCredentials(
+      integration.credentials
+    );
   } catch (error) {
     console.error(
       `Failed to decrypt integration credentials: ${integration._id}`,

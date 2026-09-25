@@ -1,26 +1,17 @@
 const crypto = require("crypto");
 
-const createIdempotencyKey = (
-  executionId,
-  nodeId
-) => {
-  if (!executionId) {
-    throw new Error(
-      "Execution ID is required for idempotency"
-    );
+const createIdempotencyKey = (effectScopeId, nodeId) => {
+  if (!effectScopeId) {
+    throw new Error("Effect scope ID is required for idempotency");
   }
 
   if (!nodeId) {
-    throw new Error(
-      "Node ID is required for idempotency"
-    );
+    throw new Error("Node ID is required for idempotency");
   }
 
   return crypto
     .createHash("sha256")
-    .update(
-      `flowpilot:${executionId}:${nodeId}`
-    )
+    .update(`flowpilot:${effectScopeId}:${nodeId}`)
     .digest("hex");
 };
 

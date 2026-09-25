@@ -10,6 +10,12 @@ const executionEffectSchema =
         index: true,
       },
 
+      effectScopeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true,
+        index: true,
+      },
+
       workflow: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Workflow",
@@ -86,9 +92,8 @@ const executionEffectSchema =
 
 executionEffectSchema.index(
   {
-    execution: 1,
+    effectScopeId: 1,
     nodeId: 1,
-    idempotencyKey: 1,
   },
   {
     unique: true,
@@ -100,8 +105,12 @@ executionEffectSchema.index({
   createdAt: -1,
 });
 
-module.exports =
-  mongoose.model(
-    "ExecutionEffect",
-    executionEffectSchema
-  );
+executionEffectSchema.index({
+  effectScopeId: 1,
+  createdAt: -1,
+});
+
+module.exports = mongoose.model(
+  "ExecutionEffect",
+  executionEffectSchema
+);

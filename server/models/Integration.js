@@ -39,7 +39,10 @@ const integrationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["connected", "disconnected"],
+      enum: [
+        "connected",
+        "disconnected",
+      ],
       default: "connected",
       index: true,
     },
@@ -47,6 +50,7 @@ const integrationSchema = new mongoose.Schema(
     credentials: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
+      select: false,
     },
 
     metadata: {
@@ -56,6 +60,7 @@ const integrationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    minimize: false,
   }
 );
 
@@ -74,9 +79,21 @@ integrationSchema.index({
   status: 1,
 });
 
-const Integration = mongoose.model(
-  "Integration",
-  integrationSchema
+integrationSchema.index(
+  {
+    workspace: 1,
+    provider: 1,
+    name: 1,
+  },
+  {
+    unique: true,
+  }
 );
+
+const Integration =
+  mongoose.model(
+    "Integration",
+    integrationSchema
+  );
 
 module.exports = Integration;

@@ -14,7 +14,9 @@ const getWorkspace = async (
 
   return Workspace.findOne({
     _id: workspaceId,
+
     "members.user": userId,
+
     status: "active",
   }).select("_id");
 };
@@ -23,14 +25,51 @@ const sanitizeIntegration = (
   integration
 ) => {
   const data =
-    integration.toObject
+    integration?.toObject
       ? integration.toObject()
-      : { ...integration };
+      : {
+          ...integration,
+        };
 
   delete data.credentials;
   delete data.credentialsEncrypted;
 
   return data;
+};
+
+
+const validateProviderCredentials = (
+  provider,
+  credentials
+) => {
+  const schema =
+    credentialsByProvider[provider];
+
+  if (!schema) {
+    return {
+      error:
+        "Unsupported integration provider",
+    };
+  }
+
+  const {
+    error,
+    value,
+  } = schema.validate(
+    credentials
+  );
+
+  if (error) {
+    return {
+      error:
+        error.details?.[0]?.message ||
+        "Invalid integration credentials",
+    };
+  }
+
+  return {
+    value,
+  };
 };
 
 const createIntegration = async (
@@ -47,7 +86,9 @@ const createIntegration = async (
     } = req.body;
 
     const workspaceId =
-      req.headers["x-workspace-id"];
+      req.headers[
+        "x-workspace-id"
+      ];
 
     if (!name) {
       return res.status(400).json({
@@ -71,7 +112,8 @@ const createIntegration = async (
     }
 
     if (
-      credentials === undefined ||
+      credentials ===
+        undefined ||
       credentials === null
     ) {
       return res.status(400).json({
@@ -93,55 +135,64 @@ const createIntegration = async (
       });
     }
 
-    const credentialsSchema =
-  credentialsByProvider[provider];
+    const validation =
+      validateProviderCredentials(
+        provider,
+        credentials
+      );
 
-if (!credentialsSchema) {
-  return res.status(400).json({
-    message: "Unsupported integration provider",
-  });
-}
-
-const {
-  error: credentialsError,
-  value: validatedCredentials,
-} =
-  credentialsSchema.validate(
-    credentials
-  );
-
-if (credentialsError) {
-  return res.status(400).json({
-    message:
-      credentialsError.details[0].message,
-  });
-}
-
-    const credentialsEncrypted =
-  encryptCredentials(
-    validatedCredentials
-  );
+    if (validation.error) {
+      return res.status(400).json({
+        message:
+          validation.error,
+      });
+    }
+    const encryptedCredentials =
+      encryptCredentials(
+        validation.value
+      );
 
     const integration =
       await Integration.create({
         name,
         provider,
-        owner: req.user._id,
-        workspace: workspaceId,
-        credentialsEncrypted,
-        metadata: metadata || {},
-        status: "connected",
+
+        owner:
+          req.user._id,
+
+        workspace:
+          workspaceId,
+
+        credentials:
+          encryptedCredentials,
+
+        metadata:
+          metadata || {},
+
+        status:
+          "connected",
       });
 
     return res.status(201).json({
       message:
         "Integration created successfully",
+
       integration:
         sanitizeIntegration(
           integration
         ),
     });
   } catch (error) {
+   
+    if (
+      error?.code === 11000
+    ) {
+      return res.status(409).json({
+        message:
+          "An integration with this name already exists for this provider in this workspace",
+      });
+    }
+
     next(error);
   }
 };
@@ -153,7 +204,9 @@ const getIntegrations = async (
 ) => {
   try {
     const workspaceId =
-      req.headers["x-workspace-id"];
+      req.headers[
+        "x-workspace-id"
+      ];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -177,8 +230,11 @@ const getIntegrations = async (
 
     const integrations =
       await Integration.find({
-        owner: req.user._id,
-        workspace: workspaceId,
+        owner:
+          req.user._id,
+
+        workspace:
+          workspaceId,
       })
         .sort({
           createdAt: -1,
@@ -202,10 +258,13 @@ const getIntegration = async (
   next
 ) => {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
     const workspaceId =
-      req.headers["x-workspace-id"];
+      req.headers[
+        "x-workspace-id"
+      ];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -230,8 +289,12 @@ const getIntegration = async (
     const integration =
       await Integration.findOne({
         _id: id,
-        owner: req.user._id,
-        workspace: workspaceId,
+
+        owner:
+          req.user._id,
+
+        workspace:
+          workspaceId,
       }).lean();
 
     if (!integration) {
@@ -258,7 +321,8 @@ const updateIntegration = async (
   next
 ) => {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
     const {
       name,
@@ -267,7 +331,9 @@ const updateIntegration = async (
     } = req.body;
 
     const workspaceId =
-      req.headers["x-workspace-id"];
+      req.headers[
+        "x-workspace-id"
+      ];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -292,8 +358,12 @@ const updateIntegration = async (
     const integration =
       await Integration.findOne({
         _id: id,
-        owner: req.user._id,
-        workspace: workspaceId,
+
+        owner:
+          req.user._id,
+
+        workspace:
+          workspaceId,
       });
 
     if (!integration) {
@@ -303,45 +373,37 @@ const updateIntegration = async (
       });
     }
 
-    if (name !== undefined) {
-      integration.name = name;
+    if (
+      name !== undefined
+    ) {
+      integration.name =
+        name;
+    }
+    if (
+      credentials !== undefined
+    ) {
+      const validation =
+        validateProviderCredentials(
+          integration.provider,
+          credentials
+        );
+
+      if (validation.error) {
+        return res.status(400).json({
+          message:
+            validation.error,
+        });
+      }
+
+      integration.credentials =
+        encryptCredentials(
+          validation.value
+        );
     }
 
-    if (credentials !== undefined) {
-  const credentialsSchema =
-    credentialsByProvider[
-      integration.provider
-    ];
-
-  if (!credentialsSchema) {
-    return res.status(400).json({
-      message:
-        "Unsupported integration provider",
-    });
-  }
-
-  const {
-    error: credentialsError,
-    value: validatedCredentials,
-  } =
-    credentialsSchema.validate(
-      credentials
-    );
-
-  if (credentialsError) {
-    return res.status(400).json({
-      message:
-        credentialsError.details[0].message,
-    });
-  }
-
-  integration.credentialsEncrypted =
-    encryptCredentials(
-      validatedCredentials
-    );
-}
-
-    if (metadata !== undefined) {
+    if (
+      metadata !== undefined
+    ) {
       integration.metadata =
         metadata;
     }
@@ -351,12 +413,22 @@ const updateIntegration = async (
     return res.status(200).json({
       message:
         "Integration updated successfully",
+
       integration:
         sanitizeIntegration(
           integration
         ),
     });
   } catch (error) {
+    if (
+      error?.code === 11000
+    ) {
+      return res.status(409).json({
+        message:
+          "An integration with this name already exists for this provider in this workspace",
+      });
+    }
+
     next(error);
   }
 };
@@ -367,10 +439,13 @@ const toggleIntegration = async (
   next
 ) => {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
     const workspaceId =
-      req.headers["x-workspace-id"];
+      req.headers[
+        "x-workspace-id"
+      ];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -395,8 +470,12 @@ const toggleIntegration = async (
     const integration =
       await Integration.findOne({
         _id: id,
-        owner: req.user._id,
-        workspace: workspaceId,
+
+        owner:
+          req.user._id,
+
+        workspace:
+          workspaceId,
       });
 
     if (!integration) {
@@ -417,6 +496,7 @@ const toggleIntegration = async (
     return res.status(200).json({
       message:
         "Integration status updated",
+
       integration:
         sanitizeIntegration(
           integration
@@ -433,10 +513,13 @@ const deleteIntegration = async (
   next
 ) => {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
     const workspaceId =
-      req.headers["x-workspace-id"];
+      req.headers[
+        "x-workspace-id"
+      ];
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -461,8 +544,12 @@ const deleteIntegration = async (
     const integration =
       await Integration.findOneAndDelete({
         _id: id,
-        owner: req.user._id,
-        workspace: workspaceId,
+
+        owner:
+          req.user._id,
+
+        workspace:
+          workspaceId,
       });
 
     if (!integration) {

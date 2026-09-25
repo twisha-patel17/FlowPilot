@@ -6,14 +6,22 @@ const executeDiscordNode = async (
   input = {},
   context = {}
 ) => {
-  const config = node.data?.config || {};
+  const config =
+    node.data?.config || {};
 
-  const integration = await getIntegration({
-    integrationId: config.integrationId,
-    userId: context.userId,
-    workspaceId: context.workspaceId,
-    provider: "discord",
-  });
+  const integration =
+    await getIntegration({
+      integrationId:
+        config.integrationId,
+
+      userId:
+        context.userId,
+
+      workspaceId:
+        context.workspaceId,
+
+      provider: "discord",
+    });
 
   const webhookUrl =
     integration.credentials?.webhookUrl;
@@ -41,31 +49,54 @@ const executeDiscordNode = async (
   };
 
   if (context.idempotencyKey) {
-    headers["Idempotency-Key"] =
+    headers[
+      "Idempotency-Key"
+    ] =
+      context.idempotencyKey;
+
+    headers[
+      "X-FlowPilot-Idempotency-Key"
+    ] =
       context.idempotencyKey;
   }
 
-  const response = await axios.post(
-    webhookUrl,
-    {
-      content: message,
-    },
-    {
-      headers,
+  try {
+    const response =
+      await axios.post(
+        webhookUrl,
+        {
+          content: message,
+        },
+        {
+          headers,
 
-      signal:
-        context.signal || undefined,
+          signal:
+            context.signal ||
+            undefined,
+        }
+      );
+
+    return {
+      success: true,
+
+      output: {
+        status:
+          response.status,
+
+        message,
+
+        integrationId:
+          integration._id,
+      },
+    };
+  } catch (error) {
+    if (error.response?.status) {
+      error.statusCode =
+        error.response.status;
     }
-  );
 
-  return {
-    success: true,
-    output: {
-      status: response.status,
-      message,
-      integrationId: integration._id,
-    },
-  };
+    throw error;
+  }
 };
 
 module.exports =
