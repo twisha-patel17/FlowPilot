@@ -4,7 +4,10 @@ import {
   useState,
 } from "react";
 
-import { useNavigate, useParams } from "react-router-dom";
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 
 import {
   useMutation,
@@ -16,6 +19,7 @@ import {
   FiArrowLeft,
   FiSave,
   FiPlay,
+  FiUploadCloud,
 } from "react-icons/fi";
 
 import {
@@ -23,6 +27,7 @@ import {
   getWorkflow,
   updateWorkflow,
   toggleWorkflow,
+  publishWorkflow,
 } from "../api/workflowApi";
 
 import { createExecution } from "../api/executionApi";
@@ -47,200 +52,392 @@ const WorkflowBuilderPage = () => {
 
   const [selectedNode, setSelectedNode] = useState(null);
 
-  const [workflowName, setWorkflowName] =
-    useState("Untitled Workflow");
+  const [workflowName, setWorkflowName] = useState(
+    "Untitled Workflow"
+  );
 
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
-
-  /*
-   * LOAD WORKFLOW
-   */
 
   const {
     data,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["workflow", id, workspaceId],
+    queryKey: [
+      "workflow",
+      id,
+      workspaceId,
+    ],
+
     queryFn: () =>
       getWorkflow({
         id,
         workspaceId,
       }),
-    enabled: !!id && !!workspaceId,
+
+    enabled:
+      !!id &&
+      !!workspaceId,
   });
 
+  const workflow = data?.workflow || null;
+
+  const isActive =
+    workflow?.status === "active";
+
+  const hasPublishedVersion =
+    workflow?.publishedVersion !== null &&
+    workflow?.publishedVersion !== undefined;
+
+  const isPublished =
+    hasPublishedVersion &&
+    workflow?.publishedVersion ===
+      workflow?.currentVersion;
+
+  const hasUnpublishedChanges =
+    hasPublishedVersion &&
+    workflow?.publishedVersion !==
+      workflow?.currentVersion;
+
   useEffect(() => {
-    if (!data?.workflow) return;
+    if (!workflow) {
+      return;
+    }
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWorkflowName(
-      data.workflow.name || "Untitled Workflow"
+      workflow.name ||
+        "Untitled Workflow"
     );
 
-    setNodes(data.workflow.nodes || []);
-    setEdges(data.workflow.edges || []);
-  }, [data]);
+    setNodes(
+      workflow.nodes || []
+    );
 
-  /*
-   * WORKFLOW CANVAS CHANGE
-   */
+    setEdges(
+      workflow.edges || []
+    );
+  }, [workflow]);
 
-  const handleWorkflowChange = useCallback(
-    (updatedNodes, updatedEdges) => {
-      setNodes(updatedNodes);
-      setEdges(updatedEdges);
-    },
-    []
-  );
+  const handleWorkflowChange =
+    useCallback(
+      (
+        updatedNodes,
+        updatedEdges
+      ) => {
+        setNodes(updatedNodes);
+        setEdges(updatedEdges);
+      },
+      []
+    );
 
-  /*
-   * NODE UPDATE
-   */
-
-  const handleNodeUpdate = useCallback(
-    (updatedNode) => {
-      setNodes((currentNodes) =>
-        currentNodes.map((node) =>
-          node.id === updatedNode.id
-            ? updatedNode
-            : node
-        )
-      );
-
-      setSelectedNode(updatedNode);
-    },
-    []
-  );
-
-  /*
-   * CREATE WORKFLOW
-   */
-
-  const createMutation = useMutation({
-    mutationFn: createWorkflow,
-
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({
-        queryKey: ["workflows", workspaceId],
-      });
-
-      const createdWorkflow =
-        response.workflow;
-
-      navigate(
-        `/app/workflows/${createdWorkflow._id}`,
-        {
-          replace: true,
-        }
-      );
-    },
-
-    onError: (error) => {
-      console.error(
-        "Create workflow error:",
-        error
-      );
-    },
-  });
-
-  /*
-   * UPDATE WORKFLOW
-   */
-
-  const updateMutation = useMutation({
-    mutationFn: updateWorkflow,
-
-    onSuccess: (response) => {
-      queryClient.setQueryData(
-        ["workflow", id, workspaceId],
-        response
-      );
-
-      queryClient.invalidateQueries({
-        queryKey: ["workflows", workspaceId],
-      });
-    },
-
-    onError: (error) => {
-      console.error(
-        "Update workflow error:",
-        error
-      );
-    },
-  });
-
-  /*
-   * TOGGLE WORKFLOW
-   */
-
-  const toggleMutation = useMutation({
-    mutationFn: toggleWorkflow,
-
-    onSuccess: (response) => {
-      queryClient.setQueryData(
-        ["workflow", id, workspaceId],
-        response
-      );
-
-      queryClient.invalidateQueries({
-        queryKey: ["workflows", workspaceId],
-      });
-    },
-
-    onError: (error) => {
-      console.error(
-        "Toggle workflow error:",
-        error
-      );
-    },
-  });
-
-  /*
-   * RUN WORKFLOW
-   */
-
-  const executeMutation = useMutation({
-    mutationFn: createExecution,
-
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({
-        queryKey: ["executions", workspaceId],
-      });
-
-      const execution =
-        response?.execution;
-
-      if (execution?._id) {
-        navigate(
-          `/app/executions/${execution._id}`
+  const handleNodeUpdate =
+    useCallback(
+      (updatedNode) => {
+        setNodes(
+          (currentNodes) =>
+            currentNodes.map(
+              (node) =>
+                node.id ===
+                updatedNode.id
+                  ? updatedNode
+                  : node
+            )
         );
 
-        return;
+        setSelectedNode(
+          updatedNode
+        );
+      },
+      []
+    );
+
+  const createMutation =
+    useMutation({
+      mutationFn:
+        createWorkflow,
+
+      onSuccess:
+        (response) => {
+          queryClient.invalidateQueries({
+            queryKey: [
+              "workflows",
+              workspaceId,
+            ],
+          });
+
+          const createdWorkflow =
+            response?.workflow;
+
+          if (!createdWorkflow?._id) {
+            alert(
+              "Workflow was created, but its ID could not be found."
+            );
+
+            return;
+          }
+
+          navigate(
+            `/app/workflows/${createdWorkflow._id}`,
+            {
+              replace: true,
+            }
+          );
+        },
+
+      onError:
+        (error) => {
+          console.error(
+            "Create workflow error:",
+            error
+          );
+
+          alert(
+            error.response?.data
+              ?.message ||
+              "Failed to create workflow"
+          );
+        },
+    });
+
+  const updateMutation =
+    useMutation({
+      mutationFn:
+        updateWorkflow,
+
+      onSuccess:
+        (response) => {
+          queryClient.setQueryData(
+            [
+              "workflow",
+              id,
+              workspaceId,
+            ],
+            response
+          );
+
+          queryClient.invalidateQueries({
+            queryKey: [
+              "workflows",
+              workspaceId,
+            ],
+          });
+        },
+
+      onError:
+        (error) => {
+          console.error(
+            "Update workflow error:",
+            error
+          );
+
+          alert(
+            error.response?.data
+              ?.message ||
+              "Failed to update workflow"
+          );
+        },
+    });
+
+  const publishMutation =
+    useMutation({
+      mutationFn:
+        publishWorkflow,
+
+      onSuccess:
+        (response) => {
+          queryClient.setQueryData(
+            [
+              "workflow",
+              id,
+              workspaceId,
+            ],
+            response
+          );
+
+          queryClient.invalidateQueries({
+            queryKey: [
+              "workflows",
+              workspaceId,
+            ],
+          });
+        },
+
+      onError:
+        (error) => {
+          console.error(
+            "Publish workflow error:",
+            error
+          );
+
+          alert(
+            error.response?.data
+              ?.message ||
+              "Failed to publish workflow"
+          );
+        },
+    });
+
+  const toggleMutation =
+    useMutation({
+      mutationFn:
+        toggleWorkflow,
+
+      onSuccess:
+        (response) => {
+          queryClient.setQueryData(
+            [
+              "workflow",
+              id,
+              workspaceId,
+            ],
+            response
+          );
+
+          queryClient.invalidateQueries({
+            queryKey: [
+              "workflows",
+              workspaceId,
+            ],
+          });
+        },
+
+      onError:
+        (error) => {
+          console.error(
+            "Toggle workflow error:",
+            error
+          );
+
+          alert(
+            error.response?.data
+              ?.message ||
+              "Failed to update workflow status"
+          );
+        },
+    });
+
+  const executeMutation =
+    useMutation({
+      mutationFn:
+        createExecution,
+
+      onSuccess:
+        (response) => {
+          queryClient.invalidateQueries({
+            queryKey: [
+              "executions",
+              workspaceId,
+            ],
+          });
+
+          const execution =
+            response?.execution;
+
+          if (execution?._id) {
+            navigate(
+              `/app/executions/${execution._id}`
+            );
+
+            return;
+          }
+
+          alert(
+            "Workflow executed successfully"
+          );
+        },
+
+      onError:
+        (error) => {
+          console.error(
+            "Workflow execution error:",
+            error
+          );
+
+          alert(
+            error.response?.data
+              ?.message ||
+              "Workflow execution failed"
+          );
+        },
+    });
+
+  const buildWorkflowData =
+    () => {
+      const normalizedNodes =
+        nodes.map(
+          (node) => {
+            const nodeType =
+              node.data?.type ||
+              node.data?.nodeType ||
+              node.type ||
+              "manual";
+
+            return {
+              ...node,
+
+              type: "flowpilot",
+
+              data: {
+                ...node.data,
+                type: nodeType,
+              },
+            };
+          }
+        );
+
+      const triggerPriority = [
+        "schedule",
+        "webhook",
+        "github",
+        "http",
+        "manual",
+      ];
+
+      let triggerNode = null;
+
+      for (
+        const triggerType of
+          triggerPriority
+      ) {
+        triggerNode =
+          normalizedNodes.find(
+            (node) =>
+              node.data?.type ===
+              triggerType
+          );
+
+        if (triggerNode) {
+          break;
+        }
       }
 
-      alert(
-        "Workflow executed successfully"
-      );
-    },
+      const triggerType =
+        triggerNode?.data?.type ||
+        "manual";
 
-    onError: (error) => {
-      console.error(
-        "Workflow execution error:",
-        error
-      );
+      const triggerConfig =
+        triggerNode?.data?.config ||
+        {};
 
-      alert(
-        error.response?.data?.message ||
-          "Workflow execution failed"
-      );
-    },
-  });
+      return {
+        name:
+          workflowName.trim() ||
+          "Untitled Workflow",
 
-  /*
-   * SAVE WORKFLOW
-   */
+        description: "",
+
+        trigger: {
+          type: triggerType,
+          config: triggerConfig,
+        },
+
+        nodes: normalizedNodes,
+
+        edges,
+      };
+    };
 
   const handleSave = () => {
     if (!workspaceId) {
@@ -251,103 +448,8 @@ const WorkflowBuilderPage = () => {
       return;
     }
 
-    /*
-     * Normalize nodes before saving.
-     */
-
-    const normalizedNodes = nodes.map(
-      (node) => {
-        const nodeType =
-          node.data?.type ||
-          node.data?.nodeType ||
-          node.type ||
-          "manual";
-
-        return {
-          ...node,
-
-          type: "flowpilot",
-
-          data: {
-            ...node.data,
-            type: nodeType,
-          },
-        };
-      }
-    );
-
-    /*
-     * Trigger node priority.
-     *
-     * We intentionally check real trigger nodes
-     * BEFORE manual.
-     *
-     * This prevents a Manual node appearing before
-     * a Schedule node from overriding the Schedule
-     * trigger.
-     */
-
-    const triggerPriority = [
-      "schedule",
-      "webhook",
-      "github",
-      "http",
-      "manual",
-    ];
-
-    let triggerNode = null;
-
-    for (const triggerType of triggerPriority) {
-      triggerNode = normalizedNodes.find(
-        (node) =>
-          node.data?.type === triggerType
-      );
-
-      if (triggerNode) {
-        break;
-      }
-    }
-
-    /*
-     * Get trigger type.
-     */
-
-    const triggerType =
-      triggerNode?.data?.type ||
-      "manual";
-
-    /*
-     * Get trigger configuration.
-     */
-
-    const triggerConfig =
-      triggerNode?.data?.config || {};
-
-    /*
-     * Build workflow payload.
-     */
-
-    const workflowData = {
-      name:
-        workflowName.trim() ||
-        "Untitled Workflow",
-
-      description: "",
-
-      trigger: {
-        type: triggerType,
-        config: triggerConfig,
-      },
-
-      nodes: normalizedNodes,
-
-      edges,
-    };
-
-    console.log(
-      "Saving workflow:",
-      workflowData
-    );
+    const workflowData =
+      buildWorkflowData();
 
     if (id) {
       updateMutation.mutate({
@@ -355,30 +457,68 @@ const WorkflowBuilderPage = () => {
         workflowData,
         workspaceId,
       });
-    } else {
-      createMutation.mutate({
-        workflowData,
-        workspaceId,
-      });
+
+      return;
     }
+
+    createMutation.mutate({
+      workflowData,
+      workspaceId,
+    });
   };
 
-  /*
-   * ACTIVATE WORKFLOW
-   */
+  const handlePublish = () => {
+    if (!id) {
+      alert(
+        "Save the workflow before publishing it."
+      );
 
-  const handleActivate = () => {
-    if (!id || !workspaceId) return;
+      return;
+    }
+
+    if (!workspaceId) {
+      alert(
+        "Please select a workspace first."
+      );
+
+      return;
+    }
+
+    if (nodes.length === 0) {
+      alert(
+        "Add at least one node before publishing the workflow."
+      );
+
+      return;
+    }
+
+    publishMutation.mutate({
+      id,
+      workspaceId,
+    });
+  };
+
+  const handleToggle = () => {
+    if (!id || !workspaceId) {
+      return;
+    }
+
+    if (
+      !isActive &&
+      !hasPublishedVersion
+    ) {
+      alert(
+        "Publish the workflow before activating it."
+      );
+
+      return;
+    }
 
     toggleMutation.mutate({
       id,
       workspaceId,
     });
   };
-
-  /*
-   * RUN WORKFLOW
-   */
 
   const handleRunWorkflow = () => {
     if (!id) {
@@ -405,15 +545,19 @@ const WorkflowBuilderPage = () => {
       return;
     }
 
+    if (!isActive) {
+      alert(
+        "Publish and activate the workflow before running it."
+      );
+
+      return;
+    }
+
     executeMutation.mutate({
       workflowId: id,
       workspaceId,
     });
   };
-
-  /*
-   * LOADING
-   */
 
   if (workspaceLoading) {
     return (
@@ -435,7 +579,9 @@ const WorkflowBuilderPage = () => {
         <button
           type="button"
           onClick={() =>
-            navigate("/app/workflows")
+            navigate(
+              "/app/workflows"
+            )
           }
           className="rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
         >
@@ -465,7 +611,9 @@ const WorkflowBuilderPage = () => {
         <button
           type="button"
           onClick={() =>
-            navigate("/app/workflows")
+            navigate(
+              "/app/workflows"
+            )
           }
           className="rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
         >
@@ -476,19 +624,70 @@ const WorkflowBuilderPage = () => {
   }
 
   /*
+   * BUTTON STATES
+   */
+
+  const isSaving =
+    createMutation.isPending ||
+    updateMutation.isPending;
+
+  const isPublishing =
+    publishMutation.isPending;
+
+  const isToggling =
+    toggleMutation.isPending;
+
+  const isRunning =
+    executeMutation.isPending;
+
+  const canPublish =
+    !!id &&
+    !isSaving &&
+    !isPublishing &&
+    !isToggling &&
+    !isRunning &&
+    !isPublished;
+
+  const canToggle =
+    !!id &&
+    !isSaving &&
+    !isPublishing &&
+    !isToggling &&
+    !isRunning &&
+    (
+      isActive ||
+      hasPublishedVersion
+    );
+
+  const canRun =
+    !!id &&
+    isActive &&
+    !isSaving &&
+    !isPublishing &&
+    !isToggling &&
+    !isRunning;
+
+  /*
    * PAGE
    */
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#09090b]">
+
+      {/* HEADER */}
+
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-800/70 bg-[#0d0d0f] px-3 sm:px-5">
+
+        {/* LEFT */}
 
         <div className="flex min-w-0 items-center gap-3">
 
           <button
             type="button"
             onClick={() =>
-              navigate("/app/workflows")
+              navigate(
+                "/app/workflows"
+              )
             }
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-900 hover:text-zinc-200"
             aria-label="Back to workflows"
@@ -497,7 +696,10 @@ const WorkflowBuilderPage = () => {
           </button>
 
           <div className="hidden items-center gap-2 text-xs text-zinc-600 sm:flex">
-            <span>Workflows</span>
+            <span>
+              Workflows
+            </span>
+
             <span>/</span>
           </div>
 
@@ -512,7 +714,35 @@ const WorkflowBuilderPage = () => {
             className="min-w-0 max-w-[220px] truncate bg-transparent text-sm font-semibold text-zinc-100 outline-none"
           />
 
+          {/* STATUS */}
+
+          {id && (
+            <div className="hidden items-center gap-1.5 md:flex">
+
+              <span className="text-zinc-700">
+                •
+              </span>
+
+              {isActive ? (
+                <span className="text-[11px] font-medium text-emerald-400">
+                  Active
+                </span>
+              ) : hasPublishedVersion ? (
+                <span className="text-[11px] font-medium text-violet-400">
+                  Published
+                </span>
+              ) : (
+                <span className="text-[11px] font-medium text-zinc-500">
+                  Draft
+                </span>
+              )}
+
+            </div>
+          )}
+
         </div>
+
+        {/* RIGHT */}
 
         <div className="flex shrink-0 items-center gap-2">
 
@@ -522,18 +752,44 @@ const WorkflowBuilderPage = () => {
             type="button"
             onClick={handleSave}
             disabled={
-              createMutation.isPending ||
-              updateMutation.isPending
+              isSaving ||
+              isPublishing ||
+              isToggling ||
+              isRunning
             }
             className="flex h-8 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FiSave className="h-3.5 w-3.5" />
 
             <span className="hidden sm:inline">
-              {createMutation.isPending ||
-              updateMutation.isPending
+              {isSaving
                 ? "Saving..."
                 : "Save"}
+            </span>
+          </button>
+
+          {/* PUBLISH */}
+
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={!canPublish}
+            className={`flex h-8 items-center gap-2 rounded-md px-3 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              isPublished
+                ? "bg-zinc-800 text-zinc-500"
+                : "bg-violet-600 hover:bg-violet-500"
+            }`}
+          >
+            <FiUploadCloud className="h-3.5 w-3.5" />
+
+            <span className="hidden sm:inline">
+              {isPublishing
+                ? "Publishing..."
+                : isPublished
+                ? "Published"
+                : hasUnpublishedChanges
+                ? "Publish changes"
+                : "Publish"}
             </span>
           </button>
 
@@ -541,38 +797,40 @@ const WorkflowBuilderPage = () => {
 
           <button
             type="button"
-            onClick={handleRunWorkflow}
-            disabled={
-              !id ||
-              executeMutation.isPending
+            onClick={
+              handleRunWorkflow
             }
+            disabled={!canRun}
             className="flex h-8 items-center gap-2 rounded-md bg-emerald-600 px-3 text-xs font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FiPlay className="h-3.5 w-3.5" />
 
             <span className="hidden sm:inline">
-              {executeMutation.isPending
+              {isRunning
                 ? "Running..."
                 : "Run"}
             </span>
           </button>
 
-          {/* ACTIVATE */}
+          {/* ACTIVATE / DEACTIVATE */}
 
           <button
             type="button"
-            onClick={handleActivate}
-            disabled={
-              !id ||
-              toggleMutation.isPending
-            }
-            className="flex h-8 items-center gap-2 rounded-md bg-violet-600 px-3 text-xs font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleToggle}
+            disabled={!canToggle}
+            className={`flex h-8 items-center gap-2 rounded-md px-3 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              isActive
+                ? "bg-amber-600 hover:bg-amber-500"
+                : "bg-violet-600 hover:bg-violet-500"
+            }`}
           >
             <FiPlay className="h-3.5 w-3.5" />
 
             <span className="hidden sm:inline">
-              {toggleMutation.isPending
+              {isToggling
                 ? "Updating..."
+                : isActive
+                ? "Deactivate"
                 : "Activate"}
             </span>
           </button>
@@ -580,15 +838,23 @@ const WorkflowBuilderPage = () => {
         </div>
       </header>
 
+      {/* WORKSPACE */}
+
       <div className="flex min-h-0 flex-1">
+
+        {/* NODE PANEL */}
 
         <div className="hidden w-60 shrink-0 md:block">
           <NodePanel />
         </div>
 
+        {/* CANVAS */}
+
         <main className="min-w-0 flex-1">
           <WorkflowCanvas
-            onNodeSelect={setSelectedNode}
+            onNodeSelect={
+              setSelectedNode
+            }
             onWorkflowChange={
               handleWorkflowChange
             }
@@ -597,13 +863,19 @@ const WorkflowBuilderPage = () => {
           />
         </main>
 
+        {/* CONFIG PANEL */}
+
         <div className="hidden w-72 shrink-0 lg:block">
           <ConfigPanel
-            selectedNode={selectedNode}
+            selectedNode={
+              selectedNode
+            }
             onClose={() =>
               setSelectedNode(null)
             }
-            onNodeUpdate={handleNodeUpdate}
+            onNodeUpdate={
+              handleNodeUpdate
+            }
           />
         </div>
 

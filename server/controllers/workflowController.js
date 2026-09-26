@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const Workflow = require("../models/Workflow");
 const WorkflowVersion = require("../models/WorkflowVersion");
 const Workspace = require("../models/Workspace");
@@ -12,8 +14,17 @@ const createWorkflow = async (req, res, next) => {
     const workspaceId = req.headers["x-workspace-id"];
     const userId = req.user._id;
 
-    if (!name) return res.status(400).json({ message: "Workflow name is required" });
-    if (!workspaceId) return res.status(400).json({ message: "Workspace is required" });
+    if (!name) {
+      return res.status(400).json({
+        message: "Workflow name is required",
+      });
+    }
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
 
     const workspace = await Workspace.findOne({
       _id: workspaceId,
@@ -31,34 +42,38 @@ const createWorkflow = async (req, res, next) => {
 
     await withTransactionRetry(async (session) => {
       const created = await Workflow.create(
-        [{
-          name,
-          description,
-          trigger,
-          nodes,
-          edges,
-          owner: userId,
-          workspace: workspaceId,
-          currentVersion: 1,
-        }],
+        [
+          {
+            name,
+            description,
+            trigger,
+            nodes,
+            edges,
+            owner: userId,
+            workspace: workspaceId,
+            currentVersion: 1,
+          },
+        ],
         { session }
       );
 
       workflow = created[0];
 
       await WorkflowVersion.create(
-        [{
-          workflow: workflow._id,
-          workspace: workflow.workspace,
-          owner: workflow.owner,
-          version: 1,
-          name: workflow.name,
-          description: workflow.description,
-          trigger: workflow.trigger,
-          nodes: workflow.nodes,
-          edges: workflow.edges,
-          createdBy: userId,
-        }],
+        [
+          {
+            workflow: workflow._id,
+            workspace: workflow.workspace,
+            owner: workflow.owner,
+            version: 1,
+            name: workflow.name,
+            description: workflow.description,
+            trigger: workflow.trigger,
+            nodes: workflow.nodes,
+            edges: workflow.edges,
+            createdBy: userId,
+          },
+        ],
         { session }
       );
     });
@@ -75,8 +90,11 @@ const createWorkflow = async (req, res, next) => {
 const getWorkflows = async (req, res, next) => {
   try {
     const workspaceId = req.headers["x-workspace-id"];
+
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
     const workspace = await Workspace.findOne({
@@ -96,7 +114,9 @@ const getWorkflows = async (req, res, next) => {
       workspace: workspaceId,
     }).sort({ createdAt: -1 });
 
-    return res.status(200).json({ workflows });
+    return res.status(200).json({
+      workflows,
+    });
   } catch (error) {
     next(error);
   }
@@ -108,7 +128,9 @@ const getWorkflow = async (req, res, next) => {
     const workspaceId = req.headers["x-workspace-id"];
 
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
     const workspace = await Workspace.findOne({
@@ -130,10 +152,14 @@ const getWorkflow = async (req, res, next) => {
     });
 
     if (!workflow) {
-      return res.status(404).json({ message: "Workflow not found" });
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
     }
 
-    return res.status(200).json({ workflow });
+    return res.status(200).json({
+      workflow,
+    });
   } catch (error) {
     next(error);
   }
@@ -146,7 +172,9 @@ const updateWorkflow = async (req, res, next) => {
     const userId = req.user._id;
 
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
     const workspace = await Workspace.findOne({
@@ -162,6 +190,7 @@ const updateWorkflow = async (req, res, next) => {
     }
 
     const { name, description, trigger, nodes, edges } = req.body;
+
     let updatedWorkflow = null;
 
     await withTransactionRetry(async (session) => {
@@ -171,34 +200,54 @@ const updateWorkflow = async (req, res, next) => {
         owner: userId,
       }).session(session);
 
-      if (!workflow) throw new Error("WORKFLOW_NOT_FOUND");
+      if (!workflow) {
+        throw new Error("WORKFLOW_NOT_FOUND");
+      }
 
-      if (name !== undefined) workflow.name = name;
-      if (description !== undefined) workflow.description = description;
-      if (trigger !== undefined) workflow.trigger = trigger;
-      if (nodes !== undefined) workflow.nodes = nodes;
-      if (edges !== undefined) workflow.edges = edges;
+      if (name !== undefined) {
+        workflow.name = name;
+      }
+
+      if (description !== undefined) {
+        workflow.description = description;
+      }
+
+      if (trigger !== undefined) {
+        workflow.trigger = trigger;
+      }
+
+      if (nodes !== undefined) {
+        workflow.nodes = nodes;
+      }
+
+      if (edges !== undefined) {
+        workflow.edges = edges;
+      }
 
       const nextVersion = workflow.currentVersion + 1;
 
       await WorkflowVersion.create(
-        [{
-          workflow: workflow._id,
-          workspace: workflow.workspace,
-          owner: workflow.owner,
-          version: nextVersion,
-          name: workflow.name,
-          description: workflow.description,
-          trigger: workflow.trigger,
-          nodes: workflow.nodes,
-          edges: workflow.edges,
-          createdBy: userId,
-        }],
+        [
+          {
+            workflow: workflow._id,
+            workspace: workflow.workspace,
+            owner: workflow.owner,
+            version: nextVersion,
+            name: workflow.name,
+            description: workflow.description,
+            trigger: workflow.trigger,
+            nodes: workflow.nodes,
+            edges: workflow.edges,
+            createdBy: userId,
+          },
+        ],
         { session }
       );
 
       workflow.currentVersion = nextVersion;
+
       await workflow.save({ session });
+
       updatedWorkflow = workflow.toObject();
     });
 
@@ -208,21 +257,19 @@ const updateWorkflow = async (req, res, next) => {
     });
   } catch (error) {
     if (error.message === "WORKFLOW_NOT_FOUND") {
-      return res.status(404).json({ message: "Workflow not found" });
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
     }
+
     next(error);
   }
 };
 
-const deleteWorkflow = async (
-  req,
-  res,
-  next
-) => {
+const deleteWorkflow = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const workspaceId =
-      req.headers["x-workspace-id"];
+    const workspaceId = req.headers["x-workspace-id"];
     const userId = req.user._id;
 
     if (!workspaceId) {
@@ -231,26 +278,23 @@ const deleteWorkflow = async (
       });
     }
 
-    const workspace =
-      await Workspace.findOne({
-        _id: workspaceId,
-        "members.user": userId,
-        status: "active",
-      });
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      "members.user": userId,
+      status: "active",
+    });
 
     if (!workspace) {
       return res.status(403).json({
-        message:
-          "You do not have access to this workspace",
+        message: "You do not have access to this workspace",
       });
     }
 
-    const workflow =
-      await Workflow.findOne({
-        _id: id,
-        owner: userId,
-        workspace: workspaceId,
-      }).select("_id");
+    const workflow = await Workflow.findOne({
+      _id: id,
+      owner: userId,
+      workspace: workspaceId,
+    }).select("_id");
 
     if (!workflow) {
       return res.status(404).json({
@@ -258,58 +302,54 @@ const deleteWorkflow = async (
       });
     }
 
-    await mongoose.connection.transaction(
-      async (session) => {
-        const webhooks =
-          await Webhook.find({
-            workflow: workflow._id,
-          })
-            .select("_id")
-            .session(session)
-            .lean();
+    await mongoose.connection.transaction(async (session) => {
+      const webhooks = await Webhook.find({
+        workflow: workflow._id,
+      })
+        .select("_id")
+        .session(session)
+        .lean();
 
-        const webhookIds =
-          webhooks.map(
-            (webhook) => webhook._id
-          );
+      const webhookIds = webhooks.map(
+        (webhook) => webhook._id
+      );
 
-        if (webhookIds.length > 0) {
-          await WebhookDelivery.deleteMany(
-            {
-              webhook: {
-                $in: webhookIds,
-              },
-            },
-            { session }
-          );
-
-          await Webhook.deleteMany(
-            {
-              _id: {
-                $in: webhookIds,
-              },
-            },
-            { session }
-          );
-        }
-
-        await WorkflowVersion.deleteMany(
+      if (webhookIds.length > 0) {
+        await WebhookDelivery.deleteMany(
           {
-            workflow: workflow._id,
+            webhook: {
+              $in: webhookIds,
+            },
           },
           { session }
         );
 
-        await Workflow.deleteOne(
+        await Webhook.deleteMany(
           {
-            _id: workflow._id,
-            owner: userId,
-            workspace: workspaceId,
+            _id: {
+              $in: webhookIds,
+            },
           },
           { session }
         );
       }
-    );
+
+      await WorkflowVersion.deleteMany(
+        {
+          workflow: workflow._id,
+        },
+        { session }
+      );
+
+      await Workflow.deleteOne(
+        {
+          _id: workflow._id,
+          owner: userId,
+          workspace: workspaceId,
+        },
+        { session }
+      );
+    });
 
     return res.status(200).json({
       message:
@@ -324,14 +364,17 @@ const toggleWorkflow = async (req, res, next) => {
   try {
     const { id } = req.params;
     const workspaceId = req.headers["x-workspace-id"];
+    const userId = req.user._id;
 
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
     const workspace = await Workspace.findOne({
       _id: workspaceId,
-      "members.user": req.user._id,
+      "members.user": userId,
       status: "active",
     });
 
@@ -343,16 +386,20 @@ const toggleWorkflow = async (req, res, next) => {
 
     const workflow = await Workflow.findOne({
       _id: id,
-      owner: req.user._id,
+      owner: userId,
       workspace: workspaceId,
     });
 
     if (!workflow) {
-      return res.status(404).json({ message: "Workflow not found" });
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
     }
 
+    // Deactivate without removing the published version.
     if (workflow.status === "active") {
       workflow.status = "inactive";
+
       await workflow.save();
 
       return res.status(200).json({
@@ -361,26 +408,38 @@ const toggleWorkflow = async (req, res, next) => {
       });
     }
 
-    if (!workflow.publishedVersion) {
-      return res.status(409).json({
-        message: "Workflow must be published before it can be activated",
-      });
+    /*
+     * Activating an inactive workflow:
+     *
+     * If it has not been published yet, publish the current version
+     * automatically. This matches the builder UX where the user has
+     * Save + Activate rather than a separate Publish button.
+     */
+
+    let versionToActivate = workflow.publishedVersion;
+
+    if (!versionToActivate) {
+      versionToActivate = workflow.currentVersion;
     }
 
-    const publishedVersion = await WorkflowVersion.findOne({
+    const version = await WorkflowVersion.findOne({
       workflow: workflow._id,
       workspace: workspaceId,
-      owner: req.user._id,
-      version: workflow.publishedVersion,
+      owner: userId,
+      version: versionToActivate,
     });
 
-    if (!publishedVersion) {
+    if (!version) {
       return res.status(409).json({
-        message: "Published workflow version does not exist",
+        message:
+          "Current workflow version does not exist",
       });
     }
 
+    // Publish the version being activated.
+    workflow.publishedVersion = version.version;
     workflow.status = "active";
+
     await workflow.save();
 
     return res.status(200).json({
@@ -399,7 +458,9 @@ const getWorkflowVersions = async (req, res, next) => {
     const userId = req.user._id;
 
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
     const workspace = await Workspace.findOne({
@@ -421,7 +482,9 @@ const getWorkflowVersions = async (req, res, next) => {
     }).lean();
 
     if (!workflow) {
-      return res.status(404).json({ message: "Workflow not found" });
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
     }
 
     const versions = await WorkflowVersion.find({
@@ -429,7 +492,9 @@ const getWorkflowVersions = async (req, res, next) => {
       workspace: workspaceId,
       owner: userId,
     })
-      .select("_id workflow version name description trigger createdBy createdAt updatedAt")
+      .select(
+        "_id workflow version name description trigger createdBy createdAt updatedAt"
+      )
       .sort({ version: -1 })
       .lean();
 
@@ -438,7 +503,8 @@ const getWorkflowVersions = async (req, res, next) => {
       currentVersion: workflow.currentVersion,
       versions: versions.map((version) => ({
         ...version,
-        isCurrent: version.version === workflow.currentVersion,
+        isCurrent:
+          version.version === workflow.currentVersion,
       })),
     });
   } catch (error) {
@@ -454,11 +520,18 @@ const getWorkflowVersion = async (req, res, next) => {
     const versionNumber = Number(version);
 
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
-    if (!Number.isInteger(versionNumber) || versionNumber < 1) {
-      return res.status(400).json({ message: "Invalid workflow version" });
+    if (
+      !Number.isInteger(versionNumber) ||
+      versionNumber < 1
+    ) {
+      return res.status(400).json({
+        message: "Invalid workflow version",
+      });
     }
 
     const workspace = await Workspace.findOne({
@@ -480,7 +553,9 @@ const getWorkflowVersion = async (req, res, next) => {
     }).lean();
 
     if (!workflow) {
-      return res.status(404).json({ message: "Workflow not found" });
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
     }
 
     const workflowVersion = await WorkflowVersion.findOne({
@@ -499,7 +574,8 @@ const getWorkflowVersion = async (req, res, next) => {
     return res.status(200).json({
       version: {
         ...workflowVersion,
-        isCurrent: versionNumber === workflow.currentVersion,
+        isCurrent:
+          versionNumber === workflow.currentVersion,
       },
     });
   } catch (error) {
@@ -515,11 +591,18 @@ const restoreWorkflowVersion = async (req, res, next) => {
     const versionNumber = Number(version);
 
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
-    if (!Number.isInteger(versionNumber) || versionNumber < 1) {
-      return res.status(400).json({ message: "Invalid workflow version" });
+    if (
+      !Number.isInteger(versionNumber) ||
+      versionNumber < 1
+    ) {
+      return res.status(400).json({
+        message: "Invalid workflow version",
+      });
     }
 
     const workspace = await Workspace.findOne({
@@ -543,7 +626,9 @@ const restoreWorkflowVersion = async (req, res, next) => {
         owner: userId,
       }).session(session);
 
-      if (!workflow) throw new Error("WORKFLOW_NOT_FOUND");
+      if (!workflow) {
+        throw new Error("WORKFLOW_NOT_FOUND");
+      }
 
       const sourceVersion = await WorkflowVersion.findOne({
         workflow: workflow._id,
@@ -552,37 +637,49 @@ const restoreWorkflowVersion = async (req, res, next) => {
         version: versionNumber,
       }).session(session);
 
-      if (!sourceVersion) throw new Error("VERSION_NOT_FOUND");
+      if (!sourceVersion) {
+        throw new Error("VERSION_NOT_FOUND");
+      }
 
-      if (sourceVersion.version === workflow.currentVersion) {
+      if (
+        sourceVersion.version ===
+        workflow.currentVersion
+      ) {
         restoredWorkflow = {
           workflow: workflow.toObject(),
           version: sourceVersion.toObject(),
           alreadyCurrent: true,
         };
+
         return;
       }
 
-      const nextVersion = workflow.currentVersion + 1;
+      const nextVersion =
+        workflow.currentVersion + 1;
 
-      const createdVersions = await WorkflowVersion.create(
-        [{
-          workflow: workflow._id,
-          workspace: workflow.workspace,
-          owner: workflow.owner,
-          version: nextVersion,
-          name: sourceVersion.name,
-          description: sourceVersion.description,
-          trigger: sourceVersion.trigger,
-          nodes: sourceVersion.nodes,
-          edges: sourceVersion.edges,
-          createdBy: userId,
-        }],
-        { session }
-      );
+      const createdVersions =
+        await WorkflowVersion.create(
+          [
+            {
+              workflow: workflow._id,
+              workspace: workflow.workspace,
+              owner: workflow.owner,
+              version: nextVersion,
+              name: sourceVersion.name,
+              description:
+                sourceVersion.description,
+              trigger: sourceVersion.trigger,
+              nodes: sourceVersion.nodes,
+              edges: sourceVersion.edges,
+              createdBy: userId,
+            },
+          ],
+          { session }
+        );
 
       workflow.name = sourceVersion.name;
-      workflow.description = sourceVersion.description;
+      workflow.description =
+        sourceVersion.description;
       workflow.trigger = sourceVersion.trigger;
       workflow.nodes = sourceVersion.nodes;
       workflow.edges = sourceVersion.edges;
@@ -592,27 +689,32 @@ const restoreWorkflowVersion = async (req, res, next) => {
 
       restoredWorkflow = {
         workflow: workflow.toObject(),
-        version: createdVersions[0].toObject(),
+        version:
+          createdVersions[0].toObject(),
         alreadyCurrent: false,
       };
     });
 
     if (restoredWorkflow.alreadyCurrent) {
       return res.status(200).json({
-        message: "Workflow is already using this version",
+        message:
+          "Workflow is already using this version",
         workflow: restoredWorkflow.workflow,
         version: restoredWorkflow.version,
       });
     }
 
     return res.status(200).json({
-      message: "Workflow version restored successfully",
+      message:
+        "Workflow version restored successfully",
       workflow: restoredWorkflow.workflow,
       version: restoredWorkflow.version,
     });
   } catch (error) {
     if (error.message === "WORKFLOW_NOT_FOUND") {
-      return res.status(404).json({ message: "Workflow not found" });
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
     }
 
     if (error.message === "VERSION_NOT_FOUND") {
@@ -632,7 +734,9 @@ const publishWorkflow = async (req, res, next) => {
     const userId = req.user._id;
 
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
     const workspace = await Workspace.findOne({
@@ -654,7 +758,9 @@ const publishWorkflow = async (req, res, next) => {
     });
 
     if (!workflow) {
-      return res.status(404).json({ message: "Workflow not found" });
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
     }
 
     const currentVersion = await WorkflowVersion.findOne({
@@ -666,11 +772,14 @@ const publishWorkflow = async (req, res, next) => {
 
     if (!currentVersion) {
       return res.status(409).json({
-        message: "Current workflow version does not exist",
+        message:
+          "Current workflow version does not exist",
       });
     }
 
-    workflow.publishedVersion = workflow.currentVersion;
+    workflow.publishedVersion =
+      workflow.currentVersion;
+
     await workflow.save();
 
     return res.status(200).json({
@@ -689,7 +798,9 @@ const unpublishWorkflow = async (req, res, next) => {
     const userId = req.user._id;
 
     if (!workspaceId) {
-      return res.status(400).json({ message: "Workspace is required" });
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
     }
 
     const workspace = await Workspace.findOne({
@@ -711,11 +822,14 @@ const unpublishWorkflow = async (req, res, next) => {
     });
 
     if (!workflow) {
-      return res.status(404).json({ message: "Workflow not found" });
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
     }
 
     workflow.publishedVersion = null;
     workflow.status = "inactive";
+
     await workflow.save();
 
     return res.status(200).json({

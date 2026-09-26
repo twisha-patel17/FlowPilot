@@ -31,11 +31,14 @@ export const getWorkflow = async ({
   id,
   workspaceId,
 }) => {
-  const response = await api.get(`/workflows/${id}`, {
-    headers: {
-      "X-Workspace-Id": workspaceId,
-    },
-  });
+  const response = await api.get(
+    `/workflows/${id}`,
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
+  );
 
   return response.data;
 };
@@ -62,11 +65,31 @@ export const deleteWorkflow = async ({
   id,
   workspaceId,
 }) => {
-  const response = await api.delete(`/workflows/${id}`, {
-    headers: {
-      "X-Workspace-Id": workspaceId,
-    },
-  });
+  const response = await api.delete(
+    `/workflows/${id}`,
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
+  );
+
+  return response.data;
+};
+
+export const publishWorkflow = async ({
+  id,
+  workspaceId,
+}) => {
+  const response = await api.post(
+    `/workflows/${id}/publish`,
+    {},
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
+  );
 
   return response.data;
 };

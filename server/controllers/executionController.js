@@ -81,7 +81,6 @@ const createExecution = async (
         _id: workflowId,
         owner: req.user._id,
         workspace: workspaceId,
-        status: "active",
       });
 
     if (!workflow) {
