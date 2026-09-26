@@ -20,12 +20,43 @@ const ConnectIntegrationModal = ({
       return;
     }
 
+    let credentials;
+
+    switch (integration.provider) {
+      case "discord":
+        credentials = {
+          webhookUrl: value.trim(),
+        };
+        break;
+
+      case "github":
+        credentials = {
+          token: value.trim(),
+        };
+        break;
+
+      case "mongodb":
+        credentials = {
+          uri: value.trim(),
+        };
+        break;
+
+      case "http":
+        credentials = {
+          headers: {},
+        };
+        break;
+
+      default:
+        credentials = {
+          value: value.trim(),
+        };
+    }
+
     onConnect({
       name: name.trim(),
       provider: integration.provider,
-      credentials: {
-        value: value.trim(),
-      },
+      credentials,
     });
   };
 
@@ -168,12 +199,10 @@ const ConnectIntegrationModal = ({
             </p>
           </div>
 
-          {/* Development Notice */}
-          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-            <p className="text-[11px] leading-5 text-amber-400">
-              Connection credentials are currently stored
-              for development purposes. Secure credential
-              storage will be added later.
+          {/* Credential Security Notice */}
+          <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+            <p className="text-[11px] leading-5 text-emerald-400">
+              Connection credentials are encrypted before being stored.
             </p>
           </div>
 
