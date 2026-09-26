@@ -9,9 +9,18 @@ const executeSwitchNode = require("./switchNode");
 
 const executeManualNode = async (
   node,
-  input
+  input = {},
+  context = {}
 ) => {
-  console.log("Executing manual node");
+  if (context.signal?.aborted) {
+    const error = new Error(
+      "Manual node execution was cancelled"
+    );
+
+    error.code = "NODE_CANCELLED";
+
+    throw error;
+  }
 
   return {
     success: true,
@@ -21,9 +30,18 @@ const executeManualNode = async (
 
 const executeWebhookNode = async (
   node,
-  input
+  input = {},
+  context = {}
 ) => {
-  console.log("Executing webhook node");
+  if (context.signal?.aborted) {
+    const error = new Error(
+      "Webhook node execution was cancelled"
+    );
+
+    error.code = "NODE_CANCELLED";
+
+    throw error;
+  }
 
   return {
     success: true,
@@ -31,98 +49,77 @@ const executeWebhookNode = async (
   };
 };
 
+const NODE_EXECUTORS = Object.freeze({
+  manual: executeManualNode,
+  filter: executeFilterNode,
+  http: executeHttpNode,
+  discord: executeDiscordNode,
+  email: executeEmailNode,
+  mongodb: executeMongoDBNode,
+  condition: executeConditionNode,
+  delay: executeDelayNode,
+  webhook: executeWebhookNode,
+  switch: executeSwitchNode,
+});
+
 const executeNode = async (
   node,
   input = {},
   context = {}
 ) => {
-  const nodeType =
+  if (!node || typeof node !== "object") {
+    const error = new Error(
+      "Invalid workflow node"
+    );
+
+    error.code = "INVALID_NODE";
+
+    throw error;
+  }
+
+  const rawNodeType =
     node.data?.type ||
     node.data?.nodeType;
 
-  console.log(
-    "Node type:",
-    nodeType
-  );
+  const nodeType =
+    typeof rawNodeType === "string"
+      ? rawNodeType.trim().toLowerCase()
+      : "";
+
+  if (!nodeType) {
+    const error = new Error(
+      "Workflow node type is required"
+    );
+
+    error.code = "INVALID_NODE";
+
+    throw error;
+  }
+
+  const executor =
+    NODE_EXECUTORS[nodeType];
+
+  if (!executor) {
+    const error = new Error(
+      `Unsupported node type: ${nodeType}`
+    );
+
+    error.code =
+      "UNSUPPORTED_NODE_TYPE";
+
+    throw error;
+  }
 
   const nodeContext = {
     ...context,
     signal: context.signal || null,
   };
 
-  switch (nodeType) {
-    case "manual":
-      return executeManualNode(
-        node,
-        input
-      );
-
-    case "filter":
-      return executeFilterNode(
-        node,
-        input
-      );
-
-    case "http":
-      return executeHttpNode(
-        node,
-        input,
-        nodeContext
-      );
-
-    case "discord":
-      return executeDiscordNode(
-        node,
-        input,
-        nodeContext
-      );
-
-    case "email":
-      return executeEmailNode(
-        node,
-        input,
-        nodeContext
-      );
-
-    case "mongodb":
-      return executeMongoDBNode(
-        node,
-        input,
-        nodeContext
-      );
-
-    case "condition":
-      return executeConditionNode(
-        node,
-        input,
-        nodeContext
-      );
-
-    case "delay":
-      return executeDelayNode(
-        node,
-        input,
-        nodeContext
-      );
-
-    case "webhook":
-      return executeWebhookNode(
-        node,
-        input
-      );
-    case "switch":
-  return executeSwitchNode(
+  return executor(
     node,
-    input
-  );  
-
-    default:
-      throw new Error(
-        `Unsupported node type: ${
-          nodeType || "unknown"
-        }`
-      );
-  }
+    input,
+    nodeContext
+  );
 };
 
 module.exports = executeNode;

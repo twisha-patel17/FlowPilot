@@ -455,7 +455,7 @@ const executeMongoDBNode = async (
       throw error;
     }
 
-    throw createMongoError(c
+    throw createMongoError(
       error,
       operation
     );
