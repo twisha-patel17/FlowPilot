@@ -13,10 +13,17 @@ const ConnectIntegrationModal = ({
 
   const [value, setValue] = useState("");
 
+  const [emailHost, setEmailHost] = useState("");
+  const [emailPort, setEmailPort] = useState("587");
+  const [emailSecure, setEmailSecure] = useState(false);
+  const [emailUsername, setEmailUsername] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailFrom, setEmailFrom] = useState("");
+
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (!name.trim() || !value.trim()) {
+    if (!name.trim()) {
       return;
     }
 
@@ -24,20 +31,47 @@ const ConnectIntegrationModal = ({
 
     switch (integration.provider) {
       case "discord":
+        if (!value.trim()) return;
+
         credentials = {
           webhookUrl: value.trim(),
         };
         break;
 
       case "github":
+        if (!value.trim()) return;
+
         credentials = {
           token: value.trim(),
         };
         break;
 
       case "mongodb":
+        if (!value.trim()) return;
+
         credentials = {
           uri: value.trim(),
+        };
+        break;
+
+      case "email":
+        if (
+          !emailHost.trim() ||
+          !emailPort ||
+          !emailUsername.trim() ||
+          !emailPassword.trim() ||
+          !emailFrom.trim()
+        ) {
+          return;
+        }
+
+        credentials = {
+          host: emailHost.trim(),
+          port: Number(emailPort),
+          secure: emailSecure,
+          username: emailUsername.trim(),
+          password: emailPassword,
+          from: emailFrom.trim(),
         };
         break;
 
@@ -48,6 +82,8 @@ const ConnectIntegrationModal = ({
         break;
 
       default:
+        if (!value.trim()) return;
+
         credentials = {
           value: value.trim(),
         };
@@ -68,9 +104,6 @@ const ConnectIntegrationModal = ({
       case "github":
         return "GitHub Access Token";
 
-      case "email":
-        return "SMTP Host / API Key";
-
       case "mongodb":
         return "MongoDB Connection String";
 
@@ -89,9 +122,6 @@ const ConnectIntegrationModal = ({
 
       case "github":
         return "ghp_xxxxxxxxxxxxxxxxxxxx";
-
-      case "email":
-        return "smtp.example.com";
 
       case "mongodb":
         return "mongodb+srv://username:password@cluster...";
@@ -113,7 +143,7 @@ const ConnectIntegrationModal = ({
         return "A GitHub access token will be used to access your repositories.";
 
       case "email":
-        return "Provide the connection details for your email provider.";
+        return "Provide the SMTP connection details for your email provider.";
 
       case "mongodb":
         return "Provide the connection string for your MongoDB cluster.";
@@ -125,6 +155,17 @@ const ConnectIntegrationModal = ({
         return "Provide the required connection details.";
     }
   };
+
+  const isEmail = integration.provider === "email";
+
+  const isFormValid = isEmail
+    ? name.trim() &&
+      emailHost.trim() &&
+      emailPort &&
+      emailUsername.trim() &&
+      emailPassword.trim() &&
+      emailFrom.trim()
+    : name.trim() && value.trim();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
@@ -172,32 +213,158 @@ const ConnectIntegrationModal = ({
             />
           </div>
 
-          {/* Provider Credential */}
-          <div>
-            <label className="mb-2 block text-xs font-medium text-zinc-400">
-              {getCredentialLabel()}
-            </label>
+          {/* Email Configuration */}
+          {isEmail ? (
+            <div className="space-y-4">
+              {/* SMTP Host */}
+              <div>
+                <label className="mb-2 block text-xs font-medium text-zinc-400">
+                  SMTP Host
+                </label>
 
-            <input
-              type={
-                integration.provider === "github" ||
-                integration.provider === "mongodb"
-                  ? "password"
-                  : "text"
-              }
-              value={value}
-              onChange={(event) =>
-                setValue(event.target.value)
-              }
-              placeholder={getPlaceholder()}
-              required
-              className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
-            />
+                <input
+                  type="text"
+                  value={emailHost}
+                  onChange={(event) =>
+                    setEmailHost(event.target.value)
+                  }
+                  placeholder="smtp.gmail.com"
+                  required
+                  className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
+                />
+              </div>
 
-            <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-              {getDescription()}
-            </p>
-          </div>
+              {/* Port + Secure */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-zinc-400">
+                    SMTP Port
+                  </label>
+
+                  <input
+                    type="number"
+                    min="1"
+                    max="65535"
+                    value={emailPort}
+                    onChange={(event) =>
+                      setEmailPort(event.target.value)
+                    }
+                    placeholder="587"
+                    required
+                    className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-zinc-400">
+                    Security
+                  </label>
+
+                  <select
+                    value={emailSecure ? "true" : "false"}
+                    onChange={(event) =>
+                      setEmailSecure(
+                        event.target.value === "true"
+                      )
+                    }
+                    className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none focus:border-violet-500"
+                  >
+                    <option value="false">
+                      STARTTLS
+                    </option>
+                    <option value="true">
+                      SSL / TLS
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Username */}
+              <div>
+                <label className="mb-2 block text-xs font-medium text-zinc-400">
+                  SMTP Username
+                </label>
+
+                <input
+                  type="email"
+                  value={emailUsername}
+                  onChange={(event) =>
+                    setEmailUsername(event.target.value)
+                  }
+                  placeholder="yourgmail@gmail.com"
+                  required
+                  className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="mb-2 block text-xs font-medium text-zinc-400">
+                  SMTP Password / App Password
+                </label>
+
+                <input
+                  type="password"
+                  value={emailPassword}
+                  onChange={(event) =>
+                    setEmailPassword(event.target.value)
+                  }
+                  placeholder="Enter your app password"
+                  required
+                  className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
+                />
+              </div>
+
+              {/* From Email */}
+              <div>
+                <label className="mb-2 block text-xs font-medium text-zinc-400">
+                  From Email
+                </label>
+
+                <input
+                  type="email"
+                  value={emailFrom}
+                  onChange={(event) =>
+                    setEmailFrom(event.target.value)
+                  }
+                  placeholder="yourgmail@gmail.com"
+                  required
+                  className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
+                />
+              </div>
+
+              <p className="text-[11px] leading-5 text-zinc-600">
+                {getDescription()}
+              </p>
+            </div>
+          ) : (
+            /* Other Provider Credential */
+            <div>
+              <label className="mb-2 block text-xs font-medium text-zinc-400">
+                {getCredentialLabel()}
+              </label>
+
+              <input
+                type={
+                  integration.provider === "github" ||
+                  integration.provider === "mongodb"
+                    ? "password"
+                    : "text"
+                }
+                value={value}
+                onChange={(event) =>
+                  setValue(event.target.value)
+                }
+                placeholder={getPlaceholder()}
+                required
+                className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
+              />
+
+              <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+                {getDescription()}
+              </p>
+            </div>
+          )}
 
           {/* Credential Security Notice */}
           <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
@@ -218,16 +385,10 @@ const ConnectIntegrationModal = ({
 
             <button
               type="submit"
-              disabled={
-                isConnecting ||
-                !name.trim() ||
-                !value.trim()
-              }
+              disabled={isConnecting || !isFormValid}
               className="h-9 rounded-md bg-violet-600 px-4 text-xs font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isConnecting
-                ? "Connecting..."
-                : "Connect"}
+              {isConnecting ? "Connecting..." : "Connect"}
             </button>
           </div>
         </form>

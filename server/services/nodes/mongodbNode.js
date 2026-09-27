@@ -114,13 +114,62 @@ const normalizeLimit = (value) => {
   );
 };
 
-const createMongoError = (error, operation) => {
+const normalizeJsonObject = (
+  value,
+  fieldName
+) => {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return {};
+  }
+
+  if (
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error(
+      `${fieldName} must be a JSON object`
+    );
+  }
+
+  try {
+    const parsed =
+      JSON.parse(value);
+
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      throw new Error();
+    }
+
+    return parsed;
+  } catch {
+    throw new Error(
+      `${fieldName} must contain valid JSON`
+    );
+  }
+};
+
+const createMongoError = (
+  error,
+  operation
+) => {
   const wrappedError = new Error(
     `MongoDB ${operation} operation failed`
   );
 
   wrappedError.code = error?.code;
-  wrappedError.codeName = error?.codeName;
+  wrappedError.codeName =
+    error?.codeName;
 
   if (error?.statusCode) {
     wrappedError.statusCode =
@@ -243,11 +292,13 @@ const executeMongoDBNode = async (
         safeCollectionName
       );
 
-    const mongoOptions = context.signal
-      ? {
-          signal: context.signal,
-        }
-      : {};
+    const mongoOptions =
+      context.signal
+        ? {
+            signal:
+              context.signal,
+          }
+        : {};
 
     let output;
 
@@ -353,7 +404,10 @@ const executeMongoDBNode = async (
 
       case "find": {
         const filter =
-          config.filter || {};
+          normalizeJsonObject(
+            config.filter,
+            "MongoDB filter"
+          );
 
         const limit =
           normalizeLimit(
@@ -385,10 +439,16 @@ const executeMongoDBNode = async (
 
       case "update": {
         const filter =
-          config.filter || {};
+          normalizeJsonObject(
+            config.filter,
+            "MongoDB filter"
+          );
 
         const update =
-          config.update || {};
+          normalizeJsonObject(
+            config.update,
+            "MongoDB update"
+          );
 
         checkAborted();
 
@@ -416,7 +476,10 @@ const executeMongoDBNode = async (
 
       case "delete": {
         const filter =
-          config.filter || {};
+          normalizeJsonObject(
+            config.filter,
+            "MongoDB filter"
+          );
 
         checkAborted();
 
