@@ -374,6 +374,17 @@ const WorkflowBuilderPage = () => {
               node.type ||
               "manual";
 
+            const normalizedConfig =
+              nodeType === "condition"
+                ? {
+                    ...node.data?.config,
+                    operator:
+                      node.data?.config
+                        ?.operator ||
+                      "equals",
+                  }
+                : node.data?.config;
+
             return {
               ...node,
 
@@ -382,6 +393,8 @@ const WorkflowBuilderPage = () => {
               data: {
                 ...node.data,
                 type: nodeType,
+                config:
+                  normalizedConfig,
               },
             };
           }
@@ -623,10 +636,6 @@ const WorkflowBuilderPage = () => {
     );
   }
 
-  /*
-   * BUTTON STATES
-   */
-
   const isSaving =
     createMutation.isPending ||
     updateMutation.isPending;
@@ -666,10 +675,6 @@ const WorkflowBuilderPage = () => {
     !isPublishing &&
     !isToggling &&
     !isRunning;
-
-  /*
-   * PAGE
-   */
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#09090b]">
@@ -793,8 +798,6 @@ const WorkflowBuilderPage = () => {
             </span>
           </button>
 
-          {/* RUN */}
-
           <button
             type="button"
             onClick={
@@ -811,8 +814,6 @@ const WorkflowBuilderPage = () => {
                 : "Run"}
             </span>
           </button>
-
-          {/* ACTIVATE / DEACTIVATE */}
 
           <button
             type="button"
@@ -838,17 +839,11 @@ const WorkflowBuilderPage = () => {
         </div>
       </header>
 
-      {/* WORKSPACE */}
-
       <div className="flex min-h-0 flex-1">
-
-        {/* NODE PANEL */}
 
         <div className="hidden w-60 shrink-0 md:block">
           <NodePanel />
         </div>
-
-        {/* CANVAS */}
 
         <main className="min-w-0 flex-1">
           <WorkflowCanvas
@@ -862,8 +857,6 @@ const WorkflowBuilderPage = () => {
             initialEdges={edges}
           />
         </main>
-
-        {/* CONFIG PANEL */}
 
         <div className="hidden w-72 shrink-0 lg:block">
           <ConfigPanel
