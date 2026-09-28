@@ -58,19 +58,18 @@ const WebhooksPage = () => {
   const createMutation = useMutation({
     mutationFn: createWebhook,
 
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({
         queryKey: ["webhooks", workspaceId],
       });
 
-      setShowModal(false);
+      // Keep the modal open so it can display
+      // the one-time endpoint and secret.
+      return data;
     },
 
     onError: (error) => {
-      console.error(
-        "Create webhook error:",
-        error
-      );
+      console.error("Create webhook error:", error);
 
       alert(
         error?.response?.data?.message ||
@@ -89,10 +88,7 @@ const WebhooksPage = () => {
     },
 
     onError: (error) => {
-      console.error(
-        "Toggle webhook error:",
-        error
-      );
+      console.error("Toggle webhook error:", error);
 
       alert(
         error?.response?.data?.message ||
@@ -111,6 +107,12 @@ const WebhooksPage = () => {
       webhookData,
       workspaceId,
     });
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+
+    createMutation.reset();
   };
 
   const handleViewLogs = (id) => {
@@ -301,9 +303,10 @@ const WebhooksPage = () => {
       {showModal && (
         <NewWebhookModal
           workflows={workflows}
-          onClose={() => setShowModal(false)}
+          onClose={handleCloseModal}
           onCreate={handleCreate}
           isCreating={createMutation.isPending}
+          createdWebhook={createMutation.data}
         />
       )}
 
