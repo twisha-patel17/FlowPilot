@@ -6,6 +6,19 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import {
+  FiGlobe,
+  FiMail,
+} from "react-icons/fi";
+
+import {
+  SiDiscord,
+  SiGithub,
+  SiMongodb,
+} from "react-icons/si";
+
+import toast from "react-hot-toast";
+
 import IntegrationCard from "../components/integrations/IntegrationCard";
 import ConnectIntegrationModal from "../components/integrations/ConnectIntegrationModal";
 
@@ -20,35 +33,35 @@ import { useWorkspace } from "../context/WorkspaceContext";
 const availableIntegrations = [
   {
     provider: "github",
-    icon: "🐙",
+    icon: <SiGithub className="h-6 w-6" />,
     name: "GitHub",
     description:
       "Connect GitHub repositories to trigger and automate workflows.",
   },
   {
     provider: "discord",
-    icon: "💬",
+    icon: <SiDiscord className="h-6 w-6" />,
     name: "Discord",
     description:
       "Send messages and notifications to Discord channels.",
   },
   {
     provider: "email",
-    icon: "✉",
+    icon: <FiMail className="h-6 w-6" />,
     name: "Email",
     description:
       "Send transactional emails from your workflows via SMTP or a provider API.",
   },
   {
     provider: "http",
-    icon: "📡",
+    icon: <FiGlobe className="h-6 w-6" />,
     name: "HTTP",
     description:
       "Make HTTP requests to external APIs from your workflows.",
   },
   {
     provider: "mongodb",
-    icon: "🍑",
+    icon: <SiMongodb className="h-6 w-6" />,
     name: "MongoDB",
     description:
       "Read from and write to a MongoDB cluster as a workflow action.",
@@ -87,6 +100,8 @@ const IntegrationsPage = () => {
       });
 
       setSelectedIntegration(null);
+
+      toast.success("Integration connected successfully.");
     },
 
     onError: (error) => {
@@ -95,9 +110,9 @@ const IntegrationsPage = () => {
         error
       );
 
-      alert(
+      toast.error(
         error?.response?.data?.message ||
-          "Failed to connect integration"
+          "Failed to connect integration."
       );
     },
   });
@@ -105,10 +120,28 @@ const IntegrationsPage = () => {
   const toggleMutation = useMutation({
     mutationFn: toggleIntegration,
 
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["integrations", workspaceId],
       });
+
+      const connectedIntegration = integrations.find(
+        (integration) =>
+          integration._id === variables.id
+      );
+
+      if (
+        connectedIntegration?.status ===
+        "connected"
+      ) {
+        toast.success(
+          "Integration disconnected successfully."
+        );
+      } else {
+        toast.success(
+          "Integration status updated successfully."
+        );
+      }
     },
 
     onError: (error) => {
@@ -117,9 +150,9 @@ const IntegrationsPage = () => {
         error
       );
 
-      alert(
+      toast.error(
         error?.response?.data?.message ||
-          "Failed to update integration"
+          "Failed to update integration."
       );
     },
   });
@@ -160,7 +193,9 @@ const IntegrationsPage = () => {
         integration.provider
       );
 
-    if (!connectedIntegration) return;
+    if (!connectedIntegration) {
+      return;
+    }
 
     toggleMutation.mutate({
       id: connectedIntegration._id,
@@ -172,7 +207,7 @@ const IntegrationsPage = () => {
     integrationData
   ) => {
     if (!workspaceId) {
-      alert("No workspace selected");
+      toast.error("No workspace selected.");
       return;
     }
 

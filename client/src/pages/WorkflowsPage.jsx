@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import { useExecutions } from "../hooks/useExecutions";
 import { useWorkspace } from "../context/WorkspaceContext";
@@ -228,10 +229,25 @@ const WorkflowsPage = () => {
         await toggleWorkflow({
           id: workflow._id,
         });
+
+        const isCurrentlyActive =
+          workflow.status ===
+          "Active";
+
+        toast.success(
+          isCurrentlyActive
+            ? "Workflow deactivated."
+            : "Workflow activated."
+        );
       } catch (error) {
         console.error(
           "Failed to toggle workflow:",
           error
+        );
+
+        toast.error(
+          error?.response?.data?.message ||
+            "Failed to update workflow status."
         );
       }
     };
@@ -262,10 +278,19 @@ const WorkflowsPage = () => {
         await deleteWorkflow({
           id: workflow._id,
         });
+
+        toast.success(
+          "Workflow deleted successfully."
+        );
       } catch (error) {
         console.error(
           "Failed to delete workflow:",
           error
+        );
+
+        toast.error(
+          error?.response?.data?.message ||
+            "Failed to delete workflow."
         );
       }
     };
@@ -311,10 +336,19 @@ const WorkflowsPage = () => {
           workflowData:
             duplicateData,
         });
+
+        toast.success(
+          "Workflow duplicated successfully."
+        );
       } catch (error) {
         console.error(
           "Failed to duplicate workflow:",
           error
+        );
+
+        toast.error(
+          error?.response?.data?.message ||
+            "Failed to duplicate workflow."
         );
       }
     };

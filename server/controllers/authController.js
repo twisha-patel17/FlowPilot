@@ -653,6 +653,76 @@ const changePassword = async (
   }
 };
 
+const deleteAccount = async (req, res, next) => {
+  try {
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        message: "Password is required to delete your account",
+      });
+    }
+
+    const user = await User.findById(req.user._id).select(
+      "+password +refreshToken"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (!user.password) {
+      return res.status(400).json({
+        message:
+          "Account deletion is not available for this account",
+      });
+    }
+
+    const passwordMatch = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    if (!passwordMatch) {
+      return res.status(401).json({
+        message: "Incorrect password",
+      });
+    }
+
+    await Workspace.deleteMany({
+      owner: user._id,
+    });
+
+    await Workspace.updateMany(
+      {},
+      {
+        $pull: {
+          members: {
+            user: user._id,
+          },
+        },
+      }
+    );
+
+    await User.deleteOne({
+      _id: user._id,
+    });
+
+    res.clearCookie(
+      "refreshToken",
+      getRefreshCookieOptions()
+    );
+
+    return res.status(200).json({
+      message: "Account deleted successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -662,4 +732,5 @@ module.exports = {
   getProfile,
   updateProfile,
   changePassword,
+  deleteAccount,
 };

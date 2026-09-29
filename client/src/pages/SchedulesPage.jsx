@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import ScheduleCard from "../components/schedules/ScheduleCard";
 
@@ -54,7 +55,7 @@ const SchedulesPage = () => {
   const toggleMutation = useMutation({
     mutationFn: toggleWorkflow,
 
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({
         queryKey: ["schedules", workspaceId],
       });
@@ -62,6 +63,33 @@ const SchedulesPage = () => {
       queryClient.invalidateQueries({
         queryKey: ["workflows", workspaceId],
       });
+
+      const status =
+        response?.workflow?.status ||
+        response?.status;
+
+      if (status === "active") {
+        toast.success(
+          "Workflow activated successfully."
+        );
+      } else if (status === "inactive") {
+        toast.success(
+          "Workflow deactivated successfully."
+        );
+      } else {
+        toast.success(
+          "Workflow status updated successfully."
+        );
+      }
+    },
+
+    onError: (error) => {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to update workflow status.";
+
+      toast.error(message);
     },
   });
 
@@ -69,6 +97,14 @@ const SchedulesPage = () => {
   const executions = executionData?.executions || [];
 
   const handleToggle = (workflowId) => {
+    if (
+      !workflowId ||
+      !workspaceId ||
+      toggleMutation.isPending
+    ) {
+      return;
+    }
+
     toggleMutation.mutate({
       id: workflowId,
       workspaceId,

@@ -9,7 +9,11 @@ const IntegrationCard = ({
   onManage,
   onDisconnect,
 }) => {
-  const isAlwaysAvailable = status === "Always available";
+  const isAlwaysAvailable =
+    status === "Always available";
+
+  const isConnected =
+    connected || isAlwaysAvailable;
 
   return (
     <div className="rounded-xl border border-zinc-800/70 bg-[#0d0d0f] p-5">
@@ -35,14 +39,14 @@ const IntegrationCard = ({
       <div className="mt-4">
         <div
           className={`flex items-center gap-2 text-xs font-medium ${
-            connected || isAlwaysAvailable
+            isConnected
               ? "text-emerald-400"
               : "text-zinc-500"
           }`}
         >
           <span
             className={`h-1.5 w-1.5 rounded-full ${
-              connected || isAlwaysAvailable
+              isConnected
                 ? "bg-emerald-400"
                 : "bg-zinc-600"
             }`}
@@ -65,6 +69,7 @@ const IntegrationCard = ({
             <button
               type="button"
               onClick={onManage}
+              aria-label={`Manage ${name} integration`}
               className="h-9 flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800"
             >
               Manage
@@ -73,6 +78,7 @@ const IntegrationCard = ({
             <button
               type="button"
               onClick={onDisconnect}
+              aria-label={`Disconnect ${name} integration`}
               className="h-9 flex-1 rounded-md border border-red-500/30 bg-transparent px-3 text-xs font-semibold text-red-400 transition hover:bg-red-500/10"
             >
               Disconnect
@@ -82,6 +88,7 @@ const IntegrationCard = ({
           <button
             type="button"
             onClick={onManage}
+            aria-label={`Manage ${name}`}
             className="h-9 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800"
           >
             Manage
@@ -90,6 +97,7 @@ const IntegrationCard = ({
           <button
             type="button"
             onClick={onConnect}
+            aria-label={`Connect ${name} integration`}
             className="h-9 w-full rounded-md bg-violet-500 px-3 text-xs font-semibold text-white transition hover:bg-violet-400"
           >
             Connect

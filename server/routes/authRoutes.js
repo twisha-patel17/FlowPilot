@@ -9,6 +9,7 @@ const {
   getProfile,
   updateProfile,
   changePassword,
+  deleteAccount,
 } = require("../controllers/authController");
 
 const protect = require("../middleware/authMiddleware");
@@ -55,6 +56,12 @@ router.patch(
   protect,
   validate(changePasswordSchema),
   changePassword
+);
+
+router.delete(
+  "/account",
+  protect,
+  deleteAccount
 );
 
 module.exports = router;
