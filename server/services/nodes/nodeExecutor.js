@@ -49,8 +49,32 @@ const executeWebhookNode = async (
   };
 };
 
+const executeScheduleNode = async (
+  node,
+  input = {},
+  context = {}
+) => {
+  if (context.signal?.aborted) {
+    const error = new Error(
+      "Schedule node execution was cancelled"
+    );
+
+    error.code = "NODE_CANCELLED";
+
+    throw error;
+  }
+
+  return {
+    success: true,
+    output: input || {},
+  };
+};
+
 const NODE_EXECUTORS = Object.freeze({
   manual: executeManualNode,
+  webhook: executeWebhookNode,
+  schedule: executeScheduleNode,
+
   filter: executeFilterNode,
   http: executeHttpNode,
   discord: executeDiscordNode,
@@ -58,7 +82,6 @@ const NODE_EXECUTORS = Object.freeze({
   mongodb: executeMongoDBNode,
   condition: executeConditionNode,
   delay: executeDelayNode,
-  webhook: executeWebhookNode,
   switch: executeSwitchNode,
 });
 
