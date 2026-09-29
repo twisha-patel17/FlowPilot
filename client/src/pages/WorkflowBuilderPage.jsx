@@ -15,6 +15,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import toast from "react-hot-toast";
+
 import {
   FiArrowLeft,
   FiSave,
@@ -58,7 +60,6 @@ const WorkflowBuilderPage = () => {
 
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
-
 
   const {
     data,
@@ -172,12 +173,16 @@ const WorkflowBuilderPage = () => {
             response?.workflow;
 
           if (!createdWorkflow?._id) {
-            alert(
+            toast.error(
               "Workflow was created, but its ID could not be found."
             );
 
             return;
           }
+
+          toast.success(
+            "Workflow created successfully"
+          );
 
           navigate(
             `/app/workflows/${createdWorkflow._id}`,
@@ -194,7 +199,7 @@ const WorkflowBuilderPage = () => {
             error
           );
 
-          alert(
+          toast.error(
             error.response?.data
               ?.message ||
               "Failed to create workflow"
@@ -224,6 +229,10 @@ const WorkflowBuilderPage = () => {
               workspaceId,
             ],
           });
+
+          toast.success(
+            "Workflow saved successfully"
+          );
         },
 
       onError:
@@ -233,7 +242,7 @@ const WorkflowBuilderPage = () => {
             error
           );
 
-          alert(
+          toast.error(
             error.response?.data
               ?.message ||
               "Failed to update workflow"
@@ -263,6 +272,10 @@ const WorkflowBuilderPage = () => {
               workspaceId,
             ],
           });
+
+          toast.success(
+            "Workflow published successfully"
+          );
         },
 
       onError:
@@ -272,7 +285,7 @@ const WorkflowBuilderPage = () => {
             error
           );
 
-          alert(
+          toast.error(
             error.response?.data
               ?.message ||
               "Failed to publish workflow"
@@ -302,6 +315,19 @@ const WorkflowBuilderPage = () => {
               workspaceId,
             ],
           });
+
+          const newStatus =
+            response?.workflow?.status;
+
+          if (newStatus === "active") {
+            toast.success(
+              "Workflow activated"
+            );
+          } else {
+            toast.success(
+              "Workflow deactivated"
+            );
+          }
         },
 
       onError:
@@ -311,7 +337,7 @@ const WorkflowBuilderPage = () => {
             error
           );
 
-          alert(
+          toast.error(
             error.response?.data
               ?.message ||
               "Failed to update workflow status"
@@ -337,6 +363,10 @@ const WorkflowBuilderPage = () => {
             response?.execution;
 
           if (execution?._id) {
+            toast.success(
+              "Workflow execution started"
+            );
+
             navigate(
               `/app/executions/${execution._id}`
             );
@@ -344,7 +374,7 @@ const WorkflowBuilderPage = () => {
             return;
           }
 
-          alert(
+          toast.success(
             "Workflow executed successfully"
           );
         },
@@ -356,7 +386,7 @@ const WorkflowBuilderPage = () => {
             error
           );
 
-          alert(
+          toast.error(
             error.response?.data
               ?.message ||
               "Workflow execution failed"
@@ -455,7 +485,7 @@ const WorkflowBuilderPage = () => {
 
   const handleSave = () => {
     if (!workspaceId) {
-      alert(
+      toast.error(
         "Please select a workspace first."
       );
 
@@ -483,7 +513,7 @@ const WorkflowBuilderPage = () => {
 
   const handlePublish = () => {
     if (!id) {
-      alert(
+      toast.error(
         "Save the workflow before publishing it."
       );
 
@@ -491,7 +521,7 @@ const WorkflowBuilderPage = () => {
     }
 
     if (!workspaceId) {
-      alert(
+      toast.error(
         "Please select a workspace first."
       );
 
@@ -499,7 +529,7 @@ const WorkflowBuilderPage = () => {
     }
 
     if (nodes.length === 0) {
-      alert(
+      toast.error(
         "Add at least one node before publishing the workflow."
       );
 
@@ -521,7 +551,7 @@ const WorkflowBuilderPage = () => {
       !isActive &&
       !hasPublishedVersion
     ) {
-      alert(
+      toast.error(
         "Publish the workflow before activating it."
       );
 
@@ -536,7 +566,7 @@ const WorkflowBuilderPage = () => {
 
   const handleRunWorkflow = () => {
     if (!id) {
-      alert(
+      toast.error(
         "Save the workflow before running it."
       );
 
@@ -544,7 +574,7 @@ const WorkflowBuilderPage = () => {
     }
 
     if (!workspaceId) {
-      alert(
+      toast.error(
         "Please select a workspace first."
       );
 
@@ -552,7 +582,7 @@ const WorkflowBuilderPage = () => {
     }
 
     if (nodes.length === 0) {
-      alert(
+      toast.error(
         "Add at least one node before running the workflow."
       );
 
@@ -560,7 +590,7 @@ const WorkflowBuilderPage = () => {
     }
 
     if (!isActive) {
-      alert(
+      toast.error(
         "Publish and activate the workflow before running it."
       );
 
@@ -879,3 +909,4 @@ const WorkflowBuilderPage = () => {
 };
 
 export default WorkflowBuilderPage;
+

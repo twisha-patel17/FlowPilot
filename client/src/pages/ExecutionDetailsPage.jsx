@@ -5,6 +5,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import toast from "react-hot-toast";
+
 import {
   FiArrowLeft,
   FiCheck,
@@ -32,8 +34,7 @@ const ExecutionDetailsPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  const queryClient =
-    useQueryClient();
+  const queryClient = useQueryClient();
 
   const {
     currentWorkspace,
@@ -139,6 +140,16 @@ const ExecutionDetailsPage = () => {
             workspaceId,
           ],
         });
+
+        toast.success(
+          "Execution cancelled successfully."
+        );
+      },
+
+      onError: (error) => {
+        toast.error(
+          getErrorMessage(error)
+        );
       },
     });
 
@@ -248,10 +259,9 @@ const ExecutionDetailsPage = () => {
              * Update existing
              * execution.
              */
-            const updatedExecutions =
-              [
-                ...currentData.executions,
-              ];
+            const updatedExecutions = [
+              ...currentData.executions,
+            ];
 
             updatedExecutions[
               existingIndex
@@ -1120,10 +1130,18 @@ const CopyButton = ({
       await navigator.clipboard.writeText(
         formatJSON(value)
       );
+
+      toast.success(
+        "Copied to clipboard."
+      );
     } catch (error) {
       console.error(
         "Copy failed:",
         error
+      );
+
+      toast.error(
+        "Failed to copy."
       );
     }
   };
