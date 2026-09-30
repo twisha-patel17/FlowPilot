@@ -254,8 +254,7 @@ const WebhookLogsPage = () => {
     );
   }
 
-  const endpoint = `http://localhost:5000/api/webhooks/${webhook.publicId}`;
-
+  const endpoint = `${import.meta.env.VITE_API_URL}/webhooks/${webhook.publicId}`;
   return (
     <div className="space-y-6">
       {/* Back */}
