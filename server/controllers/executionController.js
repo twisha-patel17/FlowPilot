@@ -467,11 +467,7 @@ const cancelExecutionController =
         execution
       );
 
-      console.log(
-        `Execution cancelled: ${id} | ` +
-          `Active signal: ${signalSent}`
-      );
-
+ 
       return res.status(200).json({
         message:
           "Workflow execution cancelled successfully",

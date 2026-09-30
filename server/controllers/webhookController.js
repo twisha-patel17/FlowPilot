@@ -966,14 +966,6 @@ const receiveWebhook = async (
         }
       );
 
-      console.log(
-        `Webhook workflow queued: ` +
-          `${webhook.workflow.name} | ` +
-          `Execution: ${execution._id} | ` +
-          `Delivery: ${deliveryId} | ` +
-          `Job: ${job.id}`
-      );
-
       return res.status(200).json({
         message:
           "Webhook received successfully",

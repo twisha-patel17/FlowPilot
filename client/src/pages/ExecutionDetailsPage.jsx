@@ -24,6 +24,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   getExecution,
   cancelExecution,
+  replayExecution,
 } from "../api/executionApi";
 
 import { useWorkspace } from "../context/WorkspaceContext";
@@ -143,6 +144,55 @@ const ExecutionDetailsPage = () => {
 
         toast.success(
           "Execution cancelled successfully."
+        );
+      },
+
+      onError: (error) => {
+        toast.error(
+          getErrorMessage(error)
+        );
+      },
+    });
+
+  /*
+   * Replay execution mutation.
+   *
+   * Replay creates a completely new
+   * execution with a fresh effect scope.
+   */
+  const replayMutation =
+    useMutation({
+      mutationFn: () =>
+        replayExecution({
+          id,
+          workspaceId,
+        }),
+
+      onSuccess: (response) => {
+        const newExecution =
+          response?.execution;
+
+        queryClient.invalidateQueries({
+          queryKey: [
+            "executions",
+            workspaceId,
+          ],
+        });
+
+        if (!newExecution?._id) {
+          toast.success(
+            "Workflow replay started."
+          );
+
+          return;
+        }
+
+        toast.success(
+          "Workflow replay started."
+        );
+
+        navigate(
+          `/app/executions/${newExecution._id}`
         );
       },
 
@@ -366,6 +416,14 @@ const ExecutionDetailsPage = () => {
     execution?.status ===
       "running";
 
+  const canReplay =
+    execution?.status ===
+      "success" ||
+    execution?.status ===
+      "failed" ||
+    execution?.status ===
+      "cancelled";
+
   const handleCancel =
     async () => {
       if (
@@ -382,6 +440,27 @@ const ExecutionDetailsPage = () => {
       } catch (error) {
         console.error(
           "Failed to cancel execution:",
+          error
+        );
+      }
+    };
+
+  const handleReplay =
+    async () => {
+      if (
+        !id ||
+        !workspaceId ||
+        !canReplay ||
+        replayMutation.isPending
+      ) {
+        return;
+      }
+
+      try {
+        await replayMutation.mutateAsync();
+      } catch (error) {
+        console.error(
+          "Failed to replay execution:",
           error
         );
       }
@@ -560,29 +639,56 @@ const ExecutionDetailsPage = () => {
           </div>
         </div>
 
-        {/* CANCEL */}
-        {canCancel && (
-          <button
-            type="button"
-            onClick={
-              handleCancel
-            }
-            disabled={
-              cancelMutation.isPending
-            }
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-red-500/20 bg-red-500/[0.06] px-3 text-xs font-medium text-red-400 transition hover:border-red-500/30 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {cancelMutation.isPending ? (
-              <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <FiX className="h-3.5 w-3.5" />
-            )}
+        {/* ACTIONS */}
+        <div className="flex shrink-0 items-center gap-2">
+          {canReplay && (
+            <button
+              type="button"
+              onClick={
+                handleReplay
+              }
+              disabled={
+                replayMutation.isPending
+              }
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FiRefreshCw
+                className={`h-3.5 w-3.5 ${
+                  replayMutation.isPending
+                    ? "animate-spin"
+                    : ""
+                }`}
+              />
 
-            {cancelMutation.isPending
-              ? "Cancelling..."
-              : "Cancel Execution"}
-          </button>
-        )}
+              {replayMutation.isPending
+                ? "Replaying..."
+                : "Replay"}
+            </button>
+          )}
+
+          {canCancel && (
+            <button
+              type="button"
+              onClick={
+                handleCancel
+              }
+              disabled={
+                cancelMutation.isPending
+              }
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-red-500/20 bg-red-500/[0.06] px-3 text-xs font-medium text-red-400 transition hover:border-red-500/30 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {cancelMutation.isPending ? (
+                <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FiX className="h-3.5 w-3.5" />
+              )}
+
+              {cancelMutation.isPending
+                ? "Cancelling..."
+                : "Cancel Execution"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* CANCEL ERROR */}
@@ -599,6 +705,26 @@ const ExecutionDetailsPage = () => {
             <p className="mt-1 text-xs text-red-300/60">
               {getErrorMessage(
                 cancelMutation.error
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* REPLAY ERROR */}
+      {replayMutation.isError && (
+        <div className="flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/[0.04] px-4 py-3">
+          <FiAlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+
+          <div>
+            <p className="text-xs font-medium text-red-400">
+              Failed to replay
+              execution
+            </p>
+
+            <p className="mt-1 text-xs text-red-300/60">
+              {getErrorMessage(
+                replayMutation.error
               )}
             </p>
           </div>
@@ -1330,7 +1456,7 @@ const getErrorMessage = (
     error?.response?.data
       ?.message ||
     error?.message ||
-    "Something went wrong while cancelling the execution."
+    "Something went wrong."
   );
 };
 

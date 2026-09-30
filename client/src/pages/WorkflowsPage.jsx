@@ -208,11 +208,8 @@ const WorkflowsPage = () => {
     };
 
   const handleMenuClick =
-    (workflow) => {
-      console.log(
-        "Workflow actions:",
-        workflow.name
-      );
+    () => {
+      // Menu actions are handled by WorkflowTable.
     };
 
   const handleToggleWorkflow =

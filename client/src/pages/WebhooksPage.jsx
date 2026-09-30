@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 import WebhookCard from "../components/webhooks/WebhookCard";
 import NewWebhookModal from "../components/webhooks/NewWebhookModal";
@@ -63,17 +64,17 @@ const WebhooksPage = () => {
         queryKey: ["webhooks", workspaceId],
       });
 
-      // Keep the modal open so it can display
-      // the one-time endpoint and secret.
+      toast.success("Webhook created successfully.");
+
       return data;
     },
 
     onError: (error) => {
       console.error("Create webhook error:", error);
 
-      alert(
+      toast.error(
         error?.response?.data?.message ||
-          "Failed to create webhook"
+          "Failed to create webhook."
       );
     },
   });
@@ -81,25 +82,46 @@ const WebhooksPage = () => {
   const toggleMutation = useMutation({
     mutationFn: toggleWebhook,
 
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({
         queryKey: ["webhooks", workspaceId],
       });
+
+      const isActive =
+        response?.webhook?.active ??
+        response?.active;
+
+      if (isActive === true) {
+        toast.success(
+          "Webhook activated successfully."
+        );
+      } else if (isActive === false) {
+        toast.success(
+          "Webhook deactivated successfully."
+        );
+      } else {
+        toast.success(
+          "Webhook status updated successfully."
+        );
+      }
     },
 
     onError: (error) => {
-      console.error("Toggle webhook error:", error);
+      console.error(
+        "Toggle webhook error:",
+        error
+      );
 
-      alert(
+      toast.error(
         error?.response?.data?.message ||
-          "Failed to update webhook"
+          "Failed to update webhook."
       );
     },
   });
 
   const handleCreate = (webhookData) => {
     if (!workspaceId) {
-      alert("No workspace selected");
+      toast.error("No workspace selected.");
       return;
     }
 
@@ -186,7 +208,8 @@ const WebhooksPage = () => {
           </h1>
 
           <p className="mt-1 text-sm text-zinc-500">
-            Manage inbound endpoints that trigger your workflows.
+            Manage inbound endpoints that trigger
+            your workflows.
           </p>
         </div>
 
@@ -208,7 +231,8 @@ const WebhooksPage = () => {
           </h1>
 
           <p className="mt-1 text-sm text-zinc-500">
-            Manage inbound endpoints that trigger your workflows.
+            Manage inbound endpoints that trigger
+            your workflows.
           </p>
         </div>
 
@@ -231,7 +255,8 @@ const WebhooksPage = () => {
           </h1>
 
           <p className="mt-1 text-sm text-zinc-500">
-            Manage inbound endpoints that trigger your workflows.
+            Manage inbound endpoints that trigger
+            your workflows.
           </p>
         </div>
 
@@ -253,7 +278,8 @@ const WebhooksPage = () => {
           </h2>
 
           <p className="mt-2 text-xs text-zinc-500">
-            Create a webhook to trigger your workflows from external events.
+            Create a webhook to trigger your
+            workflows from external events.
           </p>
 
           <button
@@ -267,7 +293,7 @@ const WebhooksPage = () => {
       ) : (
         <div className="space-y-3">
           {webhooks.map((webhook) => {
-            const endpoint = `http://localhost:5000/api/webhooks/${webhook.publicId}`;
+            const endpoint = `${import.meta.env.VITE_API_URL}/api/webhooks/${webhook.publicId}`;
 
             return (
               <WebhookCard

@@ -21,10 +21,6 @@ const executeSwitchNode = async (
   node,
   input = {}
 ) => {
-  console.log(
-    "Executing switch node"
-  );
-
   const config =
     node.data?.config || {};
 
@@ -46,13 +42,11 @@ const executeSwitchNode = async (
       "Switch cases are required"
     );
   }
-  const cases =
-    config.cases
-      .split(",")
-      .map((value) =>
-        value.trim()
-      )
-      .filter(Boolean);
+
+  const cases = config.cases
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 
   if (cases.length === 0) {
     throw new Error(
@@ -66,22 +60,21 @@ const executeSwitchNode = async (
       ? input.data
       : input;
 
-  let fieldValue =
-    getNestedValue(
-      source,
-      field
-    );
+  let fieldValue = getNestedValue(
+    source,
+    field
+  );
 
   if (
     fieldValue === undefined &&
     source !== input
   ) {
-    fieldValue =
-      getNestedValue(
-        input,
-        field
-      );
+    fieldValue = getNestedValue(
+      input,
+      field
+    );
   }
+
   const normalizedValue =
     fieldValue === null ||
     fieldValue === undefined
@@ -91,41 +84,27 @@ const executeSwitchNode = async (
   const matchedIndex =
     cases.findIndex(
       (caseValue) =>
-        normalizedValue ===
-        caseValue
+        normalizedValue === caseValue
     );
 
   const matched =
     matchedIndex !== -1;
 
-  const selectedHandle =
-    matched
-      ? `case-${matchedIndex}`
-      : "default";
+  const selectedHandle = matched
+    ? `case-${matchedIndex}`
+    : "default";
 
   const result = {
     field,
     value: fieldValue,
-
     matched,
-
     matchedIndex,
-
-    matchedCase:
-      matched
-        ? cases[matchedIndex]
-        : null,
-
+    matchedCase: matched
+      ? cases[matchedIndex]
+      : null,
     selectedHandle,
-
     cases,
   };
-
-  console.log(
-    `Switch: ${field} = ${JSON.stringify(
-      fieldValue
-    )} → ${selectedHandle}`
-  );
 
   return {
     success: true,
@@ -139,5 +118,4 @@ const executeSwitchNode = async (
   };
 };
 
-module.exports =
-  executeSwitchNode;
+module.exports = executeSwitchNode;

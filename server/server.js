@@ -29,14 +29,6 @@ const integrationRoutes = require("./routes/integrationRoutes");
 const workspaceRoutes = require("./routes/workspaceRoutes");
 const scheduleRoutes = require("./routes/scheduleRoutes");
 
-console.log("authRoutes:", typeof authRoutes);
-console.log("workflowRoutes:", typeof workflowRoutes);
-console.log("executionRoutes:", typeof executionRoutes);
-console.log("webhookRoutes:", typeof webhookRoutes);
-console.log("integrationRoutes:", typeof integrationRoutes);
-console.log("workspaceRoutes:", typeof workspaceRoutes);
-console.log("scheduleRoutes:", typeof scheduleRoutes);
-
 const {
   startScheduler,
   stopScheduler,

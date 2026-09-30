@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { FiArrowLeft, FiRefreshCw } from "react-icons/fi";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 import {
   getWebhooks,
@@ -151,6 +152,23 @@ const WebhookLogsPage = () => {
     return `${days} ${
       days === 1 ? "day" : "days"
     } ago`;
+  };
+
+  const handleRefresh = async () => {
+    try {
+      await refetch();
+      toast.success("Webhook logs refreshed.");
+    } catch (error) {
+      console.error(
+        "Refresh webhook logs error:",
+        error
+      );
+
+      toast.error(
+        error?.response?.data?.message ||
+          "Failed to refresh webhook logs."
+      );
+    }
   };
 
   if (workspaceLoading) {
@@ -326,7 +344,7 @@ const WebhookLogsPage = () => {
 
         <button
           type="button"
-          onClick={() => refetch()}
+          onClick={handleRefresh}
           disabled={deliveriesLoading}
           className="inline-flex h-8 items-center justify-center gap-2 self-start rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
         >

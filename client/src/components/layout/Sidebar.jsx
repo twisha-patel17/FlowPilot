@@ -32,7 +32,6 @@ const navigation = [
     name: "Workflows",
     path: "/app/workflows",
     icon: FiZap,
-    badge: 12,
   },
   {
     name: "Executions",

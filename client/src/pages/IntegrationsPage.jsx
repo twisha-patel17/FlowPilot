@@ -101,7 +101,9 @@ const IntegrationsPage = () => {
 
       setSelectedIntegration(null);
 
-      toast.success("Integration connected successfully.");
+      toast.success(
+        "Integration connected successfully."
+      );
     },
 
     onError: (error) => {
@@ -120,20 +122,20 @@ const IntegrationsPage = () => {
   const toggleMutation = useMutation({
     mutationFn: toggleIntegration,
 
-    onSuccess: (_, variables) => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({
         queryKey: ["integrations", workspaceId],
       });
 
-      const connectedIntegration = integrations.find(
-        (integration) =>
-          integration._id === variables.id
-      );
+      const status =
+        response?.integration?.status ||
+        response?.status;
 
-      if (
-        connectedIntegration?.status ===
-        "connected"
-      ) {
+      if (status === "connected") {
+        toast.success(
+          "Integration connected successfully."
+        );
+      } else if (status === "disconnected") {
         toast.success(
           "Integration disconnected successfully."
         );
@@ -157,9 +159,12 @@ const IntegrationsPage = () => {
     },
   });
 
-  const integrations = data?.integrations || [];
+  const integrations =
+    data?.integrations || [];
 
-  const getConnectedIntegration = (provider) => {
+  const getConnectedIntegration = (
+    provider
+  ) => {
     return integrations.find(
       (integration) =>
         integration.provider === provider
@@ -181,10 +186,7 @@ const IntegrationsPage = () => {
       return;
     }
 
-    console.log(
-      "Manage:",
-      connectedIntegration
-    );
+    // Management UI can be added here later.
   };
 
   const handleDisconnect = (integration) => {
@@ -313,6 +315,7 @@ const IntegrationsPage = () => {
     <>
       <div className="space-y-6">
         {/* Header */}
+
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
             Integrations
@@ -378,6 +381,7 @@ const IntegrationsPage = () => {
       </div>
 
       {/* Connect Modal */}
+
       {selectedIntegration && (
         <ConnectIntegrationModal
           integration={selectedIntegration}

@@ -56,8 +56,42 @@ export const cancelExecution = async ({
   id,
   workspaceId,
 }) => {
-  const response = await api.patch(
+  const response = await api.post(
     `/executions/${id}/cancel`,
+    {},
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
+  );
+
+  return response.data;
+};
+
+export const retryExecution = async ({
+  id,
+  workspaceId,
+}) => {
+  const response = await api.post(
+    `/executions/${id}/retry`,
+    {},
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
+  );
+
+  return response.data;
+};
+
+export const replayExecution = async ({
+  id,
+  workspaceId,
+}) => {
+  const response = await api.post(
+    `/executions/${id}/replay`,
     {},
     {
       headers: {

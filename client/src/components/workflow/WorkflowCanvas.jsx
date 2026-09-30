@@ -156,7 +156,6 @@ const FlowPilotNode = ({ data, selected }) => {
    * Convert them into an array so the canvas can
    * dynamically render one output handle per case.
    */
-
   const switchCases =
     isSwitch &&
     typeof data?.config?.cases === "string"
@@ -479,11 +478,6 @@ const WorkflowCanvas = ({
   const onConnect =
     useCallback(
       (connection) => {
-        console.log(
-          "Connecting nodes:",
-          connection
-        );
-
         const updatedEdges =
           addEdge(
             {
@@ -515,11 +509,6 @@ const WorkflowCanvas = ({
     useCallback(
       (event, node) => {
         event.stopPropagation();
-
-        console.log(
-          "Node selected:",
-          node
-        );
 
         if (onNodeSelect) {
           onNodeSelect(node);
