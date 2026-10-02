@@ -162,6 +162,20 @@ const IntegrationsPage = () => {
   const integrations =
     data?.integrations || [];
 
+  // Temporary debugging logs
+  console.log(
+    "FLOWPILOT INTEGRATIONS:",
+    data
+  );
+
+  console.log(
+    "FLOWPILOT EMAIL:",
+    integrations.filter(
+      (integration) =>
+        integration.provider === "email"
+    )
+  );
+
   const getConnectedIntegration = (
     provider
   ) => {
