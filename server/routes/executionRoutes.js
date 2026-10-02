@@ -7,6 +7,7 @@ const {
   retryExecution,
   replayExecution,
   cancelExecutionController,
+  createScheduledExecution,
 } = require("../controllers/executionController");
 
 const protect =
@@ -53,6 +54,11 @@ router.post(
 router.get(
   "/:id",
   getExecution
+);
+
+router.post(
+  "/scheduled",
+  createScheduledExecution
 );
 
 module.exports = router;

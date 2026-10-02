@@ -1,4 +1,8 @@
-import { createContext, useContext } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+} from "react";
 
 import {
   useQuery,
@@ -13,109 +17,165 @@ import {
   logoutUser,
 } from "../api/authApi";
 
-const AuthContext = createContext(null);
+import socket from "../socket/socket";
 
-export const AuthProvider = ({ children }) => {
-  const queryClient = useQueryClient();
+const AuthContext =
+  createContext(null);
+
+export const AuthProvider = ({
+  children,
+}) => {
+  const queryClient =
+    useQueryClient();
 
   const {
     data,
     isLoading,
+    isError,
   } = useQuery({
     queryKey: ["currentUser"],
     queryFn: getCurrentUser,
+
     retry: false,
+
+    refetchOnWindowFocus: true,
   });
 
-  const user = data?.user || null;
+  const user =
+    data?.user || null;
 
-  const loginMutation = useMutation({
-    mutationFn: loginUser,
-
-    onSuccess: (data) => {
-      if (data?.accessToken) {
-        localStorage.setItem(
-          "token",
-          data.accessToken
-        );
+  useEffect(() => {
+    if (user) {
+      if (!socket.connected) {
+        socket.connect();
       }
 
-      queryClient.setQueryData(
-        ["currentUser"],
-        {
-          user: data.user,
+      return;
+    }
+
+    if (socket.connected) {
+      socket.disconnect();
+    }
+  }, [user]);
+
+  const loginMutation =
+    useMutation({
+      mutationFn: loginUser,
+
+      onSuccess: (data) => {
+        if (data?.accessToken) {
+          localStorage.setItem(
+            "token",
+            data.accessToken
+          );
         }
-      );
-    },
-  });
 
-  const registerMutation = useMutation({
-    mutationFn: registerUser,
-
-    onSuccess: (data) => {
-      if (data?.accessToken) {
-        localStorage.setItem(
-          "token",
-          data.accessToken
+        queryClient.setQueryData(
+          ["currentUser"],
+          {
+            user: data.user,
+          }
         );
-      }
+      },
+    });
 
-      queryClient.setQueryData(
-        ["currentUser"],
-        {
-          user: data.user,
+  const registerMutation =
+    useMutation({
+      mutationFn: registerUser,
+
+      onSuccess: (data) => {
+        if (data?.accessToken) {
+          localStorage.setItem(
+            "token",
+            data.accessToken
+          );
         }
-      );
-    },
-  });
 
-  const logoutMutation = useMutation({
-    mutationFn: logoutUser,
+        queryClient.setQueryData(
+          ["currentUser"],
+          {
+            user: data.user,
+          }
+        );
+      },
+    });
 
-    onSuccess: () => {
-      localStorage.removeItem("token");
+  const logoutMutation =
+    useMutation({
+      mutationFn: logoutUser,
 
-      queryClient.setQueryData(
-        ["currentUser"],
-        null
-      );
+      onSuccess: () => {
+        localStorage.removeItem(
+          "token"
+        );
 
-      queryClient.clear();
-    },
-  });
+        queryClient.setQueryData(
+          ["currentUser"],
+          null
+        );
 
-  const login = async (formData) => {
-    return loginMutation.mutateAsync(formData);
+        if (socket.connected) {
+          socket.disconnect();
+        }
+      },
+    });
+
+  const login = async (
+    formData
+  ) => {
+    return loginMutation.mutateAsync(
+      formData
+    );
   };
 
-  const register = async (formData) => {
-    return registerMutation.mutateAsync(formData);
+  const register = async (
+    formData
+  ) => {
+    return registerMutation.mutateAsync(
+      formData
+    );
   };
 
   const logout = async () => {
     return logoutMutation.mutateAsync();
   };
 
+
   return (
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
-        loading: isLoading,
+
+        isAuthenticated:
+          !!user,
+
+        loading:
+          isLoading,
+
+        authError:
+          isError,
 
         login,
         register,
         logout,
 
-        loginLoading: loginMutation.isPending,
+        loginLoading:
+          loginMutation.isPending,
+
         registerLoading:
           registerMutation.isPending,
+
         logoutLoading:
           logoutMutation.isPending,
 
-        loginError: loginMutation.error,
+        loginError:
+          loginMutation.error,
+
         registerError:
           registerMutation.error,
+
+        logoutError:
+          logoutMutation.error,
       }}
     >
       {children}
@@ -123,9 +183,11 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
+
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
-  const context = useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(

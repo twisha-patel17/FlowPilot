@@ -8,13 +8,21 @@ const ActiveWorkflows = () => {
 
   const workspaceId = currentWorkspace?._id;
 
-  const { data: workflowData, isLoading: workflowsLoading } = useQuery({
+  const {
+    data: workflowData,
+    isLoading: workflowsLoading,
+    isError: workflowsError,
+  } = useQuery({
     queryKey: ["workflows", workspaceId],
     queryFn: () => getWorkflows(workspaceId),
     enabled: !!workspaceId,
   });
 
-  const { data: executionData, isLoading: executionsLoading } = useQuery({
+  const {
+    data: executionData,
+    isLoading: executionsLoading,
+    isError: executionsError,
+  } = useQuery({
     queryKey: ["executions", workspaceId],
     queryFn: () => getExecutions(workspaceId),
     enabled: !!workspaceId,
@@ -23,8 +31,9 @@ const ActiveWorkflows = () => {
   const workflows = workflowData?.workflows || [];
   const executions = executionData?.executions || [];
 
+  // Backend uses workflow.status
   const activeWorkflows = workflows
-    .filter((workflow) => workflow.active)
+    .filter((workflow) => workflow.status === "active")
     .slice(0, 5);
 
   const getWorkflowExecutions = (workflowId) => {
@@ -36,7 +45,8 @@ const ActiveWorkflows = () => {
   };
 
   const getSuccessRate = (workflowId) => {
-    const workflowExecutions = getWorkflowExecutions(workflowId);
+    const workflowExecutions =
+      getWorkflowExecutions(workflowId);
 
     const completed = workflowExecutions.filter(
       (execution) =>
@@ -52,11 +62,15 @@ const ActiveWorkflows = () => {
       (execution) => execution.status === "success"
     ).length;
 
-    return `${((successful / completed.length) * 100).toFixed(1)}% success`;
+    return `${(
+      (successful / completed.length) *
+      100
+    ).toFixed(1)}% success`;
   };
 
   const getLastRun = (workflowId) => {
-    const workflowExecutions = getWorkflowExecutions(workflowId);
+    const workflowExecutions =
+      getWorkflowExecutions(workflowId);
 
     if (workflowExecutions.length === 0) {
       return "no runs yet";
@@ -64,11 +78,20 @@ const ActiveWorkflows = () => {
 
     const latest = [...workflowExecutions].sort(
       (a, b) =>
-        new Date(b.createdAt) - new Date(a.createdAt)
+        new Date(b.createdAt).getTime() -
+        new Date(a.createdAt).getTime()
     )[0];
 
+    const createdAt = new Date(
+      latest.createdAt
+    ).getTime();
+
+    if (Number.isNaN(createdAt)) {
+      return "no runs yet";
+    }
+
     // eslint-disable-next-line react-hooks/purity
-    const diff = Date.now() - new Date(latest.createdAt).getTime();
+    const diff = Date.now() - createdAt;
 
     const minutes = Math.floor(diff / 60000);
 
@@ -91,6 +114,26 @@ const ActiveWorkflows = () => {
     return `last run ${days}d ago`;
   };
 
+  // No workspace selected
+  if (!workspaceId) {
+    return (
+      <section className="rounded-lg border border-zinc-800/70 bg-[#111113]">
+        <div className="border-b border-zinc-800/70 px-4 py-3">
+          <h2 className="text-sm font-medium text-zinc-200">
+            Active Workflows
+          </h2>
+        </div>
+
+        <div className="px-4 py-8 text-center">
+          <p className="text-sm text-zinc-500">
+            Select a workspace to view workflows
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  // Loading state
   if (workflowsLoading || executionsLoading) {
     return (
       <section className="rounded-lg border border-zinc-800/70 bg-[#111113]">
@@ -119,6 +162,25 @@ const ActiveWorkflows = () => {
     );
   }
 
+  // Error state
+  if (workflowsError || executionsError) {
+    return (
+      <section className="rounded-lg border border-zinc-800/70 bg-[#111113]">
+        <div className="border-b border-zinc-800/70 px-4 py-3">
+          <h2 className="text-sm font-medium text-zinc-200">
+            Active Workflows
+          </h2>
+        </div>
+
+        <div className="px-4 py-8 text-center">
+          <p className="text-sm text-zinc-500">
+            Unable to load workflow data
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-lg border border-zinc-800/70 bg-[#111113]">
       <div className="border-b border-zinc-800/70 px-4 py-3">
@@ -140,7 +202,7 @@ const ActiveWorkflows = () => {
               key={workflow._id}
               className="flex items-center justify-between gap-4 px-4 py-3"
             >
-              <p className="truncate text-sm text-zinc-300">
+              <p className="min-w-0 truncate text-sm text-zinc-300">
                 {workflow.name || "Untitled Workflow"}
               </p>
 

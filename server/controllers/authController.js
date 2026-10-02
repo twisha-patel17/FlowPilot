@@ -15,10 +15,18 @@ const REFRESH_TOKEN_MAX_AGE =
 
 const getRefreshCookieOptions = () => ({
   httpOnly: true,
+
   secure:
     process.env.NODE_ENV === "production",
-  sameSite: "lax",
+
+  sameSite:
+    process.env.NODE_ENV === "production"
+      ? "none"
+      : "lax",
+
   maxAge: REFRESH_TOKEN_MAX_AGE,
+
+  path: "/",
 });
 
 const hashToken = (token) => {
@@ -34,11 +42,7 @@ const sanitizeUser = (user) => ({
   email: user.email,
 });
 
-const register = async (
-  req,
-  res,
-  next
-) => {
+const register = async (req, res, next) => {
   try {
     const {
       name,
@@ -54,17 +58,13 @@ const register = async (
       !confirmPassword
     ) {
       return res.status(400).json({
-        message:
-          "All fields are required",
+        message: "All fields are required",
       });
     }
 
-    if (
-      password !== confirmPassword
-    ) {
+    if (password !== confirmPassword) {
       return res.status(400).json({
-        message:
-          "Passwords do not match",
+        message: "Passwords do not match",
       });
     }
 
@@ -93,17 +93,13 @@ const register = async (
     }
 
     const hashedPassword =
-      await bcrypt.hash(
-        password,
-        12
-      );
+      await bcrypt.hash(password, 12);
 
-    const user =
-      await User.create({
-        name: name.trim(),
-        email: normalizedEmail,
-        password: hashedPassword,
-      });
+    const user = await User.create({
+      name: name.trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+    });
 
     try {
       await Workspace.create({
@@ -135,9 +131,7 @@ const register = async (
       );
 
     user.refreshToken =
-      hashToken(
-        refreshToken
-      );
+      hashToken(refreshToken);
 
     await user.save();
 
@@ -153,19 +147,14 @@ const register = async (
 
       accessToken,
 
-      user:
-        sanitizeUser(user),
+      user: sanitizeUser(user),
     });
   } catch (error) {
     next(error);
   }
 };
 
-const login = async (
-  req,
-  res,
-  next
-) => {
+const login = async (req, res, next) => {
   try {
     const {
       email,
@@ -196,6 +185,13 @@ const login = async (
       });
     }
 
+    if (!user.password) {
+      return res.status(401).json({
+        message:
+          "This account does not support password login",
+      });
+    }
+
     const passwordMatch =
       await bcrypt.compare(
         password,
@@ -220,9 +216,7 @@ const login = async (
       );
 
     user.refreshToken =
-      hashToken(
-        refreshToken
-      );
+      hashToken(refreshToken);
 
     await user.save();
 
@@ -233,13 +227,11 @@ const login = async (
     );
 
     return res.status(200).json({
-      message:
-        "Login successful",
+      message: "Login successful",
 
       accessToken,
 
-      user:
-        sanitizeUser(user),
+      user: sanitizeUser(user),
     });
   } catch (error) {
     next(error);
@@ -262,8 +254,7 @@ const refreshAccessToken = async (
     }
 
     if (
-      !process.env
-        .REFRESH_TOKEN_SECRET
+      !process.env.REFRESH_TOKEN_SECRET
     ) {
       console.error(
         "REFRESH_TOKEN_SECRET is not configured"
@@ -275,17 +266,34 @@ const refreshAccessToken = async (
       });
     }
 
-    const decoded =
-      jwt.verify(
+    let decoded;
+
+    try {
+      decoded = jwt.verify(
         refreshToken,
-        process.env
-          .REFRESH_TOKEN_SECRET
+        process.env.REFRESH_TOKEN_SECRET
       );
+    } catch (error) {
+      if (
+        error.name ===
+          "TokenExpiredError" ||
+        error.name ===
+          "JsonWebTokenError" ||
+        error.name ===
+          "NotBeforeError"
+      ) {
+        return res.status(401).json({
+          message:
+            "Invalid or expired refresh token",
+        });
+      }
+
+      throw error;
+    }
 
     if (
       !decoded ||
-      typeof decoded.userId !==
-        "string"
+      typeof decoded.userId !== "string"
     ) {
       return res.status(401).json({
         message:
@@ -294,43 +302,14 @@ const refreshAccessToken = async (
     }
 
     const hashedToken =
-      hashToken(
-        refreshToken
-      );
-
-    const newRefreshToken =
-      generateRefreshToken(
-        decoded.userId
-      );
-
-    const newAccessToken =
-      generateAccessToken(
-        decoded.userId
-      );
-
-    const newHashedToken =
-      hashToken(
-        newRefreshToken
-      );
+      hashToken(refreshToken);
 
     const user =
-      await User.findOneAndUpdate(
-        {
-          _id:
-            decoded.userId,
-
-          refreshToken:
-            hashedToken,
-        },
-        {
-          $set: {
-            refreshToken:
-              newHashedToken,
-          },
-        },
-        {
-          returnDocument: "after",
-        }
+      await User.findOne({
+        _id: decoded.userId,
+        refreshToken: hashedToken,
+      }).select(
+        "+refreshToken"
       );
 
     if (!user) {
@@ -340,6 +319,21 @@ const refreshAccessToken = async (
       });
     }
 
+    const newAccessToken =
+      generateAccessToken(
+        user._id.toString()
+      );
+
+    const newRefreshToken =
+      generateRefreshToken(
+        user._id.toString()
+      );
+
+    user.refreshToken =
+      hashToken(newRefreshToken);
+
+    await user.save();
+
     res.cookie(
       "refreshToken",
       newRefreshToken,
@@ -347,24 +341,9 @@ const refreshAccessToken = async (
     );
 
     return res.status(200).json({
-      accessToken:
-        newAccessToken,
+      accessToken: newAccessToken,
     });
   } catch (error) {
-    if (
-      error.name ===
-        "TokenExpiredError" ||
-      error.name ===
-        "JsonWebTokenError" ||
-      error.name ===
-        "NotBeforeError"
-    ) {
-      return res.status(401).json({
-        message:
-          "Invalid or expired refresh token",
-      });
-    }
-
     console.error(
       "Refresh token error:",
       error.message
@@ -388,19 +367,15 @@ const logout = async (
 
     if (refreshToken) {
       const hashedToken =
-        hashToken(
-          refreshToken
-        );
+        hashToken(refreshToken);
 
       await User.findOneAndUpdate(
         {
-          refreshToken:
-            hashedToken,
+          refreshToken: hashedToken,
         },
         {
           $set: {
-            refreshToken:
-              null,
+            refreshToken: null,
           },
         }
       );
@@ -420,15 +395,9 @@ const logout = async (
   }
 };
 
-const getMe = async (
-  req,
-  res
-) => {
+const getMe = async (req, res) => {
   return res.status(200).json({
-    user:
-      sanitizeUser(
-        req.user
-      ),
+    user: sanitizeUser(req.user),
   });
 };
 
@@ -445,14 +414,12 @@ const getProfile = async (
 
     if (!user) {
       return res.status(404).json({
-        message:
-          "User not found",
+        message: "User not found",
       });
     }
 
     return res.status(200).json({
-      user:
-        sanitizeUser(user),
+      user: sanitizeUser(user),
     });
   } catch (error) {
     next(error);
@@ -487,8 +454,7 @@ const updateProfile = async (
 
     if (!user) {
       return res.status(404).json({
-        message:
-          "User not found",
+        message: "User not found",
       });
     }
 
@@ -505,8 +471,7 @@ const updateProfile = async (
         });
       }
 
-      user.name =
-        trimmedName;
+      user.name = trimmedName;
     }
 
     if (email !== undefined) {
@@ -529,9 +494,7 @@ const updateProfile = async (
     try {
       await user.save();
     } catch (error) {
-      if (
-        error.code === 11000
-      ) {
+      if (error.code === 11000) {
         return res.status(409).json({
           message:
             "An account with this email already exists",
@@ -545,8 +508,7 @@ const updateProfile = async (
       message:
         "Profile updated successfully",
 
-      user:
-        sanitizeUser(user),
+      user: sanitizeUser(user),
     });
   } catch (error) {
     next(error);
@@ -577,8 +539,7 @@ const changePassword = async (
     }
 
     if (
-      newPassword !==
-      confirmPassword
+      newPassword !== confirmPassword
     ) {
       return res.status(400).json({
         message:
@@ -586,9 +547,7 @@ const changePassword = async (
       });
     }
 
-    if (
-      newPassword.length < 8
-    ) {
+    if (newPassword.length < 8) {
       return res.status(400).json({
         message:
           "New password must be at least 8 characters",
@@ -604,8 +563,7 @@ const changePassword = async (
 
     if (!user) {
       return res.status(404).json({
-        message:
-          "User not found",
+        message: "User not found",
       });
     }
 
@@ -653,19 +611,28 @@ const changePassword = async (
   }
 };
 
-const deleteAccount = async (req, res, next) => {
+const deleteAccount = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const { password } = req.body;
+    const { password } =
+      req.body;
 
     if (!password) {
       return res.status(400).json({
-        message: "Password is required to delete your account",
+        message:
+          "Password is required to delete your account",
       });
     }
 
-    const user = await User.findById(req.user._id).select(
-      "+password +refreshToken"
-    );
+    const user =
+      await User.findById(
+        req.user._id
+      ).select(
+        "+password +refreshToken"
+      );
 
     if (!user) {
       return res.status(404).json({
@@ -680,14 +647,16 @@ const deleteAccount = async (req, res, next) => {
       });
     }
 
-    const passwordMatch = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const passwordMatch =
+      await bcrypt.compare(
+        password,
+        user.password
+      );
 
     if (!passwordMatch) {
       return res.status(401).json({
-        message: "Incorrect password",
+        message:
+          "Incorrect password",
       });
     }
 
@@ -716,12 +685,14 @@ const deleteAccount = async (req, res, next) => {
     );
 
     return res.status(200).json({
-      message: "Account deleted successfully",
+      message:
+        "Account deleted successfully",
     });
   } catch (error) {
     next(error);
   }
 };
+
 
 module.exports = {
   register,

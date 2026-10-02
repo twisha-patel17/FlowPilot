@@ -121,28 +121,15 @@ const createExecution = async (
     try {
       execution =
         await Execution.create({
-          workflow:
-            workflow._id,
-
+          workflow: workflow._id,
           workflowVersion:
             workflowVersion._id,
-
           workflowSnapshot,
-
-          owner:
-            req.user._id,
-
-          workspace:
-            workspaceId,
-
-          status:
-            "pending",
-
-          trigger:
-            "manual",
-
+          owner: req.user._id,
+          workspace: workspaceId,
+          status: "pending",
+          trigger: "manual",
           input,
-
           attempt: 1,
         });
     } catch (error) {
@@ -174,20 +161,13 @@ const createExecution = async (
 
       await Execution.findOneAndUpdate(
         {
-          _id:
-            execution._id,
-
-          status:
-            "pending",
+          _id: execution._id,
+          status: "pending",
         },
         {
           $set: {
-            status:
-              "failed",
-
-            finishedAt:
-              new Date(),
-
+            status: "failed",
+            finishedAt: new Date(),
             error:
               "Failed to queue workflow execution",
           },
@@ -203,6 +183,212 @@ const createExecution = async (
     return res.status(201).json({
       message:
         "Workflow execution started",
+
+      execution:
+        sanitizeExecution(
+          execution
+        ),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createScheduledExecution = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const {
+      workflowId,
+      scheduledAt,
+      input = {},
+    } = req.body;
+
+    const workspaceId =
+      req.headers["x-workspace-id"];
+
+    if (!workflowId) {
+      return res.status(400).json({
+        message: "Workflow is required",
+      });
+    }
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        message: "Workspace is required",
+      });
+    }
+
+    if (!scheduledAt) {
+      return res.status(400).json({
+        message:
+          "scheduledAt is required",
+      });
+    }
+
+    const scheduledDate =
+      new Date(scheduledAt);
+
+    if (
+      Number.isNaN(
+        scheduledDate.getTime()
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Invalid scheduledAt",
+      });
+    }
+
+    if (
+      scheduledDate <= new Date()
+    ) {
+      return res.status(400).json({
+        message:
+          "scheduledAt must be in the future",
+      });
+    }
+
+    const workspace =
+      await Workspace.findOne({
+        _id: workspaceId,
+        "members.user": req.user._id,
+        status: "active",
+      });
+
+    if (!workspace) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this workspace",
+      });
+    }
+
+    const workflow =
+      await Workflow.findOne({
+        _id: workflowId,
+        owner: req.user._id,
+        workspace: workspaceId,
+      });
+
+    if (!workflow) {
+      return res.status(404).json({
+        message: "Workflow not found",
+      });
+    }
+
+    if (
+      workflow.status !== "active"
+    ) {
+      return res.status(400).json({
+        message:
+          "Workflow must be active before scheduling",
+      });
+    }
+
+    if (
+      workflow.trigger?.type !==
+      "schedule"
+    ) {
+      return res.status(400).json({
+        message:
+          "Workflow is not configured with a schedule trigger",
+      });
+    }
+
+    if (!workflow.publishedVersion) {
+      return res.status(400).json({
+        message:
+          "Workflow must be published before scheduling",
+      });
+    }
+
+    const workflowVersion =
+      await WorkflowVersion.findOne({
+        workflow: workflow._id,
+        workspace: workspaceId,
+        owner: req.user._id,
+        version:
+          workflow.publishedVersion,
+      });
+
+    if (!workflowVersion) {
+      return res.status(404).json({
+        message:
+          "Published workflow version not found",
+      });
+    }
+
+    const workflowSnapshot = {
+      _id: workflowVersion.workflow,
+      version: workflowVersion.version,
+      name: workflowVersion.name,
+      description:
+        workflowVersion.description,
+      workspace:
+        workflowVersion.workspace,
+      trigger:
+        workflowVersion.trigger,
+      nodes:
+        workflowVersion.nodes,
+      edges:
+        workflowVersion.edges,
+    };
+
+    let execution;
+
+    try {
+      execution =
+        await Execution.create({
+          workflow:
+            workflow._id,
+
+          workflowVersion:
+            workflowVersion._id,
+
+          workflowSnapshot,
+
+          owner:
+            req.user._id,
+
+          workspace:
+            workspaceId,
+
+          status:
+            "pending",
+
+          trigger:
+            "schedule",
+
+          input,
+
+          scheduledAt:
+            scheduledDate,
+
+          attempt: 1,
+        });
+    } catch (error) {
+      console.error(
+        "Scheduled execution creation error:",
+        error
+      );
+
+      if (
+        error?.code === 11000
+      ) {
+        return res.status(409).json({
+          message:
+            "A schedule already exists for this workflow at this time",
+        });
+      }
+
+      throw error;
+    }
+
+    return res.status(201).json({
+      message:
+        "Workflow scheduled successfully",
 
       execution:
         sanitizeExecution(
@@ -348,7 +534,9 @@ const cancelExecutionController =
         req.params;
 
       const workspaceId =
-        req.headers["x-workspace-id"];
+        req.headers[
+          "x-workspace-id"
+        ];
 
       if (!workspaceId) {
         return res.status(400).json({
@@ -401,7 +589,8 @@ const cancelExecutionController =
             },
           },
           {
-            returnDocument: "after",
+            returnDocument:
+              "after",
           }
         );
 
@@ -467,7 +656,6 @@ const cancelExecutionController =
         execution
       );
 
- 
       return res.status(200).json({
         message:
           "Workflow execution cancelled successfully",
@@ -497,7 +685,8 @@ const retryExecution = async (
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
@@ -531,7 +720,8 @@ const retryExecution = async (
 
     const workflow =
       await Workflow.findOne({
-        _id: originalExecution.workflow,
+        _id:
+          originalExecution.workflow,
         owner: req.user._id,
         workspace: workspaceId,
         status: "active",
@@ -554,9 +744,11 @@ const retryExecution = async (
         workflow:
           originalExecution.workflow,
 
-        workspace: workspaceId,
+        workspace:
+          workspaceId,
 
-        owner: req.user._id,
+        owner:
+          req.user._id,
       });
 
     if (!workflowVersion) {
@@ -614,7 +806,8 @@ const retryExecution = async (
           workspace:
             workspaceId,
 
-          status: "pending",
+          status:
+            "pending",
 
           trigger:
             originalExecution.trigger,
@@ -622,8 +815,6 @@ const retryExecution = async (
           input:
             originalExecution.input || {},
 
-          // Retry reuses the original
-          // side-effect scope.
           effectScopeId:
             originalExecution.effectScopeId,
 
@@ -682,7 +873,8 @@ const retryExecution = async (
           },
           {
             $set: {
-              status: "failed",
+              status:
+                "failed",
 
               finishedAt:
                 new Date(),
@@ -692,7 +884,8 @@ const retryExecution = async (
             },
           },
           {
-            returnDocument: "after",
+            returnDocument:
+              "after",
           }
         );
 
@@ -740,7 +933,8 @@ const replayExecution = async (
 
     if (!workspaceId) {
       return res.status(400).json({
-        message: "Workspace is required",
+        message:
+          "Workspace is required",
       });
     }
 
@@ -786,9 +980,11 @@ const replayExecution = async (
         workflow:
           originalExecution.workflow,
 
-        workspace: workspaceId,
+        workspace:
+          workspaceId,
 
-        owner: req.user._id,
+        owner:
+          req.user._id,
       });
 
     if (!workflowVersion) {
@@ -862,7 +1058,8 @@ const replayExecution = async (
         workspace:
           workspaceId,
 
-        status: "pending",
+        status:
+          "pending",
 
         trigger:
           originalExecution.trigger,
@@ -914,11 +1111,13 @@ const replayExecution = async (
             _id:
               replayedExecution._id,
 
-            status: "pending",
+            status:
+              "pending",
           },
           {
             $set: {
-              status: "failed",
+              status:
+                "failed",
 
               finishedAt:
                 new Date(),
@@ -928,7 +1127,8 @@ const replayExecution = async (
             },
           },
           {
-            returnDocument: "after",
+            returnDocument:
+              "after",
           }
         );
 
@@ -965,6 +1165,7 @@ const replayExecution = async (
 
 module.exports = {
   createExecution,
+  createScheduledExecution,
   getExecutions,
   getExecution,
   cancelExecutionController,

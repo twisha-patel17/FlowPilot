@@ -102,3 +102,26 @@ export const replayExecution = async ({
 
   return response.data;
 };
+
+export const createScheduledExecution = async ({
+  workflowId,
+  scheduledAt,
+  input = {},
+  workspaceId,
+}) => {
+  const response = await api.post(
+    "/executions/scheduled",
+    {
+      workflowId,
+      scheduledAt,
+      input,
+    },
+    {
+      headers: {
+        "X-Workspace-Id": workspaceId,
+      },
+    }
+  );
+
+  return response.data;
+};

@@ -12,8 +12,11 @@ const {
   deleteAccount,
 } = require("../controllers/authController");
 
-const protect = require("../middleware/authMiddleware");
-const validate = require("../middleware/validate");
+const protect =
+  require("../middleware/authMiddleware");
+
+const validate =
+  require("../middleware/validate");
 
 const {
   registerSchema,
@@ -22,7 +25,8 @@ const {
   updateProfileSchema,
 } = require("../validators/authValidator");
 
-const router = express.Router();
+const router =
+  express.Router();
 
 router.post(
   "/register",
@@ -36,13 +40,27 @@ router.post(
   login
 );
 
-router.post("/refresh", refreshAccessToken);
+router.post(
+  "/refresh",
+  refreshAccessToken
+);
 
-router.post("/logout", logout);
+router.post(
+  "/logout",
+  logout
+);
 
-router.get("/me", protect, getMe);
+router.get(
+  "/me",
+  protect,
+  getMe
+);
 
-router.get("/profile", protect, getProfile);
+router.get(
+  "/profile",
+  protect,
+  getProfile
+);
 
 router.patch(
   "/profile",
