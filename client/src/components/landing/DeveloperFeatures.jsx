@@ -39,7 +39,7 @@ const DeveloperFeatures = () => {
       number: "02",
       title: "Execution history",
       description:
-        "Every workflow run is recorded so you can inspect exactly what happened and where it failed.",
+        "Every workflow run is recorded so you can inspect what happened, track failures, and understand each execution.",
       visual: (
         <div className="mt-6 rounded-lg border border-zinc-800 bg-zinc-950 p-3">
           <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
@@ -92,38 +92,48 @@ const DeveloperFeatures = () => {
 
     {
       number: "03",
-      title: "Workflow versioning",
+      title: "Workflow control",
       description:
-        "Keep track of workflow changes and safely update your automations without losing previous configurations.",
+        "Build, update, and manage your automations visually while keeping every trigger, condition, and action under your control.",
       visual: (
         <div className="mt-6 space-y-2">
-          <div className="flex items-center justify-between rounded-md border border-violet-500/20 bg-violet-500/5 px-3 py-2">
+          <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+            <span className="h-2 w-2 rounded-full bg-violet-400" />
+
             <span className="font-mono text-[11px] text-zinc-400">
-              v2.4
+              GitHub Trigger
             </span>
 
-            <span className="text-[10px] text-violet-400">
-              CURRENT
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between px-3 py-1">
-            <span className="font-mono text-[11px] text-zinc-600">
-              v2.3
-            </span>
-
-            <span className="text-[10px] text-zinc-700">
-              archived
+            <span className="ml-auto text-[10px] text-zinc-600">
+              trigger
             </span>
           </div>
 
-          <div className="flex items-center justify-between px-3 py-1">
-            <span className="font-mono text-[11px] text-zinc-600">
-              v2.2
+          <div className="ml-5 h-3 border-l border-zinc-800" />
+
+          <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+            <span className="h-2 w-2 rounded-full bg-amber-400" />
+
+            <span className="font-mono text-[11px] text-zinc-400">
+              Condition
             </span>
 
-            <span className="text-[10px] text-zinc-700">
-              archived
+            <span className="ml-auto text-[10px] text-zinc-600">
+              filter
+            </span>
+          </div>
+
+          <div className="ml-5 h-3 border-l border-zinc-800" />
+
+          <div className="flex items-center gap-2 rounded-md border border-violet-500/20 bg-violet-500/5 px-3 py-2">
+            <span className="h-2 w-2 rounded-full bg-violet-400" />
+
+            <span className="font-mono text-[11px] text-zinc-400">
+              Discord Message
+            </span>
+
+            <span className="ml-auto text-[10px] text-violet-400">
+              action
             </span>
           </div>
         </div>
@@ -132,32 +142,52 @@ const DeveloperFeatures = () => {
 
     {
       number: "04",
-      title: "Team workspaces",
+      title: "Personal workspaces",
       description:
-        "Organize workflows inside shared workspaces and give your team a single place to build and manage automations.",
+        "Keep different projects and automations organized in separate workspaces without mixing workflows or integrations.",
       visual: (
-        <div className="mt-6">
-          <div className="flex -space-x-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#0d0d0f] bg-zinc-700 text-[10px] font-semibold text-zinc-200">
-              TS
+        <div className="mt-6 space-y-2">
+          <div className="flex items-center justify-between rounded-md border border-violet-500/20 bg-violet-500/5 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-violet-400" />
+
+              <span className="font-mono text-[11px] text-zinc-400">
+                Personal Space
+              </span>
             </div>
 
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#0d0d0f] bg-zinc-800 text-[10px] font-semibold text-zinc-300">
-              AK
-            </div>
-
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#0d0d0f] bg-zinc-700 text-[10px] font-semibold text-zinc-200">
-              MR
-            </div>
-
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#0d0d0f] bg-violet-500 text-[10px] font-semibold text-white">
-              +
-            </div>
+            <span className="font-mono text-[10px] text-violet-400">
+              8 workflows
+            </span>
           </div>
 
-          <p className="mt-4 font-mono text-[10px] text-zinc-600">
-            3 members · 12 workflows
-          </p>
+          <div className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-zinc-600" />
+
+              <span className="font-mono text-[11px] text-zinc-500">
+                Project Alpha
+              </span>
+            </div>
+
+            <span className="font-mono text-[10px] text-zinc-700">
+              4 workflows
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-zinc-600" />
+
+              <span className="font-mono text-[11px] text-zinc-500">
+                Experiments
+              </span>
+            </div>
+
+            <span className="font-mono text-[10px] text-zinc-700">
+              3 workflows
+            </span>
+          </div>
         </div>
       ),
     },
@@ -169,7 +199,6 @@ const DeveloperFeatures = () => {
       className="border-t border-zinc-900 bg-[#09090b] px-5 py-24 sm:px-8 lg:py-32"
     >
       <div className="mx-auto max-w-6xl">
-
         {/* Heading */}
         <div className="mx-auto max-w-2xl text-center">
           <p className="mb-4 font-mono text-xs uppercase tracking-[0.2em] text-violet-500">
@@ -217,7 +246,6 @@ const DeveloperFeatures = () => {
             </article>
           ))}
         </div>
-
       </div>
     </section>
   );
