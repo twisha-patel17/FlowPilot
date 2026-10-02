@@ -14,8 +14,9 @@ import {
   FiDatabase,
 } from "react-icons/fi";
 
-import { useWorkspace } from "../../context/WorkspaceContext";
 import { useQuery } from "@tanstack/react-query";
+
+import { useWorkspace } from "../../context/WorkspaceContext";
 import { getIntegrations } from "../../api/integrationApi";
 
 const nodeIcons = {
@@ -254,6 +255,9 @@ const GithubConfig = ({
     currentWorkspace,
   } = useWorkspace();
 
+  const workspaceId =
+    currentWorkspace?._id;
+
   const {
     data,
     isLoading,
@@ -261,25 +265,20 @@ const GithubConfig = ({
   } = useQuery({
     queryKey: [
       "integrations",
-      currentWorkspace?._id,
+      workspaceId,
     ],
 
     queryFn: () =>
-      getIntegrations(
-        currentWorkspace._id
-      ),
+      getIntegrations(workspaceId),
 
-    enabled:
-      !!currentWorkspace?._id,
+    enabled: !!workspaceId,
   });
 
   const githubIntegrations =
     data?.integrations?.filter(
       (integration) =>
-        integration.provider ===
-          "github" &&
-        integration.status ===
-          "connected"
+        integration.provider === "github" &&
+        integration.status === "connected"
     ) || [];
 
   const connectionOptions = [
@@ -287,8 +286,7 @@ const GithubConfig = ({
       value: "",
       label: isLoading
         ? "Loading GitHub connections..."
-        : githubIntegrations.length ===
-            0
+        : githubIntegrations.length === 0
           ? "No GitHub connections"
           : "Select GitHub connection",
     },
@@ -326,28 +324,18 @@ const GithubConfig = ({
       />
 
       {isError && (
-        <p className="text-[11px] text-red-400">
+        <ErrorMessage>
           Failed to load GitHub
           connections.
-        </p>
+        </ErrorMessage>
       )}
 
       {!isLoading &&
         !isError &&
-        githubIntegrations.length ===
-          0 && (
-          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
-              No connection
-            </p>
-
-            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Connect a GitHub
-              integration from the
-              Integrations page before
-              using this trigger.
-            </p>
-          </div>
+        githubIntegrations.length === 0 && (
+          <NoConnectionMessage
+            provider="GitHub"
+          />
         )}
 
       <Field
@@ -445,7 +433,10 @@ const WebhookConfig = ({
           config.method || "POST"
         }
         onChange={(value) =>
-          onChange("method", value)
+          onChange(
+            "method",
+            value
+          )
         }
         options={[
           {
@@ -581,8 +572,7 @@ const ScheduleConfig = ({
         ]}
       />
 
-      {frequency ===
-        "custom" && (
+      {frequency === "custom" && (
         <div className="space-y-2">
           <label className="text-xs font-medium text-zinc-400">
             Days
@@ -971,6 +961,9 @@ const DiscordConfig = ({
     currentWorkspace,
   } = useWorkspace();
 
+  const workspaceId =
+    currentWorkspace?._id;
+
   const {
     data,
     isLoading,
@@ -978,16 +971,13 @@ const DiscordConfig = ({
   } = useQuery({
     queryKey: [
       "integrations",
-      currentWorkspace?._id,
+      workspaceId,
     ],
 
     queryFn: () =>
-      getIntegrations(
-        currentWorkspace._id
-      ),
+      getIntegrations(workspaceId),
 
-    enabled:
-      !!currentWorkspace?._id,
+    enabled: !!workspaceId,
   });
 
   const discordIntegrations =
@@ -1043,28 +1033,19 @@ const DiscordConfig = ({
       />
 
       {isError && (
-        <p className="text-[11px] text-red-400">
+        <ErrorMessage>
           Failed to load Discord
           connections.
-        </p>
+        </ErrorMessage>
       )}
 
       {!isLoading &&
         !isError &&
         discordIntegrations.length ===
           0 && (
-          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
-              No connection
-            </p>
-
-            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Connect a Discord
-              integration from the
-              Integrations page before
-              using this node.
-            </p>
-          </div>
+          <NoConnectionMessage
+            provider="Discord"
+          />
         )}
 
       <Field
@@ -1125,7 +1106,6 @@ const EmailConfig = ({
     data,
     isLoading,
     isError,
-    error,
   } = useQuery({
     queryKey: [
       "integrations",
@@ -1133,12 +1113,9 @@ const EmailConfig = ({
     ],
 
     queryFn: () =>
-      getIntegrations(
-        workspaceId
-      ),
+      getIntegrations(workspaceId),
 
-    enabled:
-      !!workspaceId,
+    enabled: !!workspaceId,
   });
 
   const emailIntegrations =
@@ -1149,35 +1126,6 @@ const EmailConfig = ({
         integration.status ===
           "connected"
     ) || [];
-
-  // TEMPORARY DEBUGGING
-  console.log(
-    "EMAIL CONFIG WORKSPACE:",
-    workspaceId
-  );
-
-  console.log(
-    "EMAIL CONFIG DATA:",
-    data
-  );
-
-  console.log(
-    "EMAIL CONFIG ALL EMAIL:",
-    data?.integrations?.filter(
-      (integration) =>
-        integration.provider === "email"
-    )
-  );
-
-  console.log(
-    "EMAIL CONFIG CONNECTED EMAIL:",
-    emailIntegrations
-  );
-
-  console.log(
-    "EMAIL CONFIG ERROR:",
-    error
-  );
 
   const connectionOptions = [
     {
@@ -1223,32 +1171,24 @@ const EmailConfig = ({
       />
 
       {isError && (
-        <p className="text-[11px] text-red-400">
+        <ErrorMessage>
           Failed to load email
           connections.
-        </p>
+        </ErrorMessage>
       )}
 
       {!isLoading &&
         !isError &&
         emailIntegrations.length ===
           0 && (
-          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
-              No connection
-            </p>
-
-            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Connect an email
-              integration from the
-              Integrations page before
-              using this node.
-            </p>
-          </div>
+          <NoConnectionMessage
+            provider="email"
+          />
         )}
 
       <Field
         label="To"
+        type="email"
         value={config.to || ""}
         onChange={(value) =>
           onChange("to", value)
@@ -1282,6 +1222,18 @@ const EmailConfig = ({
         placeholder="Write your email..."
         rows={5}
       />
+
+      <div className="rounded-md border border-zinc-800/70 bg-zinc-900/50 px-3 py-2.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+          Email delivery
+        </p>
+
+        <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+          FlowPilot sends this email
+          through your connected
+          Resend integration.
+        </p>
+      </div>
     </div>
   );
 };
@@ -1372,6 +1324,10 @@ const HttpConfig = ({
   );
 };
 
+/* =========================================================
+   MONGODB
+========================================================= */
+
 const MongoConfig = ({
   config,
   onChange,
@@ -1380,6 +1336,9 @@ const MongoConfig = ({
     currentWorkspace,
   } = useWorkspace();
 
+  const workspaceId =
+    currentWorkspace?._id;
+
   const {
     data,
     isLoading,
@@ -1387,16 +1346,13 @@ const MongoConfig = ({
   } = useQuery({
     queryKey: [
       "integrations",
-      currentWorkspace?._id,
+      workspaceId,
     ],
 
     queryFn: () =>
-      getIntegrations(
-        currentWorkspace._id
-      ),
+      getIntegrations(workspaceId),
 
-    enabled:
-      !!currentWorkspace?._id,
+    enabled: !!workspaceId,
   });
 
   const mongoIntegrations =
@@ -1549,28 +1505,19 @@ const MongoConfig = ({
       />
 
       {isError && (
-        <p className="text-[11px] text-red-400">
+        <ErrorMessage>
           Failed to load MongoDB
           connections.
-        </p>
+        </ErrorMessage>
       )}
 
       {!isLoading &&
         !isError &&
         mongoIntegrations.length ===
           0 && (
-          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
-              No connection
-            </p>
-
-            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Connect a MongoDB
-              integration from the
-              Integrations page before
-              using this node.
-            </p>
-          </div>
+          <NoConnectionMessage
+            provider="MongoDB"
+          />
         )}
 
       <Field
@@ -1768,6 +1715,34 @@ const SectionTitle = ({
       <h3 className="mt-1 text-sm font-semibold text-zinc-100">
         {title}
       </h3>
+    </div>
+  );
+};
+
+const ErrorMessage = ({
+  children,
+}) => {
+  return (
+    <p className="text-[11px] text-red-400">
+      {children}
+    </p>
+  );
+};
+
+const NoConnectionMessage = ({
+  provider,
+}) => {
+  return (
+    <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-amber-500/70">
+        No connection
+      </p>
+
+      <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+        Connect a {provider} integration
+        from the Integrations page before
+        using this node.
+      </p>
     </div>
   );
 };
