@@ -28,10 +28,10 @@ const LoginForm = () => {
     searchParams.get("github") === "error";
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       [e.target.name]: e.target.value,
-    });
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -39,7 +39,6 @@ const LoginForm = () => {
 
     try {
       await login(formData);
-
       navigate("/app");
     } catch (error) {
       console.error("Login failed:", error);
@@ -84,6 +83,7 @@ const LoginForm = () => {
           placeholder="you@company.com"
           value={formData.email}
           onChange={handleChange}
+          autoComplete="email"
           required
           className="h-10 w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
         />
@@ -111,10 +111,15 @@ const LoginForm = () => {
           <input
             id="password"
             name="password"
-            type={showPassword ? "text" : "password"}
+            type={
+              showPassword
+                ? "text"
+                : "password"
+            }
             placeholder="••••••••••••"
             value={formData.password}
             onChange={handleChange}
+            autoComplete="current-password"
             required
             className="h-10 w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 pr-16 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
           />
@@ -122,7 +127,9 @@ const LoginForm = () => {
           <button
             type="button"
             onClick={() =>
-              setShowPassword(!showPassword)
+              setShowPassword(
+                (prev) => !prev
+              )
             }
             className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-600 transition-colors hover:text-zinc-300"
           >
@@ -156,7 +163,9 @@ const LoginForm = () => {
         disabled={loginLoading}
         className="h-10 w-full rounded-md bg-violet-500 px-4 text-sm font-semibold text-white transition hover:bg-violet-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loginLoading ? "Signing in..." : "Sign In"}
+        {loginLoading
+          ? "Signing in..."
+          : "Sign In"}
       </button>
 
       {/* Divider */}
