@@ -5,6 +5,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import flowpilotLogo from "../../assets/flowpilot-icon-512.png";
+
 import {
   FiHome,
   FiZap,
@@ -143,7 +145,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
             className="flex items-center gap-2"
           >
             <img
-              src="/src/assets/flowpilot-icon-512.png"
+              src={flowpilotLogo}
               alt="FlowPilot"
               className="h-6 w-6 rounded-md"
             />
