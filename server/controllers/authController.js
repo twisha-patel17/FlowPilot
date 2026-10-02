@@ -10,57 +10,64 @@ const {
   generateRefreshToken,
 } = require("../utils/generateTokens");
 
-const REFRESH_TOKEN_MAX_AGE =
-  7 * 24 * 60 * 60 * 1000;
+const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const GITHUB_STATE_MAX_AGE = 10 * 60 * 1000;
 
 const getRefreshCookieOptions = () => ({
   httpOnly: true,
-
-  secure:
-    process.env.NODE_ENV === "production",
-
-  sameSite:
-    process.env.NODE_ENV === "production"
-      ? "none"
-      : "lax",
-
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   maxAge: REFRESH_TOKEN_MAX_AGE,
-
   path: "/",
 });
 
-const hashToken = (token) => {
-  return crypto
+const getGithubOAuthCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  maxAge: GITHUB_STATE_MAX_AGE,
+  path: "/api/auth/github/callback",
+});
+
+const hashToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
+const generateGithubState = () => crypto.randomBytes(32).toString("hex");
+
+const generateCodeVerifier = () =>
+  crypto.randomBytes(32).toString("base64url");
+
+const generateCodeChallenge = (verifier) =>
+  crypto
     .createHash("sha256")
-    .update(token)
-    .digest("hex");
-};
+    .update(verifier)
+    .digest("base64url");
 
 const sanitizeUser = (user) => ({
   id: user._id,
   name: user.name,
   email: user.email,
+  avatarUrl: user.avatarUrl || null,
 });
 
-const register = async (req, res, next) => {
-  try {
-    const {
-      name,
-      email,
-      password,
-      confirmPassword,
-    } = req.body;
+const getSafeGithubName = (githubUser) => {
+  const name = (githubUser.name || githubUser.login || "GitHub User")
+    .trim()
+    .slice(0, 50);
 
-    if (
-      !name ||
-      !email ||
-      !password ||
-      !confirmPassword
-    ) {
-      return res.status(400).json({
-        message: "All fields are required",
-      });
-    }
+  return name.length >= 2 ? name : `GitHub ${name}`.slice(0, 50);
+};
+
+const getGithubApiHeaders = (accessToken) => ({
+  Authorization: `Bearer ${accessToken}`,
+  Accept: "application/vnd.github+json",
+  "X-GitHub-Api-Version": "2022-11-28",
+  "User-Agent": "FlowPilot",
+});
+
+const register = async (req, res) => {
+  try {
+    const { name, email, password, confirmPassword } = req.body;
 
     if (password !== confirmPassword) {
       return res.status(400).json({
@@ -68,32 +75,19 @@ const register = async (req, res, next) => {
       });
     }
 
-    if (password.length < 8) {
-      return res.status(400).json({
-        message:
-          "Password must be at least 8 characters",
-      });
-    }
+    const normalizedEmail = email.trim().toLowerCase();
 
-    const normalizedEmail =
-      email.trim().toLowerCase();
-
-    const existingUser =
-      await User.findOne({
-        email: normalizedEmail,
-      })
-        .select("_id")
-        .lean();
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (existingUser) {
       return res.status(409).json({
-        message:
-          "An account with this email already exists",
+        message: "An account with this email already exists",
       });
     }
 
-    const hashedPassword =
-      await bcrypt.hash(password, 12);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await User.create({
       name: name.trim(),
@@ -101,7 +95,330 @@ const register = async (req, res, next) => {
       password: hashedPassword,
     });
 
-    try {
+    await Workspace.create({
+      name: "Personal Space",
+      owner: user._id,
+      members: [
+        {
+          user: user._id,
+          role: "owner",
+        },
+      ],
+    });
+
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+
+    user.refreshToken = hashToken(refreshToken);
+    await user.save();
+
+    res.cookie(
+      "refreshToken",
+      refreshToken,
+      getRefreshCookieOptions()
+    );
+
+    return res.status(201).json({
+      accessToken,
+      user: sanitizeUser(user),
+    });
+  } catch (error) {
+    console.error("Register error:", error);
+
+    return res.status(500).json({
+      message: "Registration failed",
+    });
+  }
+};
+
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+    }).select("+password +refreshToken");
+
+    if (!user) {
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    if (!user.password) {
+      return res.status(401).json({
+        message:
+          "This account uses GitHub login. Please continue with GitHub.",
+      });
+    }
+
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    if (!passwordMatches) {
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+
+    user.refreshToken = hashToken(refreshToken);
+    await user.save();
+
+    res.cookie(
+      "refreshToken",
+      refreshToken,
+      getRefreshCookieOptions()
+    );
+
+    return res.status(200).json({
+      accessToken,
+      user: sanitizeUser(user),
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+
+    return res.status(500).json({
+      message: "Login failed",
+    });
+  }
+};
+
+const githubLogin = async (req, res) => {
+  try {
+    if (
+      !process.env.GITHUB_CLIENT_ID ||
+      !process.env.GITHUB_CALLBACK_URL
+    ) {
+      return res.status(500).json({
+        message: "GitHub OAuth is not configured",
+      });
+    }
+
+    const state = generateGithubState();
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
+
+    res.cookie(
+      "githubOAuthState",
+      state,
+      getGithubOAuthCookieOptions()
+    );
+
+    res.cookie(
+      "githubOAuthVerifier",
+      codeVerifier,
+      getGithubOAuthCookieOptions()
+    );
+
+    const params = new URLSearchParams({
+      client_id: process.env.GITHUB_CLIENT_ID,
+      redirect_uri: process.env.GITHUB_CALLBACK_URL,
+      scope: "read:user user:email",
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+    });
+
+    return res.redirect(
+      `https://github.com/login/oauth/authorize?${params.toString()}`
+    );
+  } catch (error) {
+    console.error("GitHub login error:", error);
+
+    return res.status(500).json({
+      message: "Unable to start GitHub login",
+    });
+  }
+};
+
+const githubCallback = async (req, res) => {
+  const frontendUrl = process.env.CLIENT_URL;
+
+  const redirectError = () => {
+    return res.redirect(`${frontendUrl}/login?github=error`);
+  };
+
+  try {
+    const { code, state } = req.query;
+
+    const storedState = req.cookies.githubOAuthState;
+    const codeVerifier = req.cookies.githubOAuthVerifier;
+
+    res.clearCookie(
+      "githubOAuthState",
+      getGithubOAuthCookieOptions()
+    );
+
+    res.clearCookie(
+      "githubOAuthVerifier",
+      getGithubOAuthCookieOptions()
+    );
+
+    if (req.query.error) {
+      return redirectError();
+    }
+
+    if (!code || !state || !storedState || !codeVerifier) {
+      console.error("GitHub OAuth: missing code/state/verifier");
+      return redirectError();
+    }
+
+    const stateBuffer = Buffer.from(state);
+    const storedStateBuffer = Buffer.from(storedState);
+
+    if (
+      stateBuffer.length !== storedStateBuffer.length ||
+      !crypto.timingSafeEqual(
+        stateBuffer,
+        storedStateBuffer
+      )
+    ) {
+      console.error("GitHub OAuth: invalid state");
+      return redirectError();
+    }
+
+    const tokenResponse = await fetch(
+      "https://github.com/login/oauth/access_token",
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": "FlowPilot",
+        },
+        body: JSON.stringify({
+          client_id: process.env.GITHUB_CLIENT_ID,
+          client_secret: process.env.GITHUB_CLIENT_SECRET,
+          code,
+          redirect_uri: process.env.GITHUB_CALLBACK_URL,
+          code_verifier: codeVerifier,
+        }),
+      }
+    );
+
+    const tokenData = await tokenResponse.json();
+
+    if (
+      !tokenResponse.ok ||
+      !tokenData.access_token
+    ) {
+      console.error(
+        "GitHub token exchange failed:",
+        tokenData
+      );
+
+      return redirectError();
+    }
+
+    const githubAccessToken = tokenData.access_token;
+
+    const githubUserResponse = await fetch(
+      "https://api.github.com/user",
+      {
+        headers: getGithubApiHeaders(githubAccessToken),
+      }
+    );
+
+    if (!githubUserResponse.ok) {
+      console.error(
+        "GitHub user request failed:",
+        await githubUserResponse.text()
+      );
+
+      return redirectError();
+    }
+
+    const githubUser = await githubUserResponse.json();
+
+    const emailResponse = await fetch(
+      "https://api.github.com/user/emails",
+      {
+        headers: getGithubApiHeaders(githubAccessToken),
+      }
+    );
+
+    if (!emailResponse.ok) {
+      console.error(
+        "GitHub email request failed:",
+        await emailResponse.text()
+      );
+
+      return redirectError();
+    }
+
+    const githubEmails = await emailResponse.json();
+
+    const primaryVerifiedEmail = githubEmails.find(
+      (email) => email.primary && email.verified
+    );
+
+    const verifiedEmail = githubEmails.find(
+      (email) => email.verified
+    );
+
+    const githubEmail =
+      primaryVerifiedEmail?.email ||
+      verifiedEmail?.email;
+
+    if (!githubEmail) {
+      console.error("GitHub account has no verified email");
+      return redirectError();
+    }
+
+    const normalizedEmail = githubEmail
+      .trim()
+      .toLowerCase();
+
+    const githubId = String(githubUser.id);
+
+    let user = await User.findOne({
+      githubId,
+    }).select("+refreshToken");
+
+    if (!user) {
+      user = await User.findOne({
+        email: normalizedEmail,
+      }).select("+refreshToken");
+
+      if (user) {
+        
+        if (
+          user.githubId &&
+          user.githubId !== githubId
+        ) {
+          console.error(
+            "GitHub ID conflict for email:",
+            normalizedEmail
+          );
+
+          return redirectError();
+        }
+
+        user.githubId = githubId;
+
+        if (githubUser.avatar_url) {
+          user.avatarUrl = githubUser.avatar_url;
+        }
+
+        await user.save();
+      }
+    }
+
+    if (!user) {
+      user = await User.create({
+        name: getSafeGithubName(githubUser),
+        email: normalizedEmail,
+        githubId,
+        avatarUrl: githubUser.avatar_url || null,
+      });
+
       await Workspace.create({
         name: "Personal Space",
         owner: user._id,
@@ -112,27 +429,12 @@ const register = async (req, res, next) => {
           },
         ],
       });
-    } catch (workspaceError) {
-      await User.deleteOne({
-        _id: user._id,
-      });
-
-      throw workspaceError;
     }
 
-    const accessToken =
-      generateAccessToken(
-        user._id.toString()
-      );
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
-    const refreshToken =
-      generateRefreshToken(
-        user._id.toString()
-      );
-
-    user.refreshToken =
-      hashToken(refreshToken);
-
+    user.refreshToken = hashToken(refreshToken);
     await user.save();
 
     res.cookie(
@@ -141,197 +443,48 @@ const register = async (req, res, next) => {
       getRefreshCookieOptions()
     );
 
-    return res.status(201).json({
-      message:
-        "Account created successfully",
-
-      accessToken,
-
-      user: sanitizeUser(user),
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const login = async (req, res, next) => {
-  try {
-    const {
-      email,
-      password,
-    } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        message:
-          "Email and password are required",
-      });
-    }
-
-    const normalizedEmail =
-      email.trim().toLowerCase();
-
-    const user =
-      await User.findOne({
-        email: normalizedEmail,
-      }).select(
-        "+password +refreshToken"
-      );
-
-    if (!user) {
-      return res.status(401).json({
-        message:
-          "Invalid email or password",
-      });
-    }
-
-    if (!user.password) {
-      return res.status(401).json({
-        message:
-          "This account does not support password login",
-      });
-    }
-
-    const passwordMatch =
-      await bcrypt.compare(
-        password,
-        user.password
-      );
-
-    if (!passwordMatch) {
-      return res.status(401).json({
-        message:
-          "Invalid email or password",
-      });
-    }
-
-    const accessToken =
-      generateAccessToken(
-        user._id.toString()
-      );
-
-    const refreshToken =
-      generateRefreshToken(
-        user._id.toString()
-      );
-
-    user.refreshToken =
-      hashToken(refreshToken);
-
-    await user.save();
-
-    res.cookie(
-      "refreshToken",
-      refreshToken,
-      getRefreshCookieOptions()
+    return res.redirect(
+      `${frontendUrl}/auth/github/callback`
     );
-
-    return res.status(200).json({
-      message: "Login successful",
-
-      accessToken,
-
-      user: sanitizeUser(user),
-    });
   } catch (error) {
-    next(error);
+    console.error("GitHub OAuth callback error:", error);
+
+    return redirectError();
   }
 };
 
-const refreshAccessToken = async (
-  req,
-  res
-) => {
+const refreshAccessToken = async (req, res) => {
   try {
-    const refreshToken =
-      req.cookies?.refreshToken;
+    const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
       return res.status(401).json({
-        message:
-          "Refresh token required",
+        message: "Refresh token missing",
       });
     }
 
-    if (
-      !process.env.REFRESH_TOKEN_SECRET
-    ) {
-      console.error(
-        "REFRESH_TOKEN_SECRET is not configured"
-      );
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
 
-      return res.status(500).json({
-        message:
-          "Authentication service unavailable",
-      });
-    }
+    const hashedToken = hashToken(refreshToken);
 
-    let decoded;
-
-    try {
-      decoded = jwt.verify(
-        refreshToken,
-        process.env.REFRESH_TOKEN_SECRET
-      );
-    } catch (error) {
-      if (
-        error.name ===
-          "TokenExpiredError" ||
-        error.name ===
-          "JsonWebTokenError" ||
-        error.name ===
-          "NotBeforeError"
-      ) {
-        return res.status(401).json({
-          message:
-            "Invalid or expired refresh token",
-        });
-      }
-
-      throw error;
-    }
-
-    if (
-      !decoded ||
-      typeof decoded.userId !== "string"
-    ) {
-      return res.status(401).json({
-        message:
-          "Invalid or expired refresh token",
-      });
-    }
-
-    const hashedToken =
-      hashToken(refreshToken);
-
-    const user =
-      await User.findOne({
-        _id: decoded.userId,
-        refreshToken: hashedToken,
-      }).select(
-        "+refreshToken"
-      );
+    const user = await User.findOne({
+      _id: decoded.userId,
+      refreshToken: hashedToken,
+    });
 
     if (!user) {
       return res.status(401).json({
-        message:
-          "Invalid or expired refresh token",
+        message: "Invalid refresh token",
       });
     }
 
-    const newAccessToken =
-      generateAccessToken(
-        user._id.toString()
-      );
+    const newAccessToken = generateAccessToken(user._id);
+    const newRefreshToken = generateRefreshToken(user._id);
 
-    const newRefreshToken =
-      generateRefreshToken(
-        user._id.toString()
-      );
-
-    user.refreshToken =
-      hashToken(newRefreshToken);
-
+    user.refreshToken = hashToken(newRefreshToken);
     await user.save();
 
     res.cookie(
@@ -342,42 +495,27 @@ const refreshAccessToken = async (
 
     return res.status(200).json({
       accessToken: newAccessToken,
+      user: sanitizeUser(user),
     });
   } catch (error) {
-    console.error(
-      "Refresh token error:",
-      error.message
-    );
+    console.error("Refresh token error:", error);
 
-    return res.status(500).json({
-      message:
-        "Authentication service unavailable",
+    return res.status(401).json({
+      message: "Invalid or expired refresh token",
     });
   }
 };
 
-const logout = async (
-  req,
-  res,
-  next
-) => {
+const logout = async (req, res) => {
   try {
-    const refreshToken =
-      req.cookies?.refreshToken;
+    const refreshToken = req.cookies.refreshToken;
 
     if (refreshToken) {
-      const hashedToken =
-        hashToken(refreshToken);
+      const hashedToken = hashToken(refreshToken);
 
       await User.findOneAndUpdate(
-        {
-          refreshToken: hashedToken,
-        },
-        {
-          $set: {
-            refreshToken: null,
-          },
-        }
+        { refreshToken: hashedToken },
+        { refreshToken: null }
       );
     }
 
@@ -387,11 +525,14 @@ const logout = async (
     );
 
     return res.status(200).json({
-      message:
-        "Logged out successfully",
+      message: "Logged out successfully",
     });
   } catch (error) {
-    next(error);
+    console.error("Logout error:", error);
+
+    return res.status(500).json({
+      message: "Logout failed",
+    });
   }
 };
 
@@ -401,16 +542,9 @@ const getMe = async (req, res) => {
   });
 };
 
-const getProfile = async (
-  req,
-  res,
-  next
-) => {
+const getProfile = async (req, res) => {
   try {
-    const user =
-      await User.findById(
-        req.user._id
-      );
+    const user = await User.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({
@@ -422,35 +556,19 @@ const getProfile = async (
       user: sanitizeUser(user),
     });
   } catch (error) {
-    next(error);
+    console.error("Get profile error:", error);
+
+    return res.status(500).json({
+      message: "Failed to get profile",
+    });
   }
 };
 
-const updateProfile = async (
-  req,
-  res,
-  next
-) => {
+const updateProfile = async (req, res) => {
   try {
-    const {
-      name,
-      email,
-    } = req.body;
+    const { name, email } = req.body;
 
-    if (
-      name === undefined &&
-      email === undefined
-    ) {
-      return res.status(400).json({
-        message:
-          "At least one field is required",
-      });
-    }
-
-    const user =
-      await User.findById(
-        req.user._id
-      );
+    const user = await User.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({
@@ -459,107 +577,48 @@ const updateProfile = async (
     }
 
     if (name !== undefined) {
-      const trimmedName =
-        typeof name === "string"
-          ? name.trim()
-          : "";
-
-      if (!trimmedName) {
-        return res.status(400).json({
-          message:
-            "Name cannot be empty",
-        });
-      }
-
-      user.name = trimmedName;
+      user.name = name.trim();
     }
 
     if (email !== undefined) {
-      const normalizedEmail =
-        typeof email === "string"
-          ? email.trim().toLowerCase()
-          : "";
+      const normalizedEmail = email.trim().toLowerCase();
 
-      if (!normalizedEmail) {
-        return res.status(400).json({
-          message:
-            "Email cannot be empty",
-        });
-      }
+      const existingUser = await User.findOne({
+        email: normalizedEmail,
+        _id: { $ne: user._id },
+      });
 
-      user.email =
-        normalizedEmail;
-    }
-
-    try {
-      await user.save();
-    } catch (error) {
-      if (error.code === 11000) {
+      if (existingUser) {
         return res.status(409).json({
-          message:
-            "An account with this email already exists",
+          message: "Email is already in use",
         });
       }
 
-      throw error;
+      user.email = normalizedEmail;
     }
+
+    await user.save();
 
     return res.status(200).json({
-      message:
-        "Profile updated successfully",
-
+      message: "Profile updated successfully",
       user: sanitizeUser(user),
     });
   } catch (error) {
-    next(error);
+    console.error("Update profile error:", error);
+
+    return res.status(500).json({
+      message: "Failed to update profile",
+    });
   }
 };
 
-const changePassword = async (
-  req,
-  res,
-  next
-) => {
+const changePassword = async (req, res) => {
   try {
-    const {
-      currentPassword,
-      newPassword,
-      confirmPassword,
-    } = req.body;
+    const { currentPassword, newPassword } = req.body;
 
-    if (
-      !currentPassword ||
-      !newPassword ||
-      !confirmPassword
-    ) {
-      return res.status(400).json({
-        message:
-          "All password fields are required",
-      });
-    }
-
-    if (
-      newPassword !== confirmPassword
-    ) {
-      return res.status(400).json({
-        message:
-          "New passwords do not match",
-      });
-    }
-
-    if (newPassword.length < 8) {
-      return res.status(400).json({
-        message:
-          "New password must be at least 8 characters",
-      });
-    }
-
-    const user =
-      await User.findById(
-        req.user._id
-      ).select(
-        "+password +refreshToken"
-      );
+    const user = await User.findById(req.user._id).select(
+      "+password"
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -570,29 +629,24 @@ const changePassword = async (
     if (!user.password) {
       return res.status(400).json({
         message:
-          "Password change is not available for this account",
+          "This account does not have a password. GitHub accounts cannot change password here yet.",
       });
     }
 
-    const passwordMatch =
-      await bcrypt.compare(
-        currentPassword,
-        user.password
-      );
+    const passwordMatches = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
 
-    if (!passwordMatch) {
-      return res.status(401).json({
-        message:
-          "Current password is incorrect",
+    if (!passwordMatches) {
+      return res.status(400).json({
+        message: "Current password is incorrect",
       });
     }
 
-    user.password =
-      await bcrypt.hash(
-        newPassword,
-        12
-      );
+    user.password = await bcrypt.hash(newPassword, 12);
 
+    // Invalidate existing refresh token
     user.refreshToken = null;
 
     await user.save();
@@ -603,36 +657,24 @@ const changePassword = async (
     );
 
     return res.status(200).json({
-      message:
-        "Password changed successfully. Please log in again.",
+      message: "Password changed successfully",
     });
   } catch (error) {
-    next(error);
+    console.error("Change password error:", error);
+
+    return res.status(500).json({
+      message: "Failed to change password",
+    });
   }
 };
 
-const deleteAccount = async (
-  req,
-  res,
-  next
-) => {
+const deleteAccount = async (req, res) => {
   try {
-    const { password } =
-      req.body;
+    const { password } = req.body;
 
-    if (!password) {
-      return res.status(400).json({
-        message:
-          "Password is required to delete your account",
-      });
-    }
-
-    const user =
-      await User.findById(
-        req.user._id
-      ).select(
-        "+password +refreshToken"
-      );
+    const user = await User.findById(req.user._id).select(
+      "+password"
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -643,20 +685,18 @@ const deleteAccount = async (
     if (!user.password) {
       return res.status(400).json({
         message:
-          "Account deletion is not available for this account",
+          "GitHub-only accounts cannot be deleted using password confirmation yet.",
       });
     }
 
-    const passwordMatch =
-      await bcrypt.compare(
-        password,
-        user.password
-      );
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user.password
+    );
 
-    if (!passwordMatch) {
-      return res.status(401).json({
-        message:
-          "Incorrect password",
+    if (!passwordMatches) {
+      return res.status(400).json({
+        message: "Incorrect password",
       });
     }
 
@@ -665,7 +705,7 @@ const deleteAccount = async (
     });
 
     await Workspace.updateMany(
-      {},
+      { "members.user": user._id },
       {
         $pull: {
           members: {
@@ -675,9 +715,7 @@ const deleteAccount = async (
       }
     );
 
-    await User.deleteOne({
-      _id: user._id,
-    });
+    await User.findByIdAndDelete(user._id);
 
     res.clearCookie(
       "refreshToken",
@@ -685,17 +723,22 @@ const deleteAccount = async (
     );
 
     return res.status(200).json({
-      message:
-        "Account deleted successfully",
+      message: "Account deleted successfully",
     });
   } catch (error) {
-    next(error);
+    console.error("Delete account error:", error);
+
+    return res.status(500).json({
+      message: "Failed to delete account",
+    });
   }
 };
 
 module.exports = {
   register,
   login,
+  githubLogin,
+  githubCallback,
   refreshAccessToken,
   logout,
   getMe,

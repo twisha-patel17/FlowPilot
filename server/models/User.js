@@ -21,10 +21,24 @@ const userSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: true,
+      required: false,
       minlength: 8,
       maxlength: 100,
       select: false,
+    },
+
+    githubId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+
+    avatarUrl: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 500,
     },
 
     refreshToken: {

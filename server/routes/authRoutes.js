@@ -3,6 +3,8 @@ const express = require("express");
 const {
   register,
   login,
+  githubLogin,
+  githubCallback,
   refreshAccessToken,
   logout,
   getMe,
@@ -12,11 +14,8 @@ const {
   deleteAccount,
 } = require("../controllers/authController");
 
-const protect =
-  require("../middleware/authMiddleware");
-
-const validate =
-  require("../middleware/validate");
+const protect = require("../middleware/authMiddleware");
+const validate = require("../middleware/validate");
 
 const {
   registerSchema,
@@ -25,8 +24,7 @@ const {
   updateProfileSchema,
 } = require("../validators/authValidator");
 
-const router =
-  express.Router();
+const router = express.Router();
 
 router.post(
   "/register",
@@ -39,6 +37,10 @@ router.post(
   validate(loginSchema),
   login
 );
+
+// GitHub OAuth
+router.get("/github", githubLogin);
+router.get("/github/callback", githubCallback);
 
 router.post(
   "/refresh",
