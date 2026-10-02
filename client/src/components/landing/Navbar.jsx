@@ -6,10 +6,11 @@ import flowpilotIcon from "../../assets/flowpilot-icon-512.png";
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const closeMenu = () => setMenuOpen(false);
+
   return (
     <header className="fixed left-0 top-0 z-50 w-full border-b border-zinc-800/70 bg-[#09090b]/95 backdrop-blur-sm">
       <nav className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-5 lg:px-8">
-
         {/* Logo */}
         <Link
           to="/"
@@ -26,7 +27,6 @@ const Navbar = () => {
 
         {/* Desktop Navigation */}
         <div className="hidden items-center gap-8 md:flex">
-
           <a
             href="#product"
             className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
@@ -42,24 +42,24 @@ const Navbar = () => {
           </a>
 
           <a
-            href="#docs"
+            href="#developer"
             className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
           >
-            Docs
+            Developer
           </a>
 
           <a
-            href="#pricing"
+            href="https://github.com/twisha-patel17/FlowPilot"
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
           >
-            Pricing
+            Docs ↗
           </a>
-
         </div>
 
         {/* Desktop Actions */}
         <div className="hidden items-center gap-5 md:flex">
-
           <Link
             to="/login"
             className="text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-100"
@@ -73,7 +73,6 @@ const Navbar = () => {
           >
             Get started
           </Link>
-
         </div>
 
         {/* Mobile Menu Button */}
@@ -88,17 +87,15 @@ const Navbar = () => {
             {menuOpen ? "×" : "☰"}
           </span>
         </button>
-
       </nav>
 
       {/* Mobile Menu */}
       {menuOpen && (
         <div className="border-t border-zinc-800/70 bg-[#09090b] px-5 py-5 md:hidden">
           <div className="flex flex-col gap-4">
-
             <a
               href="#product"
-              onClick={() => setMenuOpen(false)}
+              onClick={closeMenu}
               className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
             >
               Product
@@ -106,34 +103,35 @@ const Navbar = () => {
 
             <a
               href="#integrations"
-              onClick={() => setMenuOpen(false)}
+              onClick={closeMenu}
               className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
             >
               Integrations
             </a>
 
             <a
-              href="#docs"
-              onClick={() => setMenuOpen(false)}
+              href="#developer"
+              onClick={closeMenu}
               className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
             >
-              Docs
+              Developer
             </a>
 
             <a
-              href="#pricing"
-              onClick={() => setMenuOpen(false)}
+              href="https://github.com/twisha-patel17/FlowPilot"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={closeMenu}
               className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
             >
-              Pricing
+              Docs ↗
             </a>
 
             {/* Mobile Auth */}
             <div className="mt-2 flex flex-col gap-3 border-t border-zinc-800/70 pt-4">
-
               <Link
                 to="/login"
-                onClick={() => setMenuOpen(false)}
+                onClick={closeMenu}
                 className="text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-100"
               >
                 Sign in
@@ -141,14 +139,12 @@ const Navbar = () => {
 
               <Link
                 to="/register"
-                onClick={() => setMenuOpen(false)}
+                onClick={closeMenu}
                 className="rounded-lg bg-violet-500 px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-violet-400"
               >
                 Get started
               </Link>
-
             </div>
-
           </div>
         </div>
       )}
