@@ -65,19 +65,25 @@ const executeEmailNode = async (
     );
   }
 
-  const transporter =
-    nodemailer.createTransport({
-      host,
-      port: Number(port) || 587,
-      secure: Boolean(secure),
+const transporter =
+  nodemailer.createTransport({
+    host,
+    port: Number(port) || 465,
+    secure:
+      port === 465
+        ? true
+        : Boolean(secure),
+    family: 4,
 
-      family: 4,
+    auth: {
+      user: username,
+      pass: password,
+    },
 
-      auth: {
-        user: username,
-        pass: password,
-      },
-    });
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+  });
 
   const abortHandler = () => {
     console.log(
