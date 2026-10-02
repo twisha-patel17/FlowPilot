@@ -96,9 +96,6 @@ const IntegrationsPage = () => {
     enabled: !!workspaceId,
   });
 
-  /*
-   * Create Integration
-   */
   const createMutation = useMutation({
     mutationFn: createIntegration,
 
@@ -127,9 +124,6 @@ const IntegrationsPage = () => {
     },
   });
 
-  /*
-   * Toggle Integration
-   */
   const toggleMutation = useMutation({
     mutationFn: toggleIntegration,
 
@@ -172,9 +166,6 @@ const IntegrationsPage = () => {
     },
   });
 
-  /*
-   * Delete Integration
-   */
   const deleteMutation = useMutation({
     mutationFn: deleteIntegration,
 
@@ -206,12 +197,6 @@ const IntegrationsPage = () => {
   const integrations =
     data?.integrations || [];
 
-  /*
-   * Get only a connected integration.
-   *
-   * This is important because you may have an old
-   * disconnected integration for the same provider.
-   */
   const getConnectedIntegration = (
     provider
   ) => {
@@ -222,34 +207,37 @@ const IntegrationsPage = () => {
     );
   };
 
-  /*
-   * Connect
-   */
   const handleConnect = (integration) => {
     setSelectedIntegration(integration);
   };
 
-  /*
-   * Manage
-   */
   const handleManage = (integration) => {
-    const connectedIntegration =
-      getConnectedIntegration(
-        integration.provider
-      );
+  const isHttp =
+    integration.provider === "http";
 
-    if (!connectedIntegration) {
-      return;
-    }
+  if (isHttp) {
+    setManageIntegration({
+      ...integration,
+      alwaysAvailable: true,
+    });
 
-    setManageIntegration(
-      connectedIntegration
+    return;
+  }
+
+  const connectedIntegration =
+    getConnectedIntegration(
+      integration.provider
     );
-  };
 
-  /*
-   * Disconnect
-   */
+  if (!connectedIntegration) {
+    return;
+  }
+
+  setManageIntegration(
+    connectedIntegration
+  );
+};
+
   const handleDisconnect = (integration) => {
     const connectedIntegration =
       getConnectedIntegration(
@@ -266,9 +254,6 @@ const IntegrationsPage = () => {
     });
   };
 
-  /*
-   * Disconnect from Manage modal
-   */
   const handleManageDisconnect = () => {
     if (!manageIntegration?._id) {
       return;
@@ -280,9 +265,6 @@ const IntegrationsPage = () => {
     });
   };
 
-  /*
-   * Delete from Manage modal
-   */
   const handleDelete = () => {
     if (!manageIntegration?._id) {
       return;
@@ -302,9 +284,6 @@ const IntegrationsPage = () => {
     });
   };
 
-  /*
-   * Create Integration
-   */
   const handleCreateIntegration = (
     integrationData
   ) => {
