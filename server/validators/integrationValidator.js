@@ -9,33 +9,36 @@ const discordCredentialsSchema = Joi.object({
 }).unknown(false);
 
 const emailCredentialsSchema = Joi.object({
-  host: Joi.string()
+  apiKey: Joi.string()
     .trim()
-    .max(255)
-    .required(),
+    .min(10)
+    .max(1000)
+    .required()
+    .messages({
+      "any.required":
+        "Resend API key is required",
 
-  port: Joi.number()
-    .integer()
-    .min(1)
-    .max(65535)
-    .default(587),
+      "string.empty":
+        "Resend API key is required",
 
-  secure: Joi.boolean()
-    .default(false),
-
-  username: Joi.string()
-    .trim()
-    .max(320)
-    .required(),
-
-  password: Joi.string()
-    .min(1)
-    .max(500)
-    .required(),
+      "string.min":
+        "Resend API key is invalid",
+    }),
 
   from: Joi.string()
+    .trim()
     .email()
-    .required(),
+    .required()
+    .messages({
+      "any.required":
+        "Email sender address is required",
+
+      "string.empty":
+        "Email sender address is required",
+
+      "string.email":
+        "Email sender address must be a valid email address",
+    }),
 }).unknown(false);
 
 const mongodbCredentialsSchema = Joi.object({

@@ -13,11 +13,7 @@ const ConnectIntegrationModal = ({
 
   const [value, setValue] = useState("");
 
-  const [emailHost, setEmailHost] = useState("");
-  const [emailPort, setEmailPort] = useState("587");
-  const [emailSecure, setEmailSecure] = useState(false);
-  const [emailUsername, setEmailUsername] = useState("");
-  const [emailPassword, setEmailPassword] = useState("");
+  const [emailApiKey, setEmailApiKey] = useState("");
   const [emailFrom, setEmailFrom] = useState("");
 
   const handleSubmit = (event) => {
@@ -56,21 +52,14 @@ const ConnectIntegrationModal = ({
 
       case "email":
         if (
-          !emailHost.trim() ||
-          !emailPort ||
-          !emailUsername.trim() ||
-          !emailPassword.trim() ||
+          !emailApiKey.trim() ||
           !emailFrom.trim()
         ) {
           return;
         }
 
         credentials = {
-          host: emailHost.trim(),
-          port: Number(emailPort),
-          secure: emailSecure,
-          username: emailUsername.trim(),
-          password: emailPassword,
+          apiKey: emailApiKey.trim(),
           from: emailFrom.trim(),
         };
         break;
@@ -143,7 +132,7 @@ const ConnectIntegrationModal = ({
         return "A GitHub access token will be used to access your repositories.";
 
       case "email":
-        return "Provide the SMTP connection details for your email provider.";
+        return "FlowPilot uses Resend to send emails through a secure HTTPS API.";
 
       case "mongodb":
         return "Provide the connection string for your MongoDB cluster.";
@@ -156,14 +145,12 @@ const ConnectIntegrationModal = ({
     }
   };
 
-  const isEmail = integration.provider === "email";
+  const isEmail =
+    integration.provider === "email";
 
   const isFormValid = isEmail
     ? name.trim() &&
-      emailHost.trim() &&
-      emailPort &&
-      emailUsername.trim() &&
-      emailPassword.trim() &&
+      emailApiKey.trim() &&
       emailFrom.trim()
     : name.trim() && value.trim();
 
@@ -216,103 +203,29 @@ const ConnectIntegrationModal = ({
           {/* Email Configuration */}
           {isEmail ? (
             <div className="space-y-4">
-              {/* SMTP Host */}
+              {/* Resend API Key */}
               <div>
                 <label className="mb-2 block text-xs font-medium text-zinc-400">
-                  SMTP Host
-                </label>
-
-                <input
-                  type="text"
-                  value={emailHost}
-                  onChange={(event) =>
-                    setEmailHost(event.target.value)
-                  }
-                  placeholder="smtp.gmail.com"
-                  required
-                  className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
-                />
-              </div>
-
-              {/* Port + Secure */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-2 block text-xs font-medium text-zinc-400">
-                    SMTP Port
-                  </label>
-
-                  <input
-                    type="number"
-                    min="1"
-                    max="65535"
-                    value={emailPort}
-                    onChange={(event) =>
-                      setEmailPort(event.target.value)
-                    }
-                    placeholder="587"
-                    required
-                    className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-medium text-zinc-400">
-                    Security
-                  </label>
-
-                  <select
-                    value={emailSecure ? "true" : "false"}
-                    onChange={(event) =>
-                      setEmailSecure(
-                        event.target.value === "true"
-                      )
-                    }
-                    className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none focus:border-violet-500"
-                  >
-                    <option value="false">
-                      STARTTLS
-                    </option>
-                    <option value="true">
-                      SSL / TLS
-                    </option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Username */}
-              <div>
-                <label className="mb-2 block text-xs font-medium text-zinc-400">
-                  SMTP Username
-                </label>
-
-                <input
-                  type="email"
-                  value={emailUsername}
-                  onChange={(event) =>
-                    setEmailUsername(event.target.value)
-                  }
-                  placeholder="yourgmail@gmail.com"
-                  required
-                  className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="mb-2 block text-xs font-medium text-zinc-400">
-                  SMTP Password / App Password
+                  Resend API Key
                 </label>
 
                 <input
                   type="password"
-                  value={emailPassword}
+                  value={emailApiKey}
                   onChange={(event) =>
-                    setEmailPassword(event.target.value)
+                    setEmailApiKey(
+                      event.target.value
+                    )
                   }
-                  placeholder="Enter your app password"
+                  placeholder="re_xxxxxxxxxxxxxxxxx"
                   required
+                  autoComplete="off"
                   className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
                 />
+
+                <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+                  Your Resend API key is encrypted before being stored.
+                </p>
               </div>
 
               {/* From Email */}
@@ -325,14 +238,21 @@ const ConnectIntegrationModal = ({
                   type="email"
                   value={emailFrom}
                   onChange={(event) =>
-                    setEmailFrom(event.target.value)
+                    setEmailFrom(
+                      event.target.value
+                    )
                   }
-                  placeholder="yourgmail@gmail.com"
+                  placeholder="notifications@yourdomain.com"
                   required
                   className="h-10 w-full rounded-md border border-zinc-800 bg-[#111114] px-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-500"
                 />
+
+                <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+                  Use a sender address that is allowed by your Resend account.
+                </p>
               </div>
 
+              {/* Description */}
               <p className="text-[11px] leading-5 text-zinc-600">
                 {getDescription()}
               </p>
@@ -346,8 +266,10 @@ const ConnectIntegrationModal = ({
 
               <input
                 type={
-                  integration.provider === "github" ||
-                  integration.provider === "mongodb"
+                  integration.provider ===
+                    "github" ||
+                  integration.provider ===
+                    "mongodb"
                     ? "password"
                     : "text"
                 }
@@ -385,10 +307,15 @@ const ConnectIntegrationModal = ({
 
             <button
               type="submit"
-              disabled={isConnecting || !isFormValid}
+              disabled={
+                isConnecting ||
+                !isFormValid
+              }
               className="h-9 rounded-md bg-violet-600 px-4 text-xs font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isConnecting ? "Connecting..." : "Connect"}
+              {isConnecting
+                ? "Connecting..."
+                : "Connect"}
             </button>
           </div>
         </form>

@@ -50,7 +50,7 @@ const availableIntegrations = [
     icon: <FiMail className="h-6 w-6" />,
     name: "Email",
     description:
-      "Send transactional emails from your workflows via SMTP or a provider API.",
+      "Send transactional emails from your workflows through the Resend API.",
   },
   {
     provider: "http",

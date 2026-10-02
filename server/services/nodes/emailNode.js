@@ -1,4 +1,4 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 const getIntegration = require("../integrations/getIntegration");
 
 const executeEmailNode = async (
@@ -27,29 +27,13 @@ const executeEmailNode = async (
     integration.credentials || {};
 
   const {
-    host,
-    port,
-    secure,
-    username,
-    password,
+    apiKey,
     from,
   } = credentials;
 
-  if (!host) {
+  if (!apiKey) {
     throw new Error(
-      "Email SMTP host is missing"
-    );
-  }
-
-  if (!username) {
-    throw new Error(
-      "Email username is missing"
-    );
-  }
-
-  if (!password) {
-    throw new Error(
-      "Email password is missing"
+      "Resend API key is missing"
     );
   }
 
@@ -65,54 +49,19 @@ const executeEmailNode = async (
     );
   }
 
-const transporter =
-  nodemailer.createTransport({
-    host,
-    port: Number(port) || 465,
-    secure:
-      port === 465
-        ? true
-        : Boolean(secure),
-    family: 4,
-
-    auth: {
-      user: username,
-      pass: password,
-    },
-
-    connectionTimeout: 30000,
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-  });
-
-  const abortHandler = () => {
-    console.log(
-      "Email node cancellation requested"
+  if (context.signal?.aborted) {
+    const error = new Error(
+      "Email node execution was cancelled"
     );
 
-    transporter.close();
-  };
+    error.code =
+      "NODE_CANCELLED";
 
-  if (context.signal) {
-    if (context.signal.aborted) {
-      transporter.close();
-
-      const error = new Error(
-        "Email node execution was cancelled"
-      );
-
-      error.code =
-        "NODE_CANCELLED";
-
-      throw error;
-    }
-
-    context.signal.addEventListener(
-      "abort",
-      abortHandler,
-      { once: true }
-    );
+    throw error;
   }
+
+  const resend =
+    new Resend(apiKey);
 
   const subject =
     config.subject ||
@@ -123,16 +72,24 @@ const transporter =
     config.body ||
     JSON.stringify(input);
 
+  const html =
+    config.html ||
+    `<p>${escapeHtml(text).replace(
+      /\n/g,
+      "<br />"
+    )}</p>`;
+
   try {
-    const mailOptions = {
+    const emailData = {
       from,
-      to: config.to,
+      to: [config.to],
       subject,
+      html,
       text,
     };
 
     if (context.idempotencyKey) {
-      mailOptions.headers = {
+      emailData.headers = {
         "X-FlowPilot-Idempotency-Key":
           context.idempotencyKey,
 
@@ -145,9 +102,9 @@ const transporter =
       };
     }
 
-    const info =
-      await transporter.sendMail(
-        mailOptions
+    const result =
+      await resend.emails.send(
+        emailData
       );
 
     if (context.signal?.aborted) {
@@ -161,16 +118,25 @@ const transporter =
       throw error;
     }
 
+    if (result.error) {
+      throw new Error(
+        result.error.message ||
+          "Resend failed to send email"
+      );
+    }
+
+    const messageId =
+      result.data?.id;
+
     console.log(
-      `Email sent successfully: ${info.messageId}`
+      `Email sent successfully: ${messageId}`
     );
 
     return {
       success: true,
 
       output: {
-        messageId:
-          info.messageId,
+        messageId,
 
         to:
           config.to,
@@ -181,17 +147,23 @@ const transporter =
       },
     };
   } catch (error) {
-    throw error;
-  } finally {
-    if (context.signal) {
-      context.signal.removeEventListener(
-        "abort",
-        abortHandler
-      );
-    }
+    console.error(
+      "Email node failed:",
+      error
+    );
 
-    transporter.close();
+    throw error;
   }
 };
 
-module.exports = executeEmailNode;
+const escapeHtml = (value) => {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+module.exports =
+  executeEmailNode;
