@@ -693,7 +693,6 @@ const deleteAccount = async (
   }
 };
 
-
 module.exports = {
   register,
   login,
