@@ -1118,23 +1118,27 @@ const EmailConfig = ({
     currentWorkspace,
   } = useWorkspace();
 
+  const workspaceId =
+    currentWorkspace?._id;
+
   const {
     data,
     isLoading,
     isError,
+    error,
   } = useQuery({
     queryKey: [
       "integrations",
-      currentWorkspace?._id,
+      workspaceId,
     ],
 
     queryFn: () =>
       getIntegrations(
-        currentWorkspace._id
+        workspaceId
       ),
 
     enabled:
-      !!currentWorkspace?._id,
+      !!workspaceId,
   });
 
   const emailIntegrations =
@@ -1145,6 +1149,35 @@ const EmailConfig = ({
         integration.status ===
           "connected"
     ) || [];
+
+  // TEMPORARY DEBUGGING
+  console.log(
+    "EMAIL CONFIG WORKSPACE:",
+    workspaceId
+  );
+
+  console.log(
+    "EMAIL CONFIG DATA:",
+    data
+  );
+
+  console.log(
+    "EMAIL CONFIG ALL EMAIL:",
+    data?.integrations?.filter(
+      (integration) =>
+        integration.provider === "email"
+    )
+  );
+
+  console.log(
+    "EMAIL CONFIG CONNECTED EMAIL:",
+    emailIntegrations
+  );
+
+  console.log(
+    "EMAIL CONFIG ERROR:",
+    error
+  );
 
   const connectionOptions = [
     {

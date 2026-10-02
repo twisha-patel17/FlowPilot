@@ -394,8 +394,6 @@ const IntegrationsPage = () => {
         </div>
       </div>
 
-      {/* Connect Modal */}
-
       {selectedIntegration && (
         <ConnectIntegrationModal
           integration={selectedIntegration}
