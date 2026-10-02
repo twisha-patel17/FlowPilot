@@ -71,6 +71,8 @@ const executeEmailNode = async (
       port: Number(port) || 587,
       secure: Boolean(secure),
 
+      family: 4,
+
       auth: {
         user: username,
         pass: password,
