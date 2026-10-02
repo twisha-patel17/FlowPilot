@@ -21,11 +21,13 @@ import toast from "react-hot-toast";
 
 import IntegrationCard from "../components/integrations/IntegrationCard";
 import ConnectIntegrationModal from "../components/integrations/ConnectIntegrationModal";
+import ManageIntegrationModal from "../components/integrations/ManageIntegrationModal";
 
 import {
   getIntegrations,
   createIntegration,
   toggleIntegration,
+  deleteIntegration,
 } from "../api/integrationApi";
 
 import { useWorkspace } from "../context/WorkspaceContext";
@@ -74,6 +76,9 @@ const IntegrationsPage = () => {
   const [selectedIntegration, setSelectedIntegration] =
     useState(null);
 
+  const [manageIntegration, setManageIntegration] =
+    useState(null);
+
   const {
     currentWorkspace,
     loading: workspaceLoading,
@@ -91,6 +96,9 @@ const IntegrationsPage = () => {
     enabled: !!workspaceId,
   });
 
+  /*
+   * Create Integration
+   */
   const createMutation = useMutation({
     mutationFn: createIntegration,
 
@@ -119,6 +127,9 @@ const IntegrationsPage = () => {
     },
   });
 
+  /*
+   * Toggle Integration
+   */
   const toggleMutation = useMutation({
     mutationFn: toggleIntegration,
 
@@ -144,6 +155,8 @@ const IntegrationsPage = () => {
           "Integration status updated successfully."
         );
       }
+
+      setManageIntegration(null);
     },
 
     onError: (error) => {
@@ -159,36 +172,66 @@ const IntegrationsPage = () => {
     },
   });
 
+  /*
+   * Delete Integration
+   */
+  const deleteMutation = useMutation({
+    mutationFn: deleteIntegration,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["integrations", workspaceId],
+      });
+
+      setManageIntegration(null);
+
+      toast.success(
+        "Integration deleted successfully."
+      );
+    },
+
+    onError: (error) => {
+      console.error(
+        "Delete integration error:",
+        error
+      );
+
+      toast.error(
+        error?.response?.data?.message ||
+          "Failed to delete integration."
+      );
+    },
+  });
+
   const integrations =
     data?.integrations || [];
 
-  // Temporary debugging logs
-  console.log(
-    "FLOWPILOT INTEGRATIONS:",
-    data
-  );
-
-  console.log(
-    "FLOWPILOT EMAIL:",
-    integrations.filter(
-      (integration) =>
-        integration.provider === "email"
-    )
-  );
-
+  /*
+   * Get only a connected integration.
+   *
+   * This is important because you may have an old
+   * disconnected integration for the same provider.
+   */
   const getConnectedIntegration = (
     provider
   ) => {
     return integrations.find(
       (integration) =>
-        integration.provider === provider
+        integration.provider === provider &&
+        integration.status === "connected"
     );
   };
 
+  /*
+   * Connect
+   */
   const handleConnect = (integration) => {
     setSelectedIntegration(integration);
   };
 
+  /*
+   * Manage
+   */
   const handleManage = (integration) => {
     const connectedIntegration =
       getConnectedIntegration(
@@ -196,13 +239,17 @@ const IntegrationsPage = () => {
       );
 
     if (!connectedIntegration) {
-      setSelectedIntegration(integration);
       return;
     }
 
-    // Management UI can be added here later.
+    setManageIntegration(
+      connectedIntegration
+    );
   };
 
+  /*
+   * Disconnect
+   */
   const handleDisconnect = (integration) => {
     const connectedIntegration =
       getConnectedIntegration(
@@ -219,6 +266,45 @@ const IntegrationsPage = () => {
     });
   };
 
+  /*
+   * Disconnect from Manage modal
+   */
+  const handleManageDisconnect = () => {
+    if (!manageIntegration?._id) {
+      return;
+    }
+
+    toggleMutation.mutate({
+      id: manageIntegration._id,
+      workspaceId,
+    });
+  };
+
+  /*
+   * Delete from Manage modal
+   */
+  const handleDelete = () => {
+    if (!manageIntegration?._id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete "${manageIntegration.name}"? This cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    deleteMutation.mutate({
+      id: manageIntegration._id,
+      workspaceId,
+    });
+  };
+
+  /*
+   * Create Integration
+   */
   const handleCreateIntegration = (
     integrationData
   ) => {
@@ -233,6 +319,9 @@ const IntegrationsPage = () => {
     });
   };
 
+  /*
+   * Workspace Loading
+   */
   if (workspaceLoading) {
     return (
       <div className="space-y-6">
@@ -256,6 +345,9 @@ const IntegrationsPage = () => {
     );
   }
 
+  /*
+   * No Workspace
+   */
   if (!workspaceId) {
     return (
       <div className="space-y-6">
@@ -279,6 +371,9 @@ const IntegrationsPage = () => {
     );
   }
 
+  /*
+   * Integrations Loading
+   */
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -302,6 +397,9 @@ const IntegrationsPage = () => {
     );
   }
 
+  /*
+   * Integrations Error
+   */
   if (isError) {
     return (
       <div className="space-y-6">
@@ -341,6 +439,8 @@ const IntegrationsPage = () => {
           </p>
         </div>
 
+        {/* Integration Cards */}
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {availableIntegrations.map(
             (integration) => {
@@ -350,9 +450,7 @@ const IntegrationsPage = () => {
                 );
 
               const isConnected =
-                !!connectedIntegration &&
-                connectedIntegration.status ===
-                  "connected";
+                !!connectedIntegration;
 
               const isHttp =
                 integration.provider === "http";
@@ -373,6 +471,8 @@ const IntegrationsPage = () => {
                       ?.account ||
                     connectedIntegration?.metadata
                       ?.username ||
+                    connectedIntegration?.metadata
+                      ?.email ||
                     connectedIntegration?.name
                   }
                   connected={isConnected}
@@ -394,6 +494,8 @@ const IntegrationsPage = () => {
         </div>
       </div>
 
+      {/* Connect Modal */}
+
       {selectedIntegration && (
         <ConnectIntegrationModal
           integration={selectedIntegration}
@@ -405,6 +507,27 @@ const IntegrationsPage = () => {
           }
           isConnecting={
             createMutation.isPending
+          }
+        />
+      )}
+
+      {/* Manage Modal */}
+
+      {manageIntegration && (
+        <ManageIntegrationModal
+          integration={manageIntegration}
+          onClose={() =>
+            setManageIntegration(null)
+          }
+          onDisconnect={
+            handleManageDisconnect
+          }
+          onDelete={handleDelete}
+          isDisconnecting={
+            toggleMutation.isPending
+          }
+          isDeleting={
+            deleteMutation.isPending
           }
         />
       )}
