@@ -28,6 +28,7 @@ const webhookRoutes = require("./routes/webhookRoutes");
 const integrationRoutes = require("./routes/integrationRoutes");
 const workspaceRoutes = require("./routes/workspaceRoutes");
 const scheduleRoutes = require("./routes/scheduleRoutes");
+const githubRoutes = require("./routes/githubRoutes");
 
 const {
   startScheduler,
@@ -196,6 +197,11 @@ app.use(
 app.use(
   "/api/schedules",
   scheduleRoutes
+);
+
+app.use(
+  "/api/github",
+  githubRoutes
 );
 
 app.use((req, res, next) => {
