@@ -380,7 +380,6 @@ const WorkflowCanvas = ({
         },
       };
     });
-
 const handleNodesChange = useCallback(
   (changes) => {
     const updatedNodes = applyNodeChanges(
@@ -403,12 +402,10 @@ const handleNodesChange = useCallback(
           )
         : initialEdges;
 
-    if (onWorkflowChange) {
-      onWorkflowChange(
-        updatedNodes,
-        updatedEdges
-      );
-    }
+    onWorkflowChange?.(
+      updatedNodes,
+      updatedEdges
+    );
   },
   [
     initialNodes,
