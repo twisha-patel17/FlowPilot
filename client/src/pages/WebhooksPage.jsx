@@ -293,7 +293,7 @@ const WebhooksPage = () => {
       ) : (
         <div className="space-y-3">
           {webhooks.map((webhook) => {
-            const endpoint = `${import.meta.env.VITE_API_URL}/api/webhooks/${webhook.publicId}`;
+            const endpoint = `${import.meta.env.VITE_API_URL}/webhooks/${webhook.publicId}`;
 
             return (
               <WebhookCard
