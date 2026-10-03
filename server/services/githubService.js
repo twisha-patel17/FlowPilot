@@ -2,7 +2,7 @@ const Integration = require("../models/Integration");
 
 const {
   decryptCredentials,
-} = require("../utils/encryption");
+} = require("../utils/credentialEncryption");
 
 const getGithubHeaders = (token) => ({
   Accept: "application/vnd.github+json",
@@ -25,11 +25,10 @@ const githubRequest = async (url, token) => {
   }
 
   if (!response.ok) {
-    const message =
+    const error = new Error(
       data?.message ||
-      `GitHub API request failed with status ${response.status}`;
-
-    const error = new Error(message);
+        `GitHub API request failed with status ${response.status}`
+    );
 
     error.statusCode = response.status;
 
@@ -48,9 +47,9 @@ const getGithubIntegration = async ({
     await Integration.findOne({
       _id: integrationId,
       provider: "github",
-      workspace: workspaceId,
       owner: userId,
-      connected: true,
+      workspace: workspaceId,
+      status: "connected",
     });
 
   if (!integration) {
@@ -63,11 +62,7 @@ const getGithubIntegration = async ({
     throw error;
   }
 
-  const encryptedCredentials =
-    integration.credentialsEncrypted ||
-    integration.credentials;
-
-  if (!encryptedCredentials) {
+  if (!integration.credentials) {
     const error = new Error(
       "GitHub credentials are not configured"
     );
@@ -79,7 +74,7 @@ const getGithubIntegration = async ({
 
   const credentials =
     decryptCredentials(
-      encryptedCredentials
+      integration.credentials
     );
 
   if (!credentials?.token) {
@@ -115,7 +110,6 @@ const validateRepository = (
   }
 
   const value = repository.trim();
-
   const parts = value.split("/");
 
   if (
@@ -145,6 +139,7 @@ const buildIssuePayload = ({
 }) => ({
   event: "issues",
   action,
+
   issue: {
     id: issue.id,
     number: issue.number,
@@ -152,20 +147,24 @@ const buildIssuePayload = ({
     body: issue.body,
     state: issue.state,
     labels: issue.labels || [],
+
     user: issue.user
       ? {
           login: issue.user.login,
           id: issue.user.id,
         }
       : null,
+
     html_url: issue.html_url,
   },
+
   repository: {
     id: repository.id,
     name: repository.name,
     full_name:
       repository.full_name,
-    html_url: repository.html_url,
+    html_url:
+      repository.html_url,
   },
 });
 
@@ -176,6 +175,7 @@ const buildPullRequestPayload = ({
 }) => ({
   event: "pull_request",
   action,
+
   pull_request: {
     id: pullRequest.id,
     number: pullRequest.number,
@@ -183,6 +183,7 @@ const buildPullRequestPayload = ({
     body: pullRequest.body,
     state: pullRequest.state,
     merged: pullRequest.merged,
+
     user: pullRequest.user
       ? {
           login:
@@ -190,9 +191,11 @@ const buildPullRequestPayload = ({
           id: pullRequest.user.id,
         }
       : null,
+
     html_url:
       pullRequest.html_url,
   },
+
   repository: {
     id: repository.id,
     name: repository.name,
@@ -210,7 +213,9 @@ const buildPushPayload = ({
 }) => ({
   event: "push",
   action,
+
   after: commit.sha,
+
   head_commit: {
     id: commit.sha,
     message:
@@ -219,12 +224,14 @@ const buildPushPayload = ({
       commit.commit?.author || null,
     url: commit.html_url,
   },
+
   repository: {
     id: repository.id,
     name: repository.name,
     full_name:
       repository.full_name,
-    html_url: repository.html_url,
+    html_url:
+      repository.html_url,
   },
 });
 
@@ -235,6 +242,7 @@ const buildReleasePayload = ({
 }) => ({
   event: "release",
   action,
+
   release: {
     id: release.id,
     name: release.name,
@@ -244,12 +252,14 @@ const buildReleasePayload = ({
     prerelease: release.prerelease,
     html_url: release.html_url,
   },
+
   repository: {
     id: repository.id,
     name: repository.name,
     full_name:
       repository.full_name,
-    html_url: repository.html_url,
+    html_url:
+      repository.html_url,
   },
 });
 
@@ -261,27 +271,20 @@ const testGithubTrigger = async ({
   event,
   action,
 }) => {
-  const {
-    token,
-  } = await getGithubIntegration({
-    integrationId,
-    workspaceId,
-    userId,
-  });
+  const { token } =
+    await getGithubIntegration({
+      integrationId,
+      workspaceId,
+      userId,
+    });
 
-  const {
-    owner,
-    repo,
-  } = validateRepository(repository);
-
-  const encodedOwner =
-    encodeURIComponent(owner);
-
-  const encodedRepo =
-    encodeURIComponent(repo);
+  const { owner, repo } =
+    validateRepository(repository);
 
   const baseUrl =
-    `https://api.github.com/repos/${encodedOwner}/${encodedRepo}`;
+    `https://api.github.com/repos/${encodeURIComponent(
+      owner
+    )}/${encodeURIComponent(repo)}`;
 
   const repositoryData =
     await githubRequest(
