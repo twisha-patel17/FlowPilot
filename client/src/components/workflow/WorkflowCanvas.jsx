@@ -628,6 +628,7 @@ const WorkflowCanvas = ({
         nodesDraggable={true}
         nodesConnectable={true}
         elementsSelectable={true}
+        deleteKeyCode={["Backspace", "Delete"]}
         fitView
         colorMode="dark"
         connectionRadius={30}
