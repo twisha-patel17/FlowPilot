@@ -4,126 +4,57 @@ const {
   decryptCredentials,
 } = require("../utils/credentialEncryption");
 
-const getGithubHeaders = (token) => ({
-  Accept: "application/vnd.github+json",
-  Authorization: `Bearer ${token}`,
-  "X-GitHub-Api-Version": "2022-11-28",
-});
+const getGithubHeaders = (token) => {
+  return {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${token}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "FlowPilot",
+  };
+};
 
-const githubRequest = async (url, token) => {
+const githubRequest = async (
+  url,
+  token
+) => {
   const response = await fetch(url, {
     method: "GET",
     headers: getGithubHeaders(token),
   });
 
-  let data;
-
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
+  const data = await response.json();
 
   if (!response.ok) {
-    const error = new Error(
+    const message =
       data?.message ||
-        `GitHub API request failed with status ${response.status}`
-    );
+      `GitHub API request failed with status ${response.status}`;
 
-    error.statusCode = response.status;
-
-    throw error;
+    throw new Error(message);
   }
 
   return data;
 };
 
-const getGithubIntegration = async ({
-  integrationId,
-  workspaceId,
-  userId,
-}) => {
-  const integration =
-    await Integration.findOne({
-      _id: integrationId,
-      provider: "github",
-      owner: userId,
-      workspace: workspaceId,
-      status: "connected",
-    });
-
-  if (!integration) {
-    const error = new Error(
-      "Connected GitHub integration not found"
-    );
-
-    error.statusCode = 404;
-
-    throw error;
-  }
-
-  if (!integration.credentials) {
-    const error = new Error(
-      "GitHub credentials are not configured"
-    );
-
-    error.statusCode = 400;
-
-    throw error;
-  }
-
-  const credentials =
-    decryptCredentials(
-      integration.credentials
-    );
-
-  if (!credentials?.token) {
-    const error = new Error(
-      "GitHub token is missing"
-    );
-
-    error.statusCode = 400;
-
-    throw error;
-  }
-
-  return {
-    integration,
-    token: credentials.token,
-  };
-};
-
 const validateRepository = (
   repository
 ) => {
-  if (
-    typeof repository !== "string" ||
-    !repository.trim()
-  ) {
-    const error = new Error(
+  if (!repository) {
+    throw new Error(
       "Repository is required"
     );
-
-    error.statusCode = 400;
-
-    throw error;
   }
 
-  const value = repository.trim();
-  const parts = value.split("/");
+  const parts =
+    repository.trim().split("/");
 
   if (
     parts.length !== 2 ||
     !parts[0] ||
     !parts[1]
   ) {
-    const error = new Error(
+    throw new Error(
       "Repository must be in owner/repository format"
     );
-
-    error.statusCode = 400;
-
-    throw error;
   }
 
   return {
@@ -132,136 +63,179 @@ const validateRepository = (
   };
 };
 
-const buildIssuePayload = ({
+const buildIssuePayload = (
   issue,
-  repository,
-  action,
-}) => ({
-  event: "issues",
-  action,
+  action
+) => {
+  return {
+    event: "issues",
+    action: action || null,
 
-  issue: {
-    id: issue.id,
-    number: issue.number,
-    title: issue.title,
-    body: issue.body,
-    state: issue.state,
-    labels: issue.labels || [],
+    issue: {
+      id: issue.id,
+      number: issue.number,
+      title: issue.title,
+      body: issue.body,
+      state: issue.state,
 
-    user: issue.user
-      ? {
-          login: issue.user.login,
-          id: issue.user.id,
-        }
-      : null,
+      html_url: issue.html_url,
 
-    html_url: issue.html_url,
-  },
+      user: issue.user
+        ? {
+            login: issue.user.login,
+            id: issue.user.id,
+          }
+        : null,
 
-  repository: {
-    id: repository.id,
-    name: repository.name,
-    full_name:
-      repository.full_name,
-    html_url:
-      repository.html_url,
-  },
-});
+      labels:
+        issue.labels?.map(
+          (label) => ({
+            name: label.name,
+            color: label.color,
+          })
+        ) || [],
 
-const buildPullRequestPayload = ({
+      created_at:
+        issue.created_at,
+
+      updated_at:
+        issue.updated_at,
+
+      closed_at:
+        issue.closed_at,
+    },
+  };
+};
+
+const buildPullRequestPayload = (
   pullRequest,
-  repository,
-  action,
-}) => ({
-  event: "pull_request",
-  action,
+  action
+) => {
+  return {
+    event: "pull_request",
+    action: action || null,
 
-  pull_request: {
-    id: pullRequest.id,
-    number: pullRequest.number,
-    title: pullRequest.title,
-    body: pullRequest.body,
-    state: pullRequest.state,
-    merged: pullRequest.merged,
+    pull_request: {
+      id: pullRequest.id,
+      number: pullRequest.number,
+      title: pullRequest.title,
+      body: pullRequest.body,
+      state: pullRequest.state,
 
-    user: pullRequest.user
-      ? {
-          login:
-            pullRequest.user.login,
-          id: pullRequest.user.id,
-        }
-      : null,
+      html_url:
+        pullRequest.html_url,
 
-    html_url:
-      pullRequest.html_url,
-  },
+      user: pullRequest.user
+        ? {
+            login:
+              pullRequest.user.login,
+            id: pullRequest.user.id,
+          }
+        : null,
 
-  repository: {
-    id: repository.id,
-    name: repository.name,
-    full_name:
-      repository.full_name,
-    html_url:
-      repository.html_url,
-  },
-});
+      head: pullRequest.head
+        ? {
+            ref:
+              pullRequest.head.ref,
+            sha:
+              pullRequest.head.sha,
+          }
+        : null,
 
-const buildPushPayload = ({
+      base: pullRequest.base
+        ? {
+            ref:
+              pullRequest.base.ref,
+            sha:
+              pullRequest.base.sha,
+          }
+        : null,
+
+      created_at:
+        pullRequest.created_at,
+
+      updated_at:
+        pullRequest.updated_at,
+
+      closed_at:
+        pullRequest.closed_at,
+
+      merged_at:
+        pullRequest.merged_at,
+    },
+  };
+};
+
+const buildPushPayload = (
   commit,
-  repository,
-  action,
-}) => ({
-  event: "push",
-  action,
+  action
+) => {
+  return {
+    event: "push",
+    action: action || "pushed",
 
-  after: commit.sha,
+    commit: {
+      sha: commit.sha,
 
-  head_commit: {
-    id: commit.sha,
-    message:
-      commit.commit?.message || "",
-    author:
-      commit.commit?.author || null,
-    url: commit.html_url,
-  },
+      message:
+        commit.commit?.message ||
+        "",
 
-  repository: {
-    id: repository.id,
-    name: repository.name,
-    full_name:
-      repository.full_name,
-    html_url:
-      repository.html_url,
-  },
-});
+      author:
+        commit.commit?.author ||
+        null,
 
-const buildReleasePayload = ({
+      committer:
+        commit.commit?.committer ||
+        null,
+
+      html_url:
+        commit.html_url,
+
+      author_user:
+        commit.author
+          ? {
+              login:
+                commit.author.login,
+              id:
+                commit.author.id,
+            }
+          : null,
+    },
+  };
+};
+
+const buildReleasePayload = (
   release,
-  repository,
-  action,
-}) => ({
-  event: "release",
-  action,
+  action
+) => {
+  return {
+    event: "release",
+    action: action || null,
 
-  release: {
-    id: release.id,
-    name: release.name,
-    tag_name: release.tag_name,
-    body: release.body,
-    draft: release.draft,
-    prerelease: release.prerelease,
-    html_url: release.html_url,
-  },
+    release: {
+      id: release.id,
+      name: release.name,
+      tag_name:
+        release.tag_name,
 
-  repository: {
-    id: repository.id,
-    name: repository.name,
-    full_name:
-      repository.full_name,
-    html_url:
-      repository.html_url,
-  },
-});
+      body: release.body,
+
+      draft: release.draft,
+      prerelease:
+        release.prerelease,
+
+      html_url:
+        release.html_url,
+
+      created_at:
+        release.created_at,
+
+      published_at:
+        release.published_at,
+    },
+  };
+};
 
 const testGithubTrigger = async ({
   integrationId,
@@ -271,148 +245,232 @@ const testGithubTrigger = async ({
   event,
   action,
 }) => {
-  const { token } =
-    await getGithubIntegration({
-      integrationId,
-      workspaceId,
-      userId,
-    });
+  /*
+   * IMPORTANT:
+   *
+   * Integration.credentials has:
+   *
+   * select: false
+   *
+   * in the Mongoose schema.
+   *
+   * Therefore we must explicitly select
+   * credentials here.
+   */
+  const integration =
+    await Integration.findOne({
+      _id: integrationId,
 
-  const { owner, repo } =
-    validateRepository(repository);
+      provider: "github",
 
-  const baseUrl =
-    `https://api.github.com/repos/${encodeURIComponent(
-      owner
-    )}/${encodeURIComponent(repo)}`;
+      owner: userId,
 
-  const repositoryData =
-    await githubRequest(
-      baseUrl,
-      token
+      workspace: workspaceId,
+
+      status: "connected",
+    }).select("+credentials");
+
+  if (!integration) {
+    throw new Error(
+      "GitHub integration not found"
     );
+  }
+
+  if (!integration.credentials) {
+    throw new Error(
+      "GitHub credentials are not configured"
+    );
+  }
+
+  let credentials;
+
+  try {
+    credentials =
+      decryptCredentials(
+        integration.credentials
+      );
+  } catch (error) {
+    throw new Error(
+      "Failed to decrypt GitHub credentials"
+    );
+  }
+
+  if (!credentials?.token) {
+    throw new Error(
+      "GitHub token is missing"
+    );
+  }
+
+  const {
+    owner,
+    repo,
+  } =
+    validateRepository(
+      repository
+    );
+
+  if (!event) {
+    throw new Error(
+      "GitHub event is required"
+    );
+  }
+
+  let payload;
 
   switch (event) {
     case "issues": {
+      const url =
+        `https://api.github.com/repos/${owner}/${repo}/issues` +
+        `?state=all&per_page=10`;
+
       const issues =
         await githubRequest(
-          `${baseUrl}/issues?state=all&per_page=10`,
-          token
+          url,
+          credentials.token
         );
 
-      const issue = issues.find(
-        (item) => !item.pull_request
-      );
+      /*
+       * GitHub's issues endpoint can also
+       * return pull requests.
+       *
+       * We only want actual issues here.
+       */
+      const issue =
+        issues.find(
+          (item) =>
+            !item.pull_request
+        );
 
       if (!issue) {
-        const error = new Error(
+        throw new Error(
           "No GitHub issue found in this repository"
         );
-
-        error.statusCode = 404;
-
-        throw error;
       }
 
-      return buildIssuePayload({
-        issue,
-        repository: repositoryData,
-        action,
-      });
+      payload =
+        buildIssuePayload(
+          issue,
+          action
+        );
+
+      break;
     }
 
     case "pull_request": {
+      const url =
+        `https://api.github.com/repos/${owner}/${repo}/pulls` +
+        `?state=all&per_page=10`;
+
       const pullRequests =
         await githubRequest(
-          `${baseUrl}/pulls?state=all&per_page=10`,
-          token
+          url,
+          credentials.token
         );
 
       const pullRequest =
         pullRequests[0];
 
       if (!pullRequest) {
-        const error = new Error(
+        throw new Error(
           "No pull request found in this repository"
         );
-
-        error.statusCode = 404;
-
-        throw error;
       }
 
-      return buildPullRequestPayload({
-        pullRequest,
-        repository:
-          repositoryData,
-        action,
-      });
+      payload =
+        buildPullRequestPayload(
+          pullRequest,
+          action
+        );
+
+      break;
     }
 
     case "push": {
+      const url =
+        `https://api.github.com/repos/${owner}/${repo}/commits` +
+        `?per_page=1`;
+
       const commits =
         await githubRequest(
-          `${baseUrl}/commits?per_page=1`,
-          token
+          url,
+          credentials.token
         );
 
-      const commit = commits[0];
+      const commit =
+        commits[0];
 
       if (!commit) {
-        const error = new Error(
+        throw new Error(
           "No commit found in this repository"
         );
-
-        error.statusCode = 404;
-
-        throw error;
       }
 
-      return buildPushPayload({
-        commit,
-        repository:
-          repositoryData,
-        action,
-      });
+      payload =
+        buildPushPayload(
+          commit,
+          action
+        );
+
+      break;
     }
 
     case "release": {
+      const url =
+        `https://api.github.com/repos/${owner}/${repo}/releases` +
+        `?per_page=10`;
+
       const releases =
         await githubRequest(
-          `${baseUrl}/releases?per_page=10`,
-          token
+          url,
+          credentials.token
         );
 
-      const release = releases[0];
+      const release =
+        releases[0];
 
       if (!release) {
-        const error = new Error(
-          "No release found in this repository"
+        throw new Error(
+          "No GitHub release found in this repository"
         );
-
-        error.statusCode = 404;
-
-        throw error;
       }
 
-      return buildReleasePayload({
-        release,
-        repository:
-          repositoryData,
-        action,
-      });
+      payload =
+        buildReleasePayload(
+          release,
+          action
+        );
+
+      break;
     }
 
-    default: {
-      const error = new Error(
+    default:
+      throw new Error(
         `Unsupported GitHub event: ${event}`
       );
-
-      error.statusCode = 400;
-
-      throw error;
-    }
   }
+
+  return {
+    integrationId:
+      integration._id,
+
+    provider: "github",
+
+    repository: {
+      owner,
+      name: repo,
+      fullName:
+        `${owner}/${repo}`,
+    },
+
+    event,
+
+    action: action || null,
+
+    payload,
+
+    testedAt:
+      new Date().toISOString(),
+  };
 };
 
 module.exports = {
