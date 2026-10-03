@@ -89,13 +89,13 @@ const webhookRateLimiter = rateLimit({
 
 app.use("/api", apiRateLimiter);
 
-const clientUrl = process.env.CLIENT_URL;
+const clientUrl = process.env.CLIENT_URL?.replace(/\/$/, "");
 
 if (!clientUrl) {
   throw new Error("CLIENT_URL is not configured");
 }
 
-const allowedOrigins = [clientUrl].filter(Boolean);
+const allowedOrigins = [clientUrl];
 
 app.use(
   cors({

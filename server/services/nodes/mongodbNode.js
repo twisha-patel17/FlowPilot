@@ -292,6 +292,21 @@ const executeMongoDBNode = async (
         safeCollectionName
       );
 
+    // Temporary safe diagnostic logging.
+    // Does not log the MongoDB URI or credentials.
+    console.log(
+      "MongoDB connection target:",
+      {
+        database: safeDatabaseName,
+        collection: safeCollectionName,
+        operation,
+        host:
+          client.options?.hosts?.map(
+            (host) => host.toString()
+          ),
+      }
+    );
+
     const mongoOptions =
       context.signal
         ? {
