@@ -313,6 +313,120 @@ const GithubConfig = ({
     ),
   ];
 
+  /*
+   * GitHub actions depend on the selected event.
+   */
+  const actionOptions = {
+    issues: [
+      {
+        value: "opened",
+        label: "Opened",
+      },
+      {
+        value: "closed",
+        label: "Closed",
+      },
+      {
+        value: "edited",
+        label: "Edited",
+      },
+      {
+        value: "reopened",
+        label: "Reopened",
+      },
+    ],
+
+    pull_request: [
+      {
+        value: "opened",
+        label: "Opened",
+      },
+      {
+        value: "closed",
+        label: "Closed",
+      },
+      {
+        value: "edited",
+        label: "Edited",
+      },
+      {
+        value: "reopened",
+        label: "Reopened",
+      },
+    ],
+
+    push: [
+      {
+        value: "pushed",
+        label: "Pushed",
+      },
+    ],
+
+    release: [
+      {
+        value: "published",
+        label: "Published",
+      },
+      {
+        value: "unpublished",
+        label: "Unpublished",
+      },
+      {
+        value: "created",
+        label: "Created",
+      },
+      {
+        value: "edited",
+        label: "Edited",
+      },
+      {
+        value: "deleted",
+        label: "Deleted",
+      },
+      {
+        value: "prereleased",
+        label: "Prereleased",
+      },
+      {
+        value: "released",
+        label: "Released",
+      },
+    ],
+  };
+
+  const selectedEvent =
+    config.event || "issues";
+
+  const currentActionOptions =
+    actionOptions[selectedEvent] ||
+    actionOptions.issues;
+
+  /*
+   * Make sure an action from a previously
+   * selected event doesn't remain invalid.
+   */
+  const selectedAction =
+    currentActionOptions.some(
+      (option) =>
+        option.value === config.action
+    )
+      ? config.action
+      : currentActionOptions[0]
+          ?.value || "";
+
+  const handleEventChange =
+    (value) => {
+      const nextActions =
+        actionOptions[value] ||
+        actionOptions.issues;
+
+      const nextAction =
+        nextActions[0]?.value || "";
+
+      onChange("event", value);
+      onChange("action", nextAction);
+    };
+
   const testMutation =
     useMutation({
       mutationFn:
@@ -326,9 +440,24 @@ const GithubConfig = ({
       },
 
       onError: (error) => {
+        /*
+         * Log the actual backend response
+         * instead of only AxiosError: 400.
+         */
         console.error(
           "GitHub trigger test failed:",
-          error
+          error.response?.data ||
+            error.message
+        );
+
+        console.error(
+          "GitHub trigger status:",
+          error.response?.status
+        );
+
+        console.error(
+          "GitHub trigger request:",
+          error.config
         );
       },
     });
@@ -343,7 +472,7 @@ const GithubConfig = ({
         return;
       }
 
-      if (!config.repository) {
+      if (!config.repository?.trim()) {
         return;
       }
 
@@ -355,10 +484,10 @@ const GithubConfig = ({
           config.repository.trim(),
 
         event:
-          config.event || "issues",
+          selectedEvent,
 
         action:
-          config.action || "opened",
+          selectedAction,
 
         workspaceId,
       });
@@ -424,11 +553,9 @@ const GithubConfig = ({
       <Field
         label="Event"
         type="select"
-        value={
-          config.event || "issues"
-        }
-        onChange={(value) =>
-          onChange("event", value)
+        value={selectedEvent}
+        onChange={
+          handleEventChange
         }
         options={[
           {
@@ -453,30 +580,16 @@ const GithubConfig = ({
       <Field
         label="Action"
         type="select"
-        value={
-          config.action || "opened"
-        }
+        value={selectedAction}
         onChange={(value) =>
-          onChange("action", value)
+          onChange(
+            "action",
+            value
+          )
         }
-        options={[
-          {
-            value: "opened",
-            label: "Opened",
-          },
-          {
-            value: "closed",
-            label: "Closed",
-          },
-          {
-            value: "edited",
-            label: "Edited",
-          },
-          {
-            value: "reopened",
-            label: "Reopened",
-          },
-        ]}
+        options={
+          currentActionOptions
+        }
       />
 
       <TestButton
@@ -514,6 +627,9 @@ const GithubConfig = ({
             {testMutation.error
               ?.response?.data
               ?.message ||
+              testMutation.error
+                ?.response?.data
+                ?.error ||
               testMutation.error
                 ?.message ||
               "GitHub trigger test failed."}
