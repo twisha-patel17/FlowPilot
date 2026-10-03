@@ -33,9 +33,17 @@ const WORKFLOW_TIMEOUT =
   Number(process.env.WORKFLOW_TIMEOUT_MS) ||
   5 * 60 * 1000;
 
+/* =========================================================
+   WORKFLOW GRAPH VALIDATION
+========================================================= */
+
 const validateWorkflowGraph = (nodes, edges) => {
   if (!Array.isArray(nodes) || nodes.length === 0) {
     throw new Error("Workflow has no nodes");
+  }
+
+  if (!Array.isArray(edges)) {
+    throw new Error("Workflow edges are invalid");
   }
 
   const nodeIds = new Set();
@@ -99,6 +107,10 @@ const validateWorkflowGraph = (nodes, edges) => {
   return startNodes[0];
 };
 
+/* =========================================================
+   ERROR HELPERS
+========================================================= */
+
 const createTimeoutError = () => {
   const error = new Error(
     "Workflow execution timed out"
@@ -136,6 +148,10 @@ const throwIfCancelled = (signal) => {
   }
 };
 
+/* =========================================================
+   TIMEOUT
+========================================================= */
+
 const withTimeout = (
   promise,
   timeoutMs,
@@ -165,6 +181,10 @@ const withTimeout = (
     clearTimeout(timeoutId);
   });
 };
+
+/* =========================================================
+   EXECUTION STEP HELPERS
+========================================================= */
 
 const appendStep = async (
   executionId,
@@ -222,6 +242,10 @@ const getLatestExecution = async (
 ) => {
   return Execution.findById(executionId);
 };
+
+/* =========================================================
+   SIDE EFFECT / IDEMPOTENCY
+========================================================= */
 
 const isSideEffectNode = (nodeType) => {
   return [
@@ -305,6 +329,10 @@ const completeExecutionEffect = async (
   );
 };
 
+/* =========================================================
+   EXECUTION CONTEXT
+========================================================= */
+
 const buildExecutionContext = (
   execution,
   currentInput
@@ -327,6 +355,10 @@ const buildExecutionContext = (
     steps,
   };
 };
+
+/* =========================================================
+   MAIN WORKFLOW EXECUTOR
+========================================================= */
 
 const executeWorkflow = async (
   executionId,
@@ -352,6 +384,10 @@ const executeWorkflow = async (
   let registered = false;
 
   try {
+    /* =====================================================
+       LOAD EXECUTION
+    ===================================================== */
+
     let execution =
       await Execution.findById(
         executionId
@@ -362,6 +398,14 @@ const executeWorkflow = async (
         "Execution not found"
       );
     }
+
+    console.log(
+      `\n========== EXECUTION START ==========\n` +
+        `Execution ID: ${executionId}\n` +
+        `Attempt: ${currentAttempt}\n` +
+        `Status: ${execution.status}\n` +
+        `====================================`
+    );
 
     /*
      * Backward compatibility for executions
@@ -414,6 +458,10 @@ const executeWorkflow = async (
       return execution;
     }
 
+    /* =====================================================
+       WORKSPACE CONCURRENCY
+    ===================================================== */
+
     concurrencySlot =
       await acquireWorkspaceConcurrencySlot(
         execution.workspace,
@@ -436,6 +484,10 @@ const executeWorkflow = async (
         `Execution: ${executionId}`
     );
 
+    /* =====================================================
+       EXECUTION LOCK
+    ===================================================== */
+
     lock =
       await acquireExecutionLock(
         executionId
@@ -455,6 +507,10 @@ const executeWorkflow = async (
     console.log(
       `Execution lock acquired: ${executionId}`
     );
+
+    /* =====================================================
+       RELOAD EXECUTION
+    ===================================================== */
 
     execution =
       await Execution.findById(
@@ -501,6 +557,10 @@ const executeWorkflow = async (
 
       return execution;
     }
+
+    /* =====================================================
+       ATOMIC EXECUTION CLAIM
+    ===================================================== */
 
     const claimedExecution =
       await Execution.findOneAndUpdate(
@@ -567,6 +627,14 @@ const executeWorkflow = async (
     execution =
       claimedExecution;
 
+    console.log(
+      `Execution claimed successfully: ${executionId}`
+    );
+
+    /* =====================================================
+       REGISTER CANCELLATION
+    ===================================================== */
+
     registerExecution(
       executionId,
       controller
@@ -603,6 +671,10 @@ const executeWorkflow = async (
       execution
     );
 
+    /* =====================================================
+       WORKFLOW SNAPSHOT
+    ===================================================== */
+
     const workflow =
       execution.workflowSnapshot;
 
@@ -633,17 +705,138 @@ const executeWorkflow = async (
         ? workflow.edges
         : [];
 
-    let currentNode =
-      validateWorkflowGraph(
+    /* =====================================================
+       DEBUG WORKFLOW GRAPH
+    ===================================================== */
+
+    console.log(
+      "\n========== WORKFLOW GRAPH DEBUG =========="
+    );
+
+    console.log(
+      "Workflow:",
+      workflow.name
+    );
+
+    console.log(
+      "Workflow ID:",
+      workflow._id
+    );
+
+    console.log(
+      "Node count:",
+      nodes.length
+    );
+
+    console.log(
+      "Edge count:",
+      edges.length
+    );
+
+    console.log(
+      "Nodes:",
+      JSON.stringify(
         nodes,
-        edges
+        null,
+        2
+      )
+    );
+
+    console.log(
+      "Edges:",
+      JSON.stringify(
+        edges,
+        null,
+        2
+      )
+    );
+
+    console.log(
+      "==========================================\n"
+    );
+
+    /* =====================================================
+       GRAPH VALIDATION
+    ===================================================== */
+
+    let currentNode;
+
+    try {
+      currentNode =
+        validateWorkflowGraph(
+          nodes,
+          edges
+        );
+    } catch (graphError) {
+      console.error(
+        "\n========== GRAPH VALIDATION FAILED =========="
       );
+
+      console.error(
+        "Error:",
+        graphError.message
+      );
+
+      console.error(
+        "Nodes:",
+        JSON.stringify(
+          nodes,
+          null,
+          2
+        )
+      );
+
+      console.error(
+        "Edges:",
+        JSON.stringify(
+          edges,
+          null,
+          2
+        )
+      );
+
+      console.error(
+        "=============================================\n"
+      );
+
+      throw graphError;
+    }
+
+    console.log(
+      "Starting node detected:",
+      currentNode.id
+    );
+
+    console.log(
+      "Starting node type:",
+      currentNode.data?.type ||
+        currentNode.data?.nodeType ||
+        currentNode.type ||
+        "unknown"
+    );
+
+    /* =====================================================
+       INITIAL INPUT
+    ===================================================== */
 
     let input =
       execution.input || {};
 
+    console.log(
+      "Initial execution input:",
+      JSON.stringify(
+        input,
+        null,
+        2
+      )
+    );
+
     const visitedNodes =
       new Set();
+
+    /* =====================================================
+       WORKFLOW LOOP
+    ===================================================== */
 
     while (currentNode) {
       throwIfCancelled(signal);
@@ -705,6 +898,10 @@ const executeWorkflow = async (
         duration: 0,
       };
 
+      /* ===================================================
+         CREATE STEP
+      =================================================== */
+
       const stepCreated =
         await appendStep(
           executionId,
@@ -730,6 +927,10 @@ const executeWorkflow = async (
         );
       }
 
+      console.log(
+        `Step created successfully: ${currentNode.id}`
+      );
+
       execution =
         await getLatestExecution(
           executionId
@@ -746,6 +947,10 @@ const executeWorkflow = async (
       );
 
       throwIfCancelled(signal);
+
+      /* ===================================================
+         TIME REMAINING
+      =================================================== */
 
       const elapsed =
         Date.now() -
@@ -789,6 +994,10 @@ const executeWorkflow = async (
         throw timeoutError;
       }
 
+      /* ===================================================
+         EXECUTION CONTEXT
+      =================================================== */
+
       const executionContext =
         buildExecutionContext(
           execution,
@@ -807,14 +1016,19 @@ const executeWorkflow = async (
           executionContext
         );
 
-      /*
-       * IMPORTANT:
-       * Idempotency is scoped to the logical
-       * side-effect lifecycle, not the execution ID.
-       *
-       * Manual retries inherit effectScopeId.
-       * Replays receive a new effectScopeId.
-       */
+      console.log(
+        `Resolved input for ${currentNode.id}:`,
+        JSON.stringify(
+          resolvedInput,
+          null,
+          2
+        )
+      );
+
+      /* ===================================================
+         IDEMPOTENCY
+      =================================================== */
+
       const idempotencyKey =
         createIdempotencyKey(
           execution.effectScopeId.toString(),
@@ -915,9 +1129,17 @@ const executeWorkflow = async (
         );
       }
 
+      /* ===================================================
+         EXECUTE NODE
+      =================================================== */
+
       let result;
 
       try {
+        console.log(
+          `Calling node executor: ${nodeType}`
+        );
+
         result =
           await withTimeout(
             executeNode(
@@ -939,6 +1161,15 @@ const executeWorkflow = async (
             controller
           );
 
+        console.log(
+          `Node executor result for ${currentNode.id}:`,
+          JSON.stringify(
+            result,
+            null,
+            2
+          )
+        );
+
         throwIfCancelled(signal);
 
         if (
@@ -950,6 +1181,10 @@ const executeWorkflow = async (
               `Node execution failed: ${currentNode.id}`
           );
         }
+
+        /* ===============================================
+           COMPLETE SIDE EFFECT
+        =============================================== */
 
         if (isSideEffectNode(nodeType)) {
           const completedEffect =
@@ -966,6 +1201,10 @@ const executeWorkflow = async (
             );
           }
         }
+
+        /* ===============================================
+           UPDATE STEP
+        =============================================== */
 
         const stepUpdated =
           await updateStep(
@@ -1018,6 +1257,10 @@ const executeWorkflow = async (
 
         input =
           result.output || {};
+
+        console.log(
+          `Node completed successfully: ${currentNode.id}`
+        );
       } catch (error) {
         if (
           signal.aborted
@@ -1041,6 +1284,11 @@ const executeWorkflow = async (
                 ? "Workflow execution timed out"
                 : error.message ||
                   "Node execution failed";
+
+        console.error(
+          `Node execution failed: ${currentNode.id}`,
+          error
+        );
 
         await updateStep(
           executionId,
@@ -1069,6 +1317,10 @@ const executeWorkflow = async (
         throw error;
       }
 
+      /* ===================================================
+         POST-NODE CHECKS
+      =================================================== */
+
       throwIfCancelled(signal);
 
       if (
@@ -1081,6 +1333,10 @@ const executeWorkflow = async (
         throw createTimeoutError();
       }
 
+      /* ===================================================
+         BRANCH RESOLUTION
+      =================================================== */
+
       const branch =
         nodeType === "condition"
           ? resolveBranch(result)
@@ -1089,6 +1345,29 @@ const executeWorkflow = async (
                 ?.selectedHandle || null
             : null;
 
+      if (
+        nodeType === "condition"
+      ) {
+        console.log(
+          `Condition result:`,
+          result.conditionResult
+        );
+
+        console.log(
+          `Condition branch:`,
+          branch
+        );
+      }
+
+      if (
+        nodeType === "switch"
+      ) {
+        console.log(
+          `Switch branch:`,
+          branch
+        );
+      }
+
       const outgoingEdges =
         getOutgoingEdges(
           edges,
@@ -1096,8 +1375,21 @@ const executeWorkflow = async (
           branch
         );
 
+      console.log(
+        `Outgoing edges from ${currentNode.id}:`,
+        JSON.stringify(
+          outgoingEdges,
+          null,
+          2
+        )
+      );
+
       let nextEdge =
         outgoingEdges[0] || null;
+
+      /* ===================================================
+         CONDITION
+      =================================================== */
 
       if (
         nodeType === "condition"
@@ -1127,6 +1419,10 @@ const executeWorkflow = async (
         }
       }
 
+      /* ===================================================
+         SWITCH
+      =================================================== */
+
       if (
         nodeType === "switch"
       ) {
@@ -1146,10 +1442,22 @@ const executeWorkflow = async (
         }
       }
 
+      /* ===================================================
+         NEXT NODE
+      =================================================== */
+
       if (!nextEdge) {
+        console.log(
+          `No outgoing edge from node: ${currentNode.id}`
+        );
+
         currentNode = null;
         continue;
       }
+
+      console.log(
+        `Next edge: ${nextEdge.source} -> ${nextEdge.target}`
+      );
 
       currentNode =
         nodes.find(
@@ -1163,7 +1471,15 @@ const executeWorkflow = async (
           `Next node not found: ${nextEdge.target}`
         );
       }
+
+      console.log(
+        `Next node selected: ${currentNode.id}`
+      );
     }
+
+    /* =====================================================
+       FINAL EXECUTION CHECK
+    ===================================================== */
 
     throwIfCancelled(signal);
 
@@ -1176,6 +1492,10 @@ const executeWorkflow = async (
 
       throw createTimeoutError();
     }
+
+    /* =====================================================
+       MARK EXECUTION SUCCESS
+    ===================================================== */
 
     const completedExecution =
       await Execution.findOneAndUpdate(
@@ -1222,17 +1542,23 @@ const executeWorkflow = async (
     );
 
     console.log(
-      `Workflow completed successfully: ` +
-        `${workflow.name} | ` +
-        `Attempt: ${currentAttempt} | ` +
+      `\n========== WORKFLOW SUCCESS ==========\n` +
+        `Workflow: ${workflow.name}\n` +
+        `Execution: ${executionId}\n` +
+        `Attempt: ${currentAttempt}\n` +
         `Duration: ${
           Date.now() -
           workflowStartedAt
-        }ms`
+        }ms\n` +
+        `=====================================\n`
     );
 
     return execution;
   } catch (error) {
+    /* =====================================================
+       CONCURRENCY LIMIT
+    ===================================================== */
+
     if (
       error.code ===
       "WORKSPACE_CONCURRENCY_LIMIT"
@@ -1244,6 +1570,10 @@ const executeWorkflow = async (
 
       throw error;
     }
+
+    /* =====================================================
+       CANCELLATION
+    ===================================================== */
 
     if (
       error.code ===
@@ -1306,6 +1636,10 @@ const executeWorkflow = async (
       throw error;
     }
 
+    /* =====================================================
+       EXECUTION LOCK
+    ===================================================== */
+
     if (
       error.code ===
       "EXECUTION_LOCKED"
@@ -1318,6 +1652,10 @@ const executeWorkflow = async (
 
       throw error;
     }
+
+    /* =====================================================
+       GENERAL FAILURE
+    ===================================================== */
 
     const latestExecution =
       await getLatestExecution(
@@ -1336,10 +1674,33 @@ const executeWorkflow = async (
     }
 
     console.error(
-      `Workflow execution error | ` +
-        `Attempt: ${currentAttempt}:`,
-      error
+      "\n========== WORKFLOW EXECUTION ERROR =========="
     );
+
+    console.error(
+      `Execution: ${executionId}`
+    );
+
+    console.error(
+      `Attempt: ${currentAttempt}`
+    );
+
+    console.error(
+      `Error: ${error.message}`
+    );
+
+    console.error(
+      error.stack
+    );
+
+    console.error(
+      "==============================================\n"
+    );
+
+    /* =====================================================
+       IMPORTANT FIX:
+       MARK EXECUTION AS FAILED
+    ===================================================== */
 
     const failedExecution =
       await Execution.findOneAndUpdate(
@@ -1355,9 +1716,12 @@ const executeWorkflow = async (
         },
         {
           $set: {
+            status: "failed",
             error:
               error.message ||
               "Workflow execution failed",
+            finishedAt:
+              new Date(),
           },
         },
         {
@@ -1369,15 +1733,31 @@ const executeWorkflow = async (
       emitExecutionUpdate(
         failedExecution
       );
+
+      console.log(
+        `Execution marked as failed: ${executionId}`
+      );
+    } else {
+      console.log(
+        `Could not mark execution as failed because execution state changed: ${executionId}`
+      );
     }
 
     throw error;
   } finally {
+    /* =====================================================
+       UNREGISTER CANCELLATION
+    ===================================================== */
+
     if (registered) {
       unregisterExecution(
         executionId
       );
     }
+
+    /* =====================================================
+       RELEASE EXECUTION LOCK
+    ===================================================== */
 
     if (lock) {
       try {
@@ -1398,6 +1778,10 @@ const executeWorkflow = async (
       }
     }
 
+    /* =====================================================
+       RELEASE WORKSPACE SLOT
+    ===================================================== */
+
     if (concurrencySlot) {
       try {
         await releaseWorkspaceConcurrencySlot(
@@ -1417,6 +1801,10 @@ const executeWorkflow = async (
         );
       }
     }
+
+    console.log(
+      `========== EXECUTION END: ${executionId} ==========\n`
+    );
   }
 };
 
