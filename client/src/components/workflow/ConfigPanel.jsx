@@ -14,10 +14,14 @@ import {
   FiDatabase,
 } from "react-icons/fi";
 
-import { useQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+} from "@tanstack/react-query";
 
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { getIntegrations } from "../../api/integrationApi";
+import { testGitHubTrigger } from "../../api/githubApi";
 
 const nodeIcons = {
   manual: FiZap,
@@ -77,7 +81,8 @@ const ConfigPanel = ({
     selectedNode.data?.nodeType ||
     selectedNode.type;
 
-  const Icon = nodeIcons[nodeType] || FiZap;
+  const Icon =
+    nodeIcons[nodeType] || FiZap;
 
   const config =
     selectedNode.data?.config || {};
@@ -247,6 +252,10 @@ const ConfigPanel = ({
   );
 };
 
+/* =========================================================
+   GITHUB
+========================================================= */
+
 const GithubConfig = ({
   config,
   onChange,
@@ -277,8 +286,10 @@ const GithubConfig = ({
   const githubIntegrations =
     data?.integrations?.filter(
       (integration) =>
-        integration.provider === "github" &&
-        integration.status === "connected"
+        integration.provider ===
+          "github" &&
+        integration.status ===
+          "connected"
     ) || [];
 
   const connectionOptions = [
@@ -286,7 +297,8 @@ const GithubConfig = ({
       value: "",
       label: isLoading
         ? "Loading GitHub connections..."
-        : githubIntegrations.length === 0
+        : githubIntegrations.length ===
+            0
           ? "No GitHub connections"
           : "Select GitHub connection",
     },
@@ -300,6 +312,62 @@ const GithubConfig = ({
       })
     ),
   ];
+
+  const testMutation =
+    useMutation({
+      mutationFn:
+        testGitHubTrigger,
+
+      onSuccess: (response) => {
+        console.log(
+          "GitHub test payload:",
+          response?.payload
+        );
+      },
+
+      onError: (error) => {
+        console.error(
+          "GitHub trigger test failed:",
+          error
+        );
+      },
+    });
+
+  const handleTestTrigger =
+    () => {
+      if (!workspaceId) {
+        return;
+      }
+
+      if (!config.integrationId) {
+        return;
+      }
+
+      if (!config.repository) {
+        return;
+      }
+
+      testMutation.mutate({
+        integrationId:
+          config.integrationId,
+
+        repository:
+          config.repository.trim(),
+
+        event:
+          config.event || "issues",
+
+        action:
+          config.action || "opened",
+
+        workspaceId,
+      });
+    };
+
+  const canTest =
+    !!workspaceId &&
+    !!config.integrationId &&
+    !!config.repository?.trim();
 
   return (
     <div className="space-y-5">
@@ -332,7 +400,8 @@ const GithubConfig = ({
 
       {!isLoading &&
         !isError &&
-        githubIntegrations.length === 0 && (
+        githubIntegrations.length ===
+          0 && (
           <NoConnectionMessage
             provider="GitHub"
           />
@@ -410,10 +479,54 @@ const GithubConfig = ({
         ]}
       />
 
-      <TestButton />
+      <TestButton
+        onClick={
+          handleTestTrigger
+        }
+        isLoading={
+          testMutation.isPending
+        }
+        disabled={!canTest}
+      />
+
+      {testMutation.isSuccess && (
+        <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-500/70">
+            Test successful
+          </p>
+
+          <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+            GitHub returned a test
+            event successfully.
+            Open the browser console
+            to inspect the payload.
+          </p>
+        </div>
+      )}
+
+      {testMutation.isError && (
+        <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-red-400">
+            Test failed
+          </p>
+
+          <p className="mt-1 text-[11px] leading-5 text-red-400/80">
+            {testMutation.error
+              ?.response?.data
+              ?.message ||
+              testMutation.error
+                ?.message ||
+              "GitHub trigger test failed."}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
+
+/* =========================================================
+   WEBHOOK
+========================================================= */
 
 const WebhookConfig = ({
   config,
@@ -472,6 +585,10 @@ const WebhookConfig = ({
     </div>
   );
 };
+
+/* =========================================================
+   SCHEDULE
+========================================================= */
 
 const ScheduleConfig = ({
   config,
@@ -679,6 +796,10 @@ const ScheduleConfig = ({
   );
 };
 
+/* =========================================================
+   MANUAL
+========================================================= */
+
 const ManualConfig = () => {
   return (
     <div className="space-y-5">
@@ -697,6 +818,10 @@ const ManualConfig = () => {
   );
 };
 
+/* =========================================================
+   FILTER
+========================================================= */
+
 const FilterConfig = ({
   config,
   onChange,
@@ -714,7 +839,7 @@ const FilterConfig = ({
         onChange={(value) =>
           onChange("field", value)
         }
-        placeholder="issue.priority"
+        placeholder="issue.labels"
       />
 
       <Field
@@ -769,11 +894,15 @@ const FilterConfig = ({
         onChange={(value) =>
           onChange("value", value)
         }
-        placeholder="Enter value"
+        placeholder="priority:high"
       />
     </div>
   );
 };
+
+/* =========================================================
+   CONDITION
+========================================================= */
 
 const ConditionConfig = ({
   config,
@@ -850,6 +979,10 @@ const ConditionConfig = ({
   );
 };
 
+/* =========================================================
+   SWITCH
+========================================================= */
+
 const SwitchConfig = ({
   config,
   onChange,
@@ -894,6 +1027,10 @@ const SwitchConfig = ({
     </div>
   );
 };
+
+/* =========================================================
+   DELAY
+========================================================= */
 
 const DelayConfig = ({
   config,
@@ -952,6 +1089,10 @@ const DelayConfig = ({
     </div>
   );
 };
+
+/* =========================================================
+   DISCORD
+========================================================= */
 
 const DiscordConfig = ({
   config,
@@ -1090,6 +1231,10 @@ const DiscordConfig = ({
     </div>
   );
 };
+
+/* =========================================================
+   EMAIL
+========================================================= */
 
 const EmailConfig = ({
   config,
@@ -1237,6 +1382,10 @@ const EmailConfig = ({
     </div>
   );
 };
+
+/* =========================================================
+   HTTP
+========================================================= */
 
 const HttpConfig = ({
   config,
@@ -1664,6 +1813,10 @@ const MongoConfig = ({
   );
 };
 
+/* =========================================================
+   GENERIC
+========================================================= */
+
 const GenericConfig = ({
   selectedNode,
 }) => {
@@ -1685,7 +1838,15 @@ const GenericConfig = ({
   );
 };
 
-const TestButton = () => {
+/* =========================================================
+   TEST BUTTON
+========================================================= */
+
+const TestButton = ({
+  onClick,
+  isLoading = false,
+  disabled = false,
+}) => {
   return (
     <div className="border-t border-zinc-800/70 pt-5">
       <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-600">
@@ -1694,13 +1855,23 @@ const TestButton = () => {
 
       <button
         type="button"
-        className="mt-3 h-9 w-full rounded-md border border-zinc-800 bg-zinc-900 text-xs font-medium text-zinc-200 transition hover:bg-zinc-800"
+        onClick={onClick}
+        disabled={
+          disabled || isLoading
+        }
+        className="mt-3 h-9 w-full rounded-md border border-zinc-800 bg-zinc-900 text-xs font-medium text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        Test Trigger
+        {isLoading
+          ? "Testing GitHub..."
+          : "Test Trigger"}
       </button>
     </div>
   );
 };
+
+/* =========================================================
+   SECTION TITLE
+========================================================= */
 
 const SectionTitle = ({
   label,
@@ -1719,6 +1890,10 @@ const SectionTitle = ({
   );
 };
 
+/* =========================================================
+   ERROR
+========================================================= */
+
 const ErrorMessage = ({
   children,
 }) => {
@@ -1728,6 +1903,10 @@ const ErrorMessage = ({
     </p>
   );
 };
+
+/* =========================================================
+   NO CONNECTION
+========================================================= */
 
 const NoConnectionMessage = ({
   provider,
@@ -1746,6 +1925,10 @@ const NoConnectionMessage = ({
     </div>
   );
 };
+
+/* =========================================================
+   FIELD
+========================================================= */
 
 const Field = ({
   label,
@@ -1802,6 +1985,10 @@ const Field = ({
     </div>
   );
 };
+
+/* =========================================================
+   TEXTAREA
+========================================================= */
 
 const TextareaField = ({
   label,

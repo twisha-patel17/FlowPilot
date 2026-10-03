@@ -6,6 +6,7 @@ const executeConditionNode = require("./conditionNode");
 const executeMongoDBNode = require("./mongodbNode");
 const executeDelayNode = require("./delayNode");
 const executeSwitchNode = require("./switchNode");
+const executeGitHubNode = require("./githubNode");
 
 const executeManualNode = async (
   node,
@@ -83,6 +84,7 @@ const NODE_EXECUTORS = Object.freeze({
   condition: executeConditionNode,
   delay: executeDelayNode,
   switch: executeSwitchNode,
+  github: executeGitHubNode,
 });
 
 const executeNode = async (
