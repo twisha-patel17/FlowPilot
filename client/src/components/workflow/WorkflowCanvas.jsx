@@ -381,66 +381,41 @@ const WorkflowCanvas = ({
       };
     });
 
-  /*
-   * NODE CHANGES
-   *
-   * Important:
-   * When a node is deleted, remove every edge
-   * connected to that node as well.
-   */
-  const handleNodesChange =
-    useCallback(
-      (changes) => {
-        const updatedNodes =
-          applyNodeChanges(
-            changes,
-            initialNodes
-          );
-
-        const removedNodeIds =
-          new Set(
-            changes
-              .filter(
-                (change) =>
-                  change.type === "remove"
-              )
-              .map(
-                (change) =>
-                  change.id
-              )
-          );
-
-        let updatedEdges =
-          initialEdges;
-
-        if (
-          removedNodeIds.size > 0
-        ) {
-          updatedEdges =
-            initialEdges.filter(
-              (edge) =>
-                !removedNodeIds.has(
-                  edge.source
-                ) &&
-                !removedNodeIds.has(
-                  edge.target
-                )
-            );
-        }
-
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            updatedNodes,
-            updatedEdges
-          );
-        }
-      },
-      [
-        initialNodes,
-        initialEdges,
-        onWorkflowChange,
-      ]
+const handleNodesChange = useCallback(
+  (changes) => {
+    const updatedNodes = applyNodeChanges(
+      changes,
+      initialNodes
     );
+
+    const removedNodeIds = new Set(
+      changes
+        .filter((change) => change.type === "remove")
+        .map((change) => change.id)
+    );
+
+    const updatedEdges =
+      removedNodeIds.size > 0
+        ? initialEdges.filter(
+            (edge) =>
+              !removedNodeIds.has(edge.source) &&
+              !removedNodeIds.has(edge.target)
+          )
+        : initialEdges;
+
+    if (onWorkflowChange) {
+      onWorkflowChange(
+        updatedNodes,
+        updatedEdges
+      );
+    }
+  },
+  [
+    initialNodes,
+    initialEdges,
+    onWorkflowChange,
+  ]
+);
 
   /*
    * EDGE CHANGES
