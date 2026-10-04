@@ -29,17 +29,21 @@ const executeConditionNode = async (
     throw new Error("Condition operator is required");
   }
 
+  const evaluationContext = {
+    ...input,
+
+    input,
+    trigger: context.trigger || input,
+    steps: context.steps || {},
+  };
+
   const conditionResult = evaluateCondition(
     {
       ...config,
       field,
       operator,
     },
-    {
-      input,
-      trigger: context.trigger || input,
-      steps: context.steps || {},
-    }
+    evaluationContext
   );
 
   console.log(
