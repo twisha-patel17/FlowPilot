@@ -163,8 +163,15 @@ const createMongoError = (
   error,
   operation
 ) => {
+  console.error(
+    `MongoDB ${operation} operation failed:`,
+    error
+  );
+
   const wrappedError = new Error(
-    `MongoDB ${operation} operation failed`
+    `MongoDB ${operation} operation failed: ${
+      error?.message || "Unknown MongoDB error"
+    }`
   );
 
   wrappedError.code = error?.code;
