@@ -1,6 +1,6 @@
 const {
   testGithubTrigger,
-} = require("./githubService");
+} = require("../githubService");
 
 const executeGitHubNode = async (
   node,
