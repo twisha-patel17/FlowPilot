@@ -1,5 +1,3 @@
-const axios = require("axios");
-
 const executeGitHubNode = async (
   node,
   input = {},
@@ -15,11 +13,14 @@ const executeGitHubNode = async (
     throw error;
   }
 
-  const config = node?.data?.config || {};
+  const config =
+    node?.data?.config || {};
 
-  const connectionId =
+  const integrationId =
+    config.integrationId ||
     config.connectionId ||
     config.connection ||
+    node?.data?.integrationId ||
     node?.data?.connectionId ||
     node?.data?.connection;
 
@@ -37,7 +38,7 @@ const executeGitHubNode = async (
     node?.data?.action ||
     "opened";
 
-  if (!connectionId) {
+  if (!integrationId) {
     throw new Error(
       "GitHub connection is required"
     );
@@ -59,7 +60,7 @@ const executeGitHubNode = async (
         event,
         action,
         repository,
-        connectionId,
+        integrationId,
       },
     },
   };

@@ -313,9 +313,6 @@ const GithubConfig = ({
     ),
   ];
 
-  /*
-   * GitHub actions depend on the selected event.
-   */
   const actionOptions = {
     issues: [
       {
@@ -401,10 +398,6 @@ const GithubConfig = ({
     actionOptions[selectedEvent] ||
     actionOptions.issues;
 
-  /*
-   * Make sure an action from a previously
-   * selected event doesn't remain invalid.
-   */
   const selectedAction =
     currentActionOptions.some(
       (option) =>
@@ -414,18 +407,19 @@ const GithubConfig = ({
       : currentActionOptions[0]
           ?.value || "";
 
-  const handleEventChange =
-    (value) => {
-      const nextActions =
-        actionOptions[value] ||
-        actionOptions.issues;
+  const handleEventChange = (
+    value
+  ) => {
+    const nextActions =
+      actionOptions[value] ||
+      actionOptions.issues;
 
-      const nextAction =
-        nextActions[0]?.value || "";
+    const nextAction =
+      nextActions[0]?.value || "";
 
-      onChange("event", value);
-      onChange("action", nextAction);
-    };
+    onChange("event", value);
+    onChange("action", nextAction);
+  };
 
   const testMutation =
     useMutation({
@@ -440,10 +434,6 @@ const GithubConfig = ({
       },
 
       onError: (error) => {
-        /*
-         * Log the actual backend response
-         * instead of only AxiosError: 400.
-         */
         console.error(
           "GitHub trigger test failed:",
           error.response?.data ||
