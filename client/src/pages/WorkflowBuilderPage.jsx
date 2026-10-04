@@ -414,6 +414,14 @@ const WorkflowBuilderPage = () => {
                         ?.operator ||
                       "equals",
                   }
+                : nodeType === "filter"
+                ? {
+                    ...node.data?.config,
+                    operator:
+                      node.data?.config
+                        ?.operator ||
+                      "equals",
+                  }
                 : node.data?.config;
 
             return {
@@ -829,6 +837,8 @@ const WorkflowBuilderPage = () => {
             </span>
           </button>
 
+          {/* RUN */}
+
           <button
             type="button"
             onClick={
@@ -845,6 +855,8 @@ const WorkflowBuilderPage = () => {
                 : "Run"}
             </span>
           </button>
+
+          {/* ACTIVATE / DEACTIVATE */}
 
           <button
             type="button"
