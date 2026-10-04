@@ -573,43 +573,74 @@ const WorkflowBuilderPage = () => {
   };
 
   const handleRunWorkflow = () => {
-    if (!id) {
+  if (!id) {
+    toast.error(
+      "Save the workflow before running it."
+    );
+
+    return;
+  }
+
+  if (!workspaceId) {
+    toast.error(
+      "Please select a workspace first."
+    );
+
+    return;
+  }
+
+  if (nodes.length === 0) {
+    toast.error(
+      "Add at least one node before running the workflow."
+    );
+
+    return;
+  }
+
+  if (!isActive) {
+    toast.error(
+      "Publish and activate the workflow before running it."
+    );
+
+    return;
+  }
+
+  const manualNode = nodes.find(
+    (node) => {
+      const nodeType =
+        node.data?.type ||
+        node.data?.nodeType ||
+        node.type;
+
+      return nodeType === "manual";
+    }
+  );
+
+  let input = {};
+
+  const manualInput =
+    manualNode?.data?.config?.input;
+
+  if (manualInput?.trim()) {
+    try {
+      input = JSON.parse(
+        manualInput
+      );
+    } catch {
       toast.error(
-        "Save the workflow before running it."
+        "Manual Test Input must contain valid JSON."
       );
 
       return;
     }
+  }
 
-    if (!workspaceId) {
-      toast.error(
-        "Please select a workspace first."
-      );
-
-      return;
-    }
-
-    if (nodes.length === 0) {
-      toast.error(
-        "Add at least one node before running the workflow."
-      );
-
-      return;
-    }
-
-    if (!isActive) {
-      toast.error(
-        "Publish and activate the workflow before running it."
-      );
-
-      return;
-    }
-
-    executeMutation.mutate({
-      workflowId: id,
-      workspaceId,
-    });
-  };
+  executeMutation.mutate({
+    workflowId: id,
+    workspaceId,
+    input,
+  });
+};
 
   if (workspaceLoading) {
     return (
