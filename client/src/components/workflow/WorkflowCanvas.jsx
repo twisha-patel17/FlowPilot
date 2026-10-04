@@ -126,6 +126,9 @@ const nodeConfig = {
   },
 };
 
+/*
+ * FLOWPILOT NODE
+ */
 const FlowPilotNode = ({ data, selected }) => {
   const nodeType = data?.type || "manual";
 
@@ -157,6 +160,39 @@ const FlowPilotNode = ({ data, selected }) => {
           .filter(Boolean)
       : [];
 
+  /*
+   * SWITCH OUTPUTS
+   *
+   * Every configured case gets a stable
+   * React Flow source handle:
+   *
+   * case-0
+   * case-1
+   * case-2
+   *
+   * Unmatched values use:
+   *
+   * default
+   */
+  const switchOutputs = isSwitch
+    ? [
+        ...switchCases.map(
+          (caseValue, index) => ({
+            id: `case-${index}`,
+            label: caseValue,
+            type: "case",
+            index,
+          })
+        ),
+        {
+          id: "default",
+          label: "DEFAULT",
+          type: "default",
+          index: switchCases.length,
+        },
+      ]
+    : [];
+
   return (
     <div
       className={`relative w-[190px] cursor-grab overflow-visible rounded-lg border bg-[#111113] transition-all active:cursor-grabbing ${
@@ -165,17 +201,20 @@ const FlowPilotNode = ({ data, selected }) => {
           : "border-zinc-800 shadow-[0_8px_25px_rgba(0,0,0,0.25)] hover:border-zinc-700"
       }`}
     >
+      {/* TARGET HANDLE */}
       <Handle
         type="target"
         position={Position.Top}
+        id="target"
         isConnectable={true}
-        className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-zinc-500"
+        className="nodrag nopan !z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-zinc-500"
         style={{
           cursor: "crosshair",
           pointerEvents: "auto",
         }}
       />
 
+      {/* HEADER */}
       <div className="flex items-center gap-2.5 border-b border-zinc-800/70 px-3 py-2.5">
         <div
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${config.iconStyle}`}
@@ -190,6 +229,7 @@ const FlowPilotNode = ({ data, selected }) => {
         </div>
       </div>
 
+      {/* BODY */}
       <div className="px-3 py-3">
         <p
           className={`break-words text-[11px] leading-5 ${
@@ -202,6 +242,7 @@ const FlowPilotNode = ({ data, selected }) => {
         </p>
       </div>
 
+      {/* FOOTER */}
       <div className="flex items-center justify-between border-t border-zinc-800/60 px-3 py-2">
         <span className="text-[10px] uppercase tracking-wide text-zinc-600">
           {config.category}
@@ -214,14 +255,15 @@ const FlowPilotNode = ({ data, selected }) => {
         )}
       </div>
 
-      {isCondition ? (
+      {/* CONDITION OUTPUTS */}
+      {isCondition && (
         <>
           <Handle
             type="source"
             position={Position.Bottom}
             id="true"
             isConnectable={true}
-            className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-emerald-500"
+            className="nodrag nopan !z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-emerald-500"
             style={{
               left: "30%",
               cursor: "crosshair",
@@ -234,7 +276,7 @@ const FlowPilotNode = ({ data, selected }) => {
             position={Position.Bottom}
             id="false"
             isConnectable={true}
-            className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-red-400"
+            className="nodrag nopan !z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-red-400"
             style={{
               left: "70%",
               cursor: "crosshair",
@@ -250,96 +292,73 @@ const FlowPilotNode = ({ data, selected }) => {
             FALSE
           </span>
         </>
-      ) : isSwitch ? (
+      )}
+
+      {/* SWITCH OUTPUTS */}
+      {isSwitch && (
         <>
-          {switchCases.map(
-            (caseValue, index) => {
+          {switchOutputs.map(
+            (output, index) => {
               const totalOutputs =
-                switchCases.length + 1;
+                switchOutputs.length;
 
               const leftPosition =
                 ((index + 1) /
                   (totalOutputs + 1)) *
                 100;
 
-              return (
-                <Handle
-                  key={`case-${index}`}
-                  type="source"
-                  position={Position.Bottom}
-                  id={`case-${index}`}
-                  isConnectable={true}
-                  className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-amber-500"
-                  style={{
-                    left: `${leftPosition}%`,
-                    cursor: "crosshair",
-                    pointerEvents: "auto",
-                  }}
-                />
-              );
-            }
-          )}
-
-          <Handle
-            type="source"
-            position={Position.Bottom}
-            id="default"
-            isConnectable={true}
-            className="!z-50 !h-3 !w-3 !border-2 !border-[#111113] !bg-zinc-500"
-            style={{
-              left: `${
-                ((switchCases.length + 1) /
-                  (switchCases.length + 2)) *
-                100
-              }%`,
-              cursor: "crosshair",
-              pointerEvents: "auto",
-            }}
-          />
-
-          {switchCases.map(
-            (caseValue, index) => {
-              const totalOutputs =
-                switchCases.length + 1;
-
-              const leftPosition =
-                ((index + 1) /
-                  (totalOutputs + 1)) *
-                100;
+              const isDefault =
+                output.type === "default";
 
               return (
-                <span
-                  key={`label-${index}`}
-                  className="pointer-events-none absolute -bottom-6 -translate-x-1/2 whitespace-nowrap text-[9px] font-medium text-amber-400"
+                <div
+                  key={output.id}
+                  className="pointer-events-none absolute bottom-0"
                   style={{
                     left: `${leftPosition}%`,
                   }}
                 >
-                  {caseValue}
-                </span>
+                  <Handle
+                    type="source"
+                    position={Position.Bottom}
+                    id={output.id}
+                    isConnectable={true}
+                    className={`nodrag nopan !z-50 !h-3 !w-3 !border-2 !border-[#111113] ${
+                      isDefault
+                        ? "!bg-zinc-500"
+                        : "!bg-amber-500"
+                    }`}
+                    style={{
+                      left: 0,
+                      cursor: "crosshair",
+                      pointerEvents: "auto",
+                    }}
+                  />
+
+                  <span
+                    className={`absolute left-1/2 top-5 -translate-x-1/2 whitespace-nowrap text-[9px] font-medium ${
+                      isDefault
+                        ? "text-zinc-500"
+                        : "text-amber-400"
+                    }`}
+                  >
+                    {output.label}
+                  </span>
+                </div>
               );
             }
           )}
-
-          <span
-            className="pointer-events-none absolute -bottom-6 -translate-x-1/2 whitespace-nowrap text-[9px] font-medium text-zinc-500"
-            style={{
-              left: `${
-                ((switchCases.length + 1) /
-                  (switchCases.length + 2)) *
-                100
-              }%`,
-            }}
-          >
-            DEFAULT
-          </span>
         </>
-      ) : (
+      )}
+
+      {/* NORMAL SINGLE OUTPUT */}
+      {!isCondition && !isSwitch && (
         <Handle
           type="source"
           position={Position.Bottom}
+          id="source"
           isConnectable={true}
-          className={`!z-50 !h-3 !w-3 !border-2 !border-[#111113] ${
+          className={`nodrag nopan !z-50 !h-3 !w-3 !border-2 !border-[#111113] ${
             selected
               ? "!bg-violet-500"
               : "!bg-zinc-500"
@@ -358,12 +377,18 @@ const nodeTypes = {
   flowpilot: FlowPilotNode,
 };
 
+/*
+ * WORKFLOW CANVAS
+ */
 const WorkflowCanvas = ({
   onNodeSelect,
   onWorkflowChange,
   initialNodes = [],
   initialEdges = [],
 }) => {
+  /*
+   * NORMALIZE NODES
+   */
   const normalizedNodes =
     initialNodes.map((node) => {
       const actualType =
@@ -380,39 +405,55 @@ const WorkflowCanvas = ({
         },
       };
     });
-const handleNodesChange = useCallback(
-  (changes) => {
-    const updatedNodes = applyNodeChanges(
-      changes,
-      initialNodes
-    );
 
-    const removedNodeIds = new Set(
-      changes
-        .filter((change) => change.type === "remove")
-        .map((change) => change.id)
-    );
+  /*
+   * NODE CHANGES
+   */
+  const handleNodesChange =
+    useCallback(
+      (changes) => {
+        const updatedNodes =
+          applyNodeChanges(
+            changes,
+            initialNodes
+          );
 
-    const updatedEdges =
-      removedNodeIds.size > 0
-        ? initialEdges.filter(
-            (edge) =>
-              !removedNodeIds.has(edge.source) &&
-              !removedNodeIds.has(edge.target)
-          )
-        : initialEdges;
+        const removedNodeIds =
+          new Set(
+            changes
+              .filter(
+                (change) =>
+                  change.type === "remove"
+              )
+              .map(
+                (change) => change.id
+              )
+          );
 
-    onWorkflowChange?.(
-      updatedNodes,
-      updatedEdges
+        const updatedEdges =
+          removedNodeIds.size > 0
+            ? initialEdges.filter(
+                (edge) =>
+                  !removedNodeIds.has(
+                    edge.source
+                  ) &&
+                  !removedNodeIds.has(
+                    edge.target
+                  )
+              )
+            : initialEdges;
+
+        onWorkflowChange?.(
+          updatedNodes,
+          updatedEdges
+        );
+      },
+      [
+        initialNodes,
+        initialEdges,
+        onWorkflowChange,
+      ]
     );
-  },
-  [
-    initialNodes,
-    initialEdges,
-    onWorkflowChange,
-  ]
-);
 
   /*
    * EDGE CHANGES
@@ -426,12 +467,10 @@ const handleNodesChange = useCallback(
             initialEdges
           );
 
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            initialNodes,
-            updatedEdges
-          );
-        }
+        onWorkflowChange?.(
+          initialNodes,
+          updatedEdges
+        );
       },
       [
         initialNodes,
@@ -446,6 +485,78 @@ const handleNodesChange = useCallback(
   const onConnect =
     useCallback(
       (connection) => {
+        if (
+          !connection.source ||
+          !connection.target
+        ) {
+          return;
+        }
+
+        /*
+         * Prevent connecting a node to itself.
+         */
+        if (
+          connection.source ===
+          connection.target
+        ) {
+          return;
+        }
+
+        /*
+         * For branching nodes, the source
+         * handle is part of the workflow
+         * definition.
+         *
+         * Example:
+         * case-0
+         * case-1
+         * default
+         */
+        const sourceNode =
+          initialNodes.find(
+            (node) =>
+              node.id ===
+              connection.source
+          );
+
+        const sourceType =
+          sourceNode?.data?.type ||
+          sourceNode?.data?.nodeType ||
+          sourceNode?.type;
+
+        const isBranchingNode =
+          sourceType === "condition" ||
+          sourceType === "switch";
+
+        if (
+          isBranchingNode &&
+          !connection.sourceHandle
+        ) {
+          return;
+        }
+
+        /*
+         * Prevent duplicate edges from the
+         * exact same source handle to the
+         * exact same target.
+         */
+        const duplicateEdge =
+          initialEdges.some(
+            (edge) =>
+              edge.source ===
+                connection.source &&
+              edge.target ===
+                connection.target &&
+              edge.sourceHandle ===
+                connection.sourceHandle &&
+              edge.targetHandle ===
+                connection.targetHandle
+          );
+
+        if (duplicateEdge) {
+          return;
+        }
+
         const updatedEdges =
           addEdge(
             {
@@ -455,12 +566,10 @@ const handleNodesChange = useCallback(
             initialEdges
           );
 
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            initialNodes,
-            updatedEdges
-          );
-        }
+        onWorkflowChange?.(
+          initialNodes,
+          updatedEdges
+        );
       },
       [
         initialNodes,
@@ -477,9 +586,7 @@ const handleNodesChange = useCallback(
       (event, node) => {
         event.stopPropagation();
 
-        if (onNodeSelect) {
-          onNodeSelect(node);
-        }
+        onNodeSelect?.(node);
       },
       [onNodeSelect]
     );
@@ -489,9 +596,7 @@ const handleNodesChange = useCallback(
    */
   const onPaneClick =
     useCallback(() => {
-      if (onNodeSelect) {
-        onNodeSelect(null);
-      }
+      onNodeSelect?.(null);
     }, [onNodeSelect]);
 
   /*
@@ -553,16 +658,12 @@ const handleNodesChange = useCallback(
           newNode,
         ];
 
-        if (onWorkflowChange) {
-          onWorkflowChange(
-            updatedNodes,
-            initialEdges
-          );
-        }
+        onWorkflowChange?.(
+          updatedNodes,
+          initialEdges
+        );
 
-        if (onNodeSelect) {
-          onNodeSelect(newNode);
-        }
+        onNodeSelect?.(newNode);
       },
       [
         initialNodes,
