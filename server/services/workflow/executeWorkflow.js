@@ -1375,6 +1375,48 @@ const executeWorkflow = async (
         );
       }
 
+      /* ===================================================
+         FILTER
+      =================================================== */
+
+      if (
+        nodeType === "filter"
+      ) {
+        if (
+          typeof result.filterPassed !==
+          "boolean"
+        ) {
+          throw new Error(
+            "Filter node did not return a valid filter result"
+          );
+        }
+
+        console.log(
+          `Filter result:`,
+          result.filterPassed
+        );
+
+        /*
+         * Filter acts as a gate.
+         *
+         * TRUE  → continue to the next node
+         * FALSE → stop the workflow successfully
+         */
+
+        if (!result.filterPassed) {
+          console.log(
+            `Filter rejected input. Stopping workflow.`
+          );
+
+          currentNode = null;
+          continue;
+        }
+      }
+
+      /* ===================================================
+         GET OUTGOING EDGES
+      =================================================== */
+
       const outgoingEdges =
         getOutgoingEdges(
           edges,
@@ -1739,7 +1781,6 @@ const executeWorkflow = async (
 
     throw error;
   } finally {
-   
     if (registered) {
       unregisterExecution(
         executionId
