@@ -1,7 +1,10 @@
 const getNestedValue = (obj, path) =>
   path
-    ? path.split(".").reduce((current, key) =>
-        current == null ? undefined : current[key], obj)
+    ? path.split(".").reduce(
+        (current, key) =>
+          current == null ? undefined : current[key],
+        obj
+      )
     : undefined;
 
 const hasValue = (value) =>
@@ -9,14 +12,26 @@ const hasValue = (value) =>
 
 const executeFilterNode = async (node, input = {}) => {
   const config = node.data?.config || {};
-  const field = typeof config.field === "string"
-    ? config.field.trim() : "";
-  const operator = typeof config.operator === "string"
-    ? config.operator.trim() : "";
+
+  const field =
+    typeof config.field === "string"
+      ? config.field.trim()
+      : "";
+
+  const operator =
+    typeof config.operator === "string"
+      ? config.operator.trim()
+      : "";
+
   const value = config.value;
 
-  if (!field) throw new Error("Filter field is required");
-  if (!operator) throw new Error("Filter operator is required");
+  if (!field) {
+    throw new Error("Filter field is required");
+  }
+
+  if (!operator) {
+    throw new Error("Filter operator is required");
+  }
 
   const supportedOperators = [
     "equals",
@@ -29,16 +44,30 @@ const executeFilterNode = async (node, input = {}) => {
   ];
 
   if (!supportedOperators.includes(operator)) {
-    throw new Error(`Unsupported filter operator: ${operator}`);
+    throw new Error(
+      `Unsupported filter operator: ${operator}`
+    );
   }
 
-  const source = input?.data &&
-    typeof input.data === "object" ? input.data : input;
+  const source =
+    input?.data &&
+    typeof input.data === "object"
+      ? input.data
+      : input;
 
-  let actualValue = getNestedValue(source, field);
+  let actualValue = getNestedValue(
+    source,
+    field
+  );
 
-  if (actualValue === undefined && source !== input) {
-    actualValue = getNestedValue(input, field);
+  if (
+    actualValue === undefined &&
+    source !== input
+  ) {
+    actualValue = getNestedValue(
+      input,
+      field
+    );
   }
 
   let passed = false;
@@ -59,28 +88,44 @@ const executeFilterNode = async (node, input = {}) => {
             "Filter contains operator requires a string value"
           );
         }
+
         passed = actualValue.includes(value);
       } else if (Array.isArray(actualValue)) {
-        passed = actualValue.some((item) => item === value);
+        passed = actualValue.some(
+          (item) => item === value
+        );
       }
+
       break;
 
     case "starts_with":
-      if (typeof actualValue !== "string") break;
+      if (typeof actualValue !== "string") {
+        break;
+      }
+
       if (typeof value !== "string") {
         throw new Error(
           "Filter starts_with operator requires a string value"
         );
       }
+
       passed = actualValue.startsWith(value);
       break;
 
     case "greater_than":
     case "less_than": {
-      if (!hasValue(actualValue) || !hasValue(value)) break;
+      if (
+        !hasValue(actualValue) ||
+        !hasValue(value)
+      ) {
+        break;
+      }
 
-      const actualNumber = Number(actualValue);
-      const expectedNumber = Number(value);
+      const actualNumber =
+        Number(actualValue);
+
+      const expectedNumber =
+        Number(value);
 
       if (
         !Number.isFinite(actualNumber) ||
@@ -91,9 +136,10 @@ const executeFilterNode = async (node, input = {}) => {
         );
       }
 
-      passed = operator === "greater_than"
-        ? actualNumber > expectedNumber
-        : actualNumber < expectedNumber;
+      passed =
+        operator === "greater_than"
+          ? actualNumber > expectedNumber
+          : actualNumber < expectedNumber;
 
       break;
     }
@@ -104,11 +150,18 @@ const executeFilterNode = async (node, input = {}) => {
   }
 
   console.log(
-    `Filter: ${field} ${operator} ${JSON.stringify(value)} → ${passed}`
+    `Filter: ${field} ${operator} ${JSON.stringify(
+      value
+    )} → ${passed}`
   );
 
   return {
     success: true,
+
+    // Used by executeWorkflow.js for branching/gating
+    filterPassed: passed,
+
+    // Passed forward to the next node
     output: {
       ...input,
       filterPassed: passed,
