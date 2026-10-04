@@ -350,8 +350,14 @@ const buildExecutionContext = (
   }
 
   return {
-    trigger: execution.input || {},
-    input: currentInput || {},
+    ...(currentInput || {}),
+
+    trigger:
+      execution.input || {},
+
+    input:
+      currentInput || {},
+
     steps,
   };
 };
@@ -1146,7 +1152,8 @@ const executeWorkflow = async (
               resolvedNode,
               resolvedInput,
               {
-                userId: execution.owner,
+                userId:
+                  execution.owner,
                 workspaceId:
                   execution.workspace,
                 signal,
@@ -1636,10 +1643,6 @@ const executeWorkflow = async (
       throw error;
     }
 
-    /* =====================================================
-       EXECUTION LOCK
-    ===================================================== */
-
     if (
       error.code ===
       "EXECUTION_LOCKED"
@@ -1652,10 +1655,6 @@ const executeWorkflow = async (
 
       throw error;
     }
-
-    /* =====================================================
-       GENERAL FAILURE
-    ===================================================== */
 
     const latestExecution =
       await getLatestExecution(
@@ -1696,11 +1695,6 @@ const executeWorkflow = async (
     console.error(
       "==============================================\n"
     );
-
-    /* =====================================================
-       IMPORTANT FIX:
-       MARK EXECUTION AS FAILED
-    ===================================================== */
 
     const failedExecution =
       await Execution.findOneAndUpdate(
@@ -1745,19 +1739,12 @@ const executeWorkflow = async (
 
     throw error;
   } finally {
-    /* =====================================================
-       UNREGISTER CANCELLATION
-    ===================================================== */
-
+   
     if (registered) {
       unregisterExecution(
         executionId
       );
     }
-
-    /* =====================================================
-       RELEASE EXECUTION LOCK
-    ===================================================== */
 
     if (lock) {
       try {
@@ -1777,10 +1764,6 @@ const executeWorkflow = async (
         );
       }
     }
-
-    /* =====================================================
-       RELEASE WORKSPACE SLOT
-    ===================================================== */
 
     if (concurrencySlot) {
       try {
