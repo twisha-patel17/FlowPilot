@@ -140,7 +140,10 @@ const ConfigPanel = ({
         );
 
       case "manual":
-        return <ManualConfig />;
+        return <ManualConfig
+          config={config}
+          onChange={updateConfig}
+        />;
 
       case "filter":
         return (
@@ -906,7 +909,10 @@ const ScheduleConfig = ({
    MANUAL
 ========================================================= */
 
-const ManualConfig = () => {
+const ManualConfig = ({
+  config,
+  onChange,
+}) => {
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -920,6 +926,28 @@ const ManualConfig = () => {
         workflow page or through the
         API.
       </p>
+
+      <TextareaField
+        label="Test Input"
+        value={config.input || ""}
+        onChange={(value) =>
+          onChange("input", value)
+        }
+        placeholder='{"status":"approved"}'
+        rows={6}
+        mono
+      />
+
+      <div className="rounded-md border border-zinc-800/70 bg-zinc-900/50 px-3 py-2.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+          Manual test data
+        </p>
+
+        <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+          Enter valid JSON to pass test
+          data into the workflow.
+        </p>
+      </div>
     </div>
   );
 };
