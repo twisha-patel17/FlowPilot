@@ -1,3 +1,7 @@
+const {
+  testGithubTrigger,
+} = require("./githubService");
+
 const executeGitHubNode = async (
   node,
   input = {},
@@ -50,6 +54,36 @@ const executeGitHubNode = async (
     );
   }
 
+  if (!context.userId) {
+    throw new Error(
+      "User context is required for GitHub execution"
+    );
+  }
+
+  if (!context.workspaceId) {
+    throw new Error(
+      "Workspace context is required for GitHub execution"
+    );
+  }
+
+  const result =
+    await testGithubTrigger({
+      integrationId,
+      workspaceId:
+        context.workspaceId,
+      userId:
+        context.userId,
+      repository,
+      event,
+      action,
+    });
+
+  if (!result?.payload) {
+    throw new Error(
+      "GitHub did not return a valid event payload"
+    );
+  }
+
   return {
     success: true,
 
@@ -57,13 +91,20 @@ const executeGitHubNode = async (
       ...input,
 
       github: {
-        event,
-        action,
-        repository,
-        integrationId,
+        event:
+          result.event,
+        action:
+          result.action,
+        repository:
+          result.repository,
+        integrationId:
+          result.integrationId,
       },
+
+      ...result.payload,
     },
   };
 };
 
-module.exports = executeGitHubNode;
+module.exports =
+  executeGitHubNode;
